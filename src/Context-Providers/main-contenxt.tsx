@@ -11,21 +11,30 @@ interface HttpOptions extends RequestInit {
     headers?: Record<string, string>;
 }
 
+interface User {
+    _id: string;
+    email: string;
+    username: string;
+    isVerified: boolean;
+    role: string;
+    fingerprint: string;
+}
+
 export interface UserContextType {
-    user: unknown | undefined;
-    setUser: Dispatch<SetStateAction<unknown | undefined>>;
-    httpFetch: <T = unknown>(endpoint: string, options?: HttpOptions) => Promise<HttpResponse<T>>;
+    user: User | undefined;
+    setUser: Dispatch<SetStateAction<User | undefined>>;
+    httpFetch: (endpoint: string, options?: HttpOptions) => Promise<HttpResponse>;
     inputRef: React.RefObject<HTMLInputElement | null>;
 }
 
 export const UserContext = createContext<UserContextType | null>(null);
 
 export const UserProvider = ({ children }: { children: ReactNode }) => {
-    const [user, setUser] = useState<unknown | undefined>(undefined);
+    const [user, setUser] = useState<User | undefined>(undefined);
     const inputRef = useRef<HTMLInputElement | null>(null);
 
-    async function httpFetch<T = unknown>(endpoint: string, options: HttpOptions = {}) {
-        const req = await httpFetchWithCredentials<T>(endpoint, options);
+    async function httpFetch(endpoint: string, options: HttpOptions = {}): Promise<HttpResponse> {
+        const req = await httpFetchWithCredentials(endpoint, options);
 
         if (req.status === 403) {
             setUser(undefined);
@@ -37,9 +46,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
             }
         }
 
-        if (endpoint === "/verify/me") {
-            setUser(req.data);
-        }
+        if (endpoint === "/verify/me") setUser(req.data as User);
 
         return req;
     }
@@ -51,7 +58,10 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     );
 };
 
-async function httpFetchWithCredentials<T = unknown>(endpoint: string, options: HttpOptions = {}): Promise<HttpResponse<T>> {
+async function httpFetchWithCredentials<T = unknown>(
+    endpoint: string,
+    options: HttpOptions = {}
+): Promise<HttpResponse<T>> {
     const apiDomain = import.meta.env.VITE_API_URL;
     const defaultOptions: HttpOptions = {
         credentials: "include",
