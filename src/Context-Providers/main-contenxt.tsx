@@ -35,7 +35,6 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
 
     async function httpFetch(endpoint: string, options: HttpOptions = {}): Promise<HttpResponse> {
         const req = await httpFetchWithCredentials(endpoint, options);
-
         if (req.status === 403) {
             setUser(undefined);
 
@@ -85,7 +84,7 @@ async function httpFetchWithCredentials<T = unknown>(
         const res = await fetch(apiDomain + endpoint, finalOptions);
         const contentType = res.headers.get("content-type");
 
-        let data: T | null = null;
+        let data: T | any = null;
         if (contentType && contentType.includes("application/json")) {
             data = await res.json();
         }
