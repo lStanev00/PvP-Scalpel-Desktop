@@ -1,3 +1,10 @@
+
 export default function App() {
-    return(<>Sagger</>)
+    return(
+        <>
+            <div>
+                <img src="logo/logo.png" alt="image"  />
+            </div>
+        </>
+    )
 }
