@@ -28,18 +28,23 @@ fn main() {
                 r"Z:\Battle.NET Lyb\World of Warcraft\_retail_\WTF\Account"
             );
 
-            let mut watcher = watcher::create_watcher(handle)
-                .expect("failed to create watcher");
+            if root.exists() {
 
-            watcher
-                .watch(&root, RecursiveMode::Recursive)
-                .expect("failed to watch folder");
-
-            // wathcer in mem stored
-            let keeper = app.state::<WatcherKeeper>();
-            *keeper.0.lock().unwrap() = Some(watcher);
-
-            println!("Watching {:?}", root);
+                let mut watcher = watcher::create_watcher(handle)
+                    .expect("failed to create watcher");
+    
+                watcher
+                    .watch(&root, RecursiveMode::Recursive)
+                    .expect("failed to watch folder");
+    
+                // wathcer in mem stored
+                let keeper = app.state::<WatcherKeeper>();
+                *keeper.0.lock().unwrap() = Some(watcher);
+    
+                println!("Watching {:?}", root);
+            } else {
+                println!("The root path does not exist. The watcher won't register.")
+            };
 
             Ok(())
         })
