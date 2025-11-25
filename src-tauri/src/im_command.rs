@@ -19,9 +19,7 @@ pub fn identify_match(obj: Value) -> Result<String, String> {
 
     let empty: Vec<Value> = Vec::new();
 
-    let players = obj["players"]
-        .as_array()
-        .unwrap_or(&empty);
+    let players = obj["players"].as_array().unwrap_or(&empty);
 
     let owner = players
         .iter()
@@ -36,7 +34,11 @@ pub fn identify_match(obj: Value) -> Result<String, String> {
         owner_name = p["name"].as_str().unwrap_or("").to_string().to_lowercase();
         owner_realm = p["realm"].as_str().unwrap_or("").to_string().to_lowercase();
         owner_spec = p["spec"].as_str().unwrap_or("").to_string();
-        owner_server = p["server"].as_str().unwrap_or("").to_string().to_lowercase();
+        owner_server = p["server"]
+            .as_str()
+            .unwrap_or("")
+            .to_string()
+            .to_lowercase();
     }
 
     // if server missing, scan other players
@@ -92,9 +94,6 @@ fn hash_match(
 
     format!(
         "{}:{}:{}|{}",
-        owner_name,
-        owner_realm,
-        owner_server,
-        hash_str
+        owner_name, owner_realm, owner_server, hash_str
     )
 }
