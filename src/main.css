@@ -1,0 +1,175 @@
+/* THIS CSS IS FROM THE FRONTEND OF THE WEBAPP https://www.pvpscalpel.com */
+:root {
+    --bg-table: rgba(10, 14, 30, 0.95);
+    --bg-row: rgba(25, 30, 50, 0.94);
+    --bg-row-alt: rgba(32, 36, 60, 0.94);
+    --bg-row-hover: rgba(40, 45, 70, 0.96);
+    --bg-header: linear-gradient(
+        90deg,
+        rgba(14, 18, 30, 0.96),
+        rgba(0, 245, 212, 0.12),
+        rgba(14, 18, 30, 0.96)
+    );
+    --bg-char-details-card: linear-gradient(145deg, var(--bg-row), rgba(20, 20, 40, 0.92));
+    --bg-main-card-char-details: linear-gradient(
+        180deg,
+        rgba(20, 25, 45, 0.75) 0%,
+        rgba(15, 18, 35, 0.55) 45%,
+        rgba(10, 12, 25, 0) 100%
+    );
+    --bg-podium-1: linear-gradient(90deg, rgba(255, 215, 0, 0.2), rgba(255, 255, 255, 0.05));
+    --bg-podium-2: linear-gradient(90deg, rgba(192, 192, 192, 0.2), rgba(255, 255, 255, 0.05));
+    --bg-podium-3: linear-gradient(90deg, rgba(205, 127, 50, 0.2), rgba(255, 255, 255, 0.05));
+    --border-color: rgba(255, 255, 255, 0.08);
+    --divider-color: rgba(255, 255, 255, 0.05);
+    --radius: 10px;
+    --color-text: #eaeef6;
+    --color-muted: #98a3c7;
+    --color-accent: #00f5d4;
+    --color-gold: #ffd700;
+    --color-silver: #c0c0c0;
+    --color-bronze: #cd7f32;
+    --font-base: "Inter", sans-serif;
+    --font-mono: "JetBrains Mono", monospace;
+    --avatar: 42px;
+    --spacer-y: 0.9rem;
+    --spacer-x: 1rem;
+    --gap-y: 12px;
+
+    /* Additional accents */
+    --color-header-accent: #d8ffe8;
+    --header-border: 0 2px 0 rgba(0, 245, 212, 0.25);
+}
+
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Arial', sans-serif;
+    background-color: #1c1c2e;
+    color: white;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+}
+
+body::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at center, rgba(0,0,0,0) 60%, rgba(0,0,0,0.65) 100%);
+    pointer-events: none;
+    z-index: -1;
+    height: fit-content;
+
+}
+
+body::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: url("/backgrounds/cinematic_fog.webp") repeat;
+    background-size: 300%;
+    opacity: 0.09;
+    animation: fogDrift 90s linear infinite;
+    mix-blend-mode: lighten;
+    pointer-events: none;
+    z-index: 0;
+    height: fit-content;
+}
+
+@keyframes fogDrift {
+    from { background-position: 0 0; }
+    to { background-position: 100% 0; }
+}
+
+/* Go To Top Button */
+.goTop {
+    position: fixed;
+    bottom: 30px;
+    right: 30px;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 215, 0, 0.25);
+    background: radial-gradient(circle at 30% 30%, #1b1d2d, #0e101b);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(40px) scale(0.85);
+    transition:
+        opacity 0.4s ease,
+        transform 0.4s ease,
+        box-shadow 0.3s ease;
+    z-index: 999;
+    box-shadow: 0 0 10px rgba(255, 215, 0, 0.1);
+    padding: 0;
+}
+
+/* visible state */
+.goTop.show {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0) scale(1);
+    animation: topPulse 5s ease-in-out infinite;
+}
+
+/* icon styling */
+.goTopIcon {
+    color: #ffd84a;
+    font-size: 1.6rem;
+    transition: transform 0.3s ease, color 0.3s ease, filter 0.3s ease;
+    filter: drop-shadow(0 0 4px rgba(255, 215, 0, 0.3));
+}
+
+/* hover and active states */
+.goTop:hover .goTopIcon {
+    color: #fff8c6;
+    transform: rotate(15deg) scale(1.2);
+    filter: drop-shadow(0 0 10px rgba(255, 215, 0, 0.6));
+}
+
+.goTop:active .goTopIcon {
+    transform: scale(0.9) rotate(-10deg);
+}
+
+/* subtle breathing glow */
+@keyframes topPulse {
+    0%, 100% {
+        box-shadow: 0 0 10px rgba(255, 215, 0, 0.15);
+    }
+    50% {
+        box-shadow: 0 0 20px rgba(255, 215, 0, 0.3);
+    }
+}
+
+/* @media (max-width: 1550px) {
+    body {
+        zoom: 0.8;
+    }
+}
+@media (max-width: 1150px) {
+    body {
+        zoom: 0.65;
+    }
+} */
+
+/* responsive */
+@media (max-width: 768px) {
+    .goTop {
+        width: 44px;
+        height: 44px;
+    }
+
+    .goTopIcon {
+        font-size: 1.3rem;
+    }
+}
