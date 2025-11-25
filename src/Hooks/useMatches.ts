@@ -14,7 +14,6 @@ export default function useMatches() {
       account: string;
       path: string;
     }>("savedvars-updated", async ({ payload }) => {
-      console.log("📩 FS change detected:", payload);
 
       if (timeout) clearTimeout(timeout); // debounce on write the wow api writes mutiple times so w need a timeout to prevent costy calcs multiple times
       timeout = setTimeout(async () => {
