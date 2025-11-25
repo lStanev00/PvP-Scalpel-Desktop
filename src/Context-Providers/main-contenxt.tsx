@@ -1,4 +1,5 @@
 import { createContext, useRef, useState, ReactNode, Dispatch, SetStateAction } from "react";
+import { Fingerprint } from "../Helpers/getFingerprint";
 
 interface HttpResponse<T = unknown> {
     status: number;
@@ -12,12 +13,12 @@ interface HttpOptions extends RequestInit {
 }
 
 interface User {
-    _id: string;
-    email: string;
-    username: string;
-    isVerified: boolean;
-    role: string;
-    fingerprint: string;
+    _id?: string;
+    email?: string;
+    username?: string;
+    isVerified?: boolean;
+    role?: string;
+    fingerprint?: Fingerprint;
 }
 
 export interface UserContextType {
