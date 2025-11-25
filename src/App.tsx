@@ -1,5 +1,6 @@
 // import { useEffect } from "react";
 // import useUserContext from "./Hooks/useUserContext";
+import { useState } from "react";
 import useMatches from "./Hooks/useMatches";
 import { MatchWithId, Player } from "./Interfaces/matches";
 
@@ -34,27 +35,38 @@ export default function App() {
                 <h1>Last Match</h1>
             </header>
 
-            <section style={styles.meta}>
-                <p>
-                    <b>Map:</b> {last.matchDetails.mapName}
-                </p>
-                <p>
-                    <b>Format:</b> {last.matchDetails.format}
-                </p>
-                <p>
-                    <b>Time:</b> {last.matchDetails.timestamp}
-                </p>
+            <section style={styles.metaContainer}>
+                <div style={styles.metaItem}>
+                    <span style={styles.metaLabel}>Map</span>
+                    <span style={styles.metaValue}>{last.matchDetails.mapName}</span>
+                </div>
+
+                <div style={styles.metaItem}>
+                    <span style={styles.metaLabel}>Format</span>
+                    <span style={styles.metaValue}>{last.matchDetails.format}</span>
+                </div>
+
+                <div style={styles.metaItem}>
+                    <span style={styles.metaLabel}>Time</span>
+                    <span style={styles.metaValue}>{last.matchDetails.timestamp}</span>
+                </div>
 
                 {owner && (
-                    <p
+                    <div
                         style={{
-                            ...styles.mmr,
+                            ...styles.metaItem,
+                            ...styles.metaMMR,
                             color: delta >= 0 ? "lime" : "red",
                         }}>
-                        MMR Change: {delta >= 0 ? `+${delta}` : delta}
-                    </p>
+                        <span style={styles.metaLabel}>MMR Δ</span>
+                        <span style={styles.metaValue}>{delta >= 0 ? `+${delta}` : delta}</span>
+                    </div>
                 )}
-                <p>ID: {last.id}</p>
+
+                <div style={styles.metaItem}>
+                    <span style={styles.metaLabel}>Match ID</span>
+                    <span style={styles.metaValue}>{last.id}</span>
+                </div>
             </section>
 
             <section style={styles.teams}>
@@ -66,6 +78,13 @@ export default function App() {
 }
 
 function TeamTable({ title, players }: { title: string; players: Player[] }) {
+    const [hovered, setHovered] = useState<number | null>(null);
+
+    const rowStyle = (i: number): React.CSSProperties => ({
+        ...styles.tr,
+        background: i % 2 === 0 ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.06)",
+    });
+
     return (
         <div style={styles.teamBox}>
             <h3 style={styles.teamTitle}>{title}</h3>
@@ -92,7 +111,18 @@ function TeamTable({ title, players }: { title: string; players: Player[] }) {
                         const delta = (p.postmatchMMR ?? 0) - (p.prematchMMR ?? 0);
 
                         return (
-                            <tr key={i}>
+                            <tr
+                                key={i}
+                                style={{
+                                    ...rowStyle(i),
+                                    background:
+                                        hovered === i
+                                            ? "rgba(0,128,255,0.25)"
+                                            : rowStyle(i).background,
+                                    cursor: "pointer",
+                                }}
+                                onMouseEnter={() => setHovered(i)}
+                                onMouseLeave={() => setHovered(null)}>
                                 <td
                                     style={{
                                         color: p.isOwner ? "gold" : "white",
@@ -158,61 +188,106 @@ function classColor(cls: string): string {
 const styles: Record<string, React.CSSProperties> = {
     wrapper: {
         color: "white",
-        padding: "30px",
+        padding: "40px",
         fontFamily: "Segoe UI, sans-serif",
+        background: "linear-gradient(180deg, #0b0f17 0%, #111827 100%)",
+        minHeight: "100vh",
     },
     header: {
         display: "flex",
         alignItems: "center",
-        gap: "12px",
-        marginBottom: "20px",
+        gap: "16px",
+        marginBottom: "32px",
+        borderBottom: "1px solid rgba(255,255,255,0.12)",
+        paddingBottom: "12px",
     },
     noData: {
-        padding: "40px",
-        fontSize: "20px",
+        padding: "60px",
+        fontSize: "22px",
         color: "white",
         fontFamily: "Segoe UI, sans-serif",
+        textAlign: "center",
+        opacity: 0.85,
     },
-    meta: {
+    metaContainer: {
+        display: "flex",
+        flexWrap: "wrap",
+        gap: "16px",
+        marginBottom: "32px",
+    },
+
+    metaItem: {
+        display: "flex",
+        flexDirection: "column",
+        padding: "14px 18px",
+        minWidth: "160px",
+        background: "rgba(255,255,255,0.06)",
+        borderRadius: "8px",
+        border: "1px solid rgba(255,255,255,0.1)",
+    },
+
+    metaLabel: {
+        fontSize: "13px",
+        opacity: 0.6,
+        marginBottom: "4px",
+        textTransform: "uppercase",
+        letterSpacing: "0.5px",
+    },
+
+    metaValue: {
         fontSize: "18px",
-        lineHeight: "1.6",
-        marginBottom: "30px",
+        fontWeight: 600,
     },
-    mmr: {
-        fontSize: "22px",
-        fontWeight: 700,
-        marginTop: "10px",
+
+    metaMMR: {
+        boxShadow: "0 0 12px rgba(0,255,0,0.15)",
     },
+
     teams: {
         display: "flex",
-        gap: "25px",
+        gap: "28px",
         flexDirection: "column",
     },
     teamBox: {
         flex: 1,
-        background: "rgba(255,255,255,0.07)",
-        padding: "18px",
-        borderRadius: "10px",
+        background: "rgba(255,255,255,0.04)",
+        padding: "22px",
+        borderRadius: "12px",
+        border: "1px solid rgba(255,255,255,0.08)",
+        boxShadow: "0 0 12px rgba(0,0,0,0.25)",
+        overflowX: "auto",
     },
     teamTitle: {
         textAlign: "center",
-        marginBottom: "12px",
-        fontSize: "20px",
-        fontWeight: 600,
+        marginBottom: "18px",
+        fontSize: "22px",
+        fontWeight: 700,
+        letterSpacing: "0.5px",
+        textTransform: "uppercase",
     },
     table: {
         width: "100%",
-        borderCollapse: "collapse",
+        borderCollapse: "separate",
+        borderSpacing: "0",
+        minWidth: "900px",
     },
     th: {
         textAlign: "left",
-        paddingBottom: "6px",
-        borderBottom: "1px solid rgba(255,255,255,0.2)",
+        padding: "10px 12px",
+        borderBottom: "2px solid rgba(255,255,255,0.18)",
+        borderRight: "1px solid rgba(255,255,255,0.08)",
+        fontWeight: 600,
+        fontSize: "14px",
+        background: "rgba(255,255,255,0.06)",
+        backdropFilter: "blur(4px)",
     },
     tr: {
-        height: "30px",
+        transition: "background 0.18s ease",
     },
     td: {
-        padding: "6px 0",
+        padding: "10px 12px",
+        borderBottom: "1px solid rgba(255,255,255,0.08)",
+        borderRight: "1px solid rgba(255,255,255,0.05)",
+        background: "rgba(0,0,0,0.22)",
     },
 };
