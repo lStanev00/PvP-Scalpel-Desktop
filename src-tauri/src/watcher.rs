@@ -5,30 +5,28 @@ use tauri::{AppHandle, Emitter};
 
 pub fn create_watcher(app: AppHandle) -> notify::Result<RecommendedWatcher> {
     RecommendedWatcher::new(
-        move |res: Result<Event, notify::Error>| {
-            match res {
-                Ok(event) => {
-                    for path in event.paths {
-                        println!("FS event: {:?}", path);
+        move |res: Result<Event, notify::Error>| match res {
+            Ok(event) => {
+                for path in event.paths {
+                    println!("FS event: {:?}", path);
 
-                        if is_our_saved_vars(&path) {
-                            if let Some(account) = extract_account_name(&path) {
-                                let payload = serde_json::json!({
-                                    "account": account,
-                                    "path": path.to_string_lossy()
-                                });
+                    if is_our_saved_vars(&path) {
+                        if let Some(account) = extract_account_name(&path) {
+                            let payload = serde_json::json!({
+                                "account": account,
+                                "path": path.to_string_lossy()
+                            });
 
-                                if let Err(err) = app.emit("savedvars-updated", payload) {
-                                    eprintln!("emit error: {err}");
-                                } else {
-                                    println!("!!! emitted savedvars-updated");
-                                }
+                            if let Err(err) = app.emit("savedvars-updated", payload) {
+                                eprintln!("emit error: {err}");
+                            } else {
+                                println!("!!! emitted savedvars-updated");
                             }
                         }
                     }
                 }
-                Err(err) => eprintln!("watch error: {err}"),
             }
+            Err(err) => eprintln!("watch error: {err}"),
         },
         Config::default().with_poll_interval(Duration::from_millis(400)),
     )
