@@ -2,6 +2,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod watcher;
+mod im_command;
 
 use std::sync::Mutex;
 use notify::{RecursiveMode, RecommendedWatcher, Watcher};
@@ -42,7 +43,7 @@ fn main() {
 
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![read_saved_variables])
+        .invoke_handler(tauri::generate_handler![read_saved_variables, im_command::identify_match])
         .run(tauri::generate_context!())
         .expect("error while running tauri app");
 }

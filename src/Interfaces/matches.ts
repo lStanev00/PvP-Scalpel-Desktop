@@ -44,3 +44,7 @@ export interface Match {
     interrupts?: Interrupts;
     auras?: Auras;
 }
+
+export interface MatchWithId extends Match {
+  id: string;
+}

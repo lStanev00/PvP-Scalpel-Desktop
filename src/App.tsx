@@ -1,16 +1,16 @@
-import { useEffect } from "react";
-import useUserContext from "./Hooks/useUserContext";
+// import { useEffect } from "react";
+// import useUserContext from "./Hooks/useUserContext";
 import useMatches from "./Hooks/useMatches";
-import { Match, Player } from "./Interfaces/matches";
+import { MatchWithId, Player } from "./Interfaces/matches";
 
 export default function App() {
-    const { httpFetch } = useUserContext();
+    // const { httpFetch } = useUserContext();
     const matches = useMatches();
-    const last: Match | undefined = matches.at(-1);
+    const last: MatchWithId | undefined = matches.at(-1);
 
-    useEffect(() => {
-        httpFetch("/verify/me").then(console.info).catch(console.error);
-    }, [httpFetch]);
+    // useEffect(() => {
+    //     httpFetch("/verify/me").then(console.info).catch(console.error);
+    // }, [httpFetch]);
 
     if (!last) {
         return (
@@ -54,6 +54,7 @@ export default function App() {
                         MMR Change: {delta >= 0 ? `+${delta}` : delta}
                     </p>
                 )}
+                <p>ID: {last.id}</p>
             </section>
 
             <section style={styles.teams}>
