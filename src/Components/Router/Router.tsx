@@ -1,22 +1,27 @@
-import { BrowserRouter as Routes, Route } from "react-router-dom"; // Dont clear imports
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { GuestRoute, UserRoute } from "./Guards";
+import DemoContent from "../Demo-content/Demo-Content";
+import Login from "../Login/Login";
+
 
 export default function AppRoutes() {
     return (
-        <Routes>
-            {/* User Only Routes */}
-            <Route element={<UserRoute />}>
-            
-            </Route>
+        <BrowserRouter>
+            <Routes>
 
+                {/* User Only */}
+                <Route element={<UserRoute />}>
+                    <Route path="/" element={<DemoContent />} />
+                </Route>
 
-            {/* Guest Only Routes */}
-            <Route element={<GuestRoute />}>
-            
-            </Route>
+                {/* Guest Only */}
+                <Route element={<GuestRoute />}>
+                    <Route path="/login" element={<Login />} />
+                </Route>
 
-            {/* Generic Routes */}
-            
-        </Routes>
-    )
+                {/* Public */}
+                
+            </Routes>
+        </BrowserRouter>
+    );
 }
