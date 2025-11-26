@@ -2,6 +2,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod im_command;
+mod gc_command;
 mod watcher;
 
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
@@ -48,7 +49,8 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             read_saved_variables,
-            im_command::identify_match
+            im_command::identify_match,
+            gc_command::get_config
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri app");

@@ -1,5 +1,15 @@
-import { createContext, useRef, useState, ReactNode, Dispatch, SetStateAction } from "react";
+import {
+    createContext,
+    useRef,
+    useState,
+    ReactNode,
+    Dispatch,
+    SetStateAction,
+    useCallback,
+} from "react";
 import { Fingerprint } from "../Helpers/getFingerprint";
+import { invoke } from "@tauri-apps/api/core";
+import { HttpAccessHeadersInterface } from "../Interfaces/HttpAccessHeadersInterface";
 
 interface HttpResponse<T = unknown> {
     status: number;
@@ -28,28 +38,32 @@ export interface UserContextType {
     inputRef: React.RefObject<HTMLInputElement | null>;
 }
 
+const cfg = await invoke<HttpAccessHeadersInterface>("get_config");
 export const UserContext = createContext<UserContextType | null>(null);
 
 export const UserProvider = ({ children }: { children: ReactNode }) => {
     const [user, setUser] = useState<User | undefined>(undefined);
     const inputRef = useRef<HTMLInputElement | null>(null);
 
-    async function httpFetch(endpoint: string, options: HttpOptions = {}): Promise<HttpResponse> {
-        const req = await httpFetchWithCredentials(endpoint, options);
-        if (req.status === 403) {
-            setUser(undefined);
+    const httpFetch = useCallback(
+        async (endpoint: string, options: HttpOptions = {}): Promise<HttpResponse> => {
+            const req = await httpFetchWithCredentials(endpoint, options);
+            if (req.status === 403) {
+                setUser(undefined);
 
-            if (import.meta.env.DEV) {
-                console.warn("Session expired please login again (403 expected)");
-            } else {
-                console.warn("Session expired please login again (403 expected)");
+                if (import.meta.env.DEV) {
+                    console.warn("Session expired please login again (403 expected)");
+                } else {
+                    console.warn("Session expired please login again (403 expected)");
+                }
             }
-        }
 
-        if (endpoint === "/verify/me") setUser(req.data as User);
+            if (endpoint === "/verify/me") setUser(prev => prev ?? (req.data as User));
 
-        return req;
-    }
+            return req;
+        },
+        []
+    );
 
     return (
         <UserContext.Provider value={{ user, setUser, httpFetch, inputRef }}>
@@ -66,18 +80,11 @@ async function httpFetchWithCredentials<T = unknown>(
     const defaultOptions: HttpOptions = {
         credentials: "include",
         headers: {
-            "600": "BasicPass",
+            ...cfg,
             "Content-Type": "application/json",
             ...options.headers,
         },
     };
-
-    if (import.meta.env.MODE === "development") {
-        defaultOptions.headers = {
-            ...defaultOptions.headers,
-            ga6n1fa4fcvt: "EiDcafRc45$td4aedrgh4615tokenbtw",
-        };
-    }
 
     const finalOptions = { ...defaultOptions, ...options };
 
