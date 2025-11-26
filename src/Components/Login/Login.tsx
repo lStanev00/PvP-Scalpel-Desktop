@@ -46,6 +46,7 @@ export default function Login() {
                     fingerprint,
                 }),
             });
+            if(req.error) setError(req.error);
 
             if (req.status === 200) {
                 await httpFetch(`/verify/me`);
