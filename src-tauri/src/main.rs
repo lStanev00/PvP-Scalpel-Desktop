@@ -4,6 +4,7 @@
 mod im_command;
 mod gc_command;
 mod watcher;
+mod gwp_command;
 
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 use std::sync::Mutex;
@@ -17,16 +18,22 @@ fn read_saved_variables(path: String) -> Result<String, String> {
     std::fs::read_to_string(&path).map_err(|e| format!("Failed reading file: {e}"))
 }
 
+
 fn main() {
     tauri::Builder::default()
-        .plugin(tauri_plugin_shell::init())
-        .manage(WatcherKeeper::default())
-        .setup(|app| {
+    .plugin(tauri_plugin_shell::init())
+    .manage(WatcherKeeper::default())
+    .setup(|app| {
             let handle = app.handle().clone();
+            let root = if let Some(path) = gwp_command::get_wow_path() {
+                std::path::PathBuf::from(path)
+            } else {
+                println!("WoW path not found");
+                return Ok(());
+            };
 
-            let root = std::path::PathBuf::from(
-                r"Z:\Battle.NET Lyb\World of Warcraft\_retail_\WTF\Account",
-            );
+            println!("Detected WoW path raw: {:?}", gwp_command::get_wow_path());
+            println!("Full folder to watch: {:?}", root);
 
             if root.exists() {
                 let mut watcher =
