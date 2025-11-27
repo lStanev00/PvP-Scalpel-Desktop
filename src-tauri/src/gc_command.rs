@@ -12,7 +12,7 @@ pub struct HttpAccessHeadersInterface {
     #[serde(rename = "600")]
     header1: String,
 
-    #[serde(rename = "ga6n1fa4fcvt")]
+    #[serde(rename = "desktop")]
     header2: String,
 }
 
