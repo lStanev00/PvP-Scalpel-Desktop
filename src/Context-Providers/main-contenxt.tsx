@@ -36,8 +36,10 @@ export interface UserContextType {
     setUser: Dispatch<SetStateAction<User | undefined>>;
     httpFetch: (endpoint: string, options?: HttpOptions) => Promise<HttpResponse>;
     inputRef: React.RefObject<HTMLInputElement | null>;
+    webUrl: String;
 }
 
+const webUrl = "https://www.pvpscalpel.com"
 const cfg = await invoke<HttpAccessHeadersInterface>("get_config");
 export const UserContext = createContext<UserContextType | null>(null);
 
@@ -66,7 +68,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     );
 
     return (
-        <UserContext.Provider value={{ user, setUser, httpFetch, inputRef }}>
+        <UserContext.Provider value={{ user, setUser, httpFetch, inputRef, webUrl }}>
             {children}
         </UserContext.Provider>
     );

@@ -1,6 +1,8 @@
 import { useState } from "react";
 import useMatches from "../../Hooks/useMatches";
 import { MatchWithId, Player } from "../../Interfaces/matches";
+import { open } from "@tauri-apps/plugin-shell";
+import useUserContext from "../../Hooks/useUserContext";
 
 export default function DemoContent() {
     const matches = useMatches();
@@ -72,6 +74,7 @@ export default function DemoContent() {
 
 function TeamTable({ title, players }: { title: string; players: Player[] }) {
     const [hovered, setHovered] = useState<number | null>(null);
+    const { webUrl } = useUserContext();
 
     const rowStyle = (i: number): React.CSSProperties => ({
         ...styles.tr,
@@ -114,6 +117,7 @@ function TeamTable({ title, players }: { title: string; players: Player[] }) {
                                             : rowStyle(i).background,
                                     cursor: "pointer",
                                 }}
+                                onClick={() => open(`${webUrl}/check/eu/${p.realm}/${p.name}`)}
                                 onMouseEnter={() => setHovered(i)}
                                 onMouseLeave={() => setHovered(null)}>
                                 <td
