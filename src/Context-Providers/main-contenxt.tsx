@@ -85,8 +85,12 @@ async function httpFetchWithCredentials<T = unknown>(
             ...options.headers,
         },
     };
-
+    
+    if (import.meta.env.MODE == `development` && defaultOptions.headers !== undefined) {
+        defaultOptions.headers.ga6n1fa4fcvt = "EiDcafRc45$td4aedrgh4615tokenbtw"
+    }
     const finalOptions = { ...defaultOptions, ...options };
+
 
     try {
         const res = await fetch(apiDomain + endpoint, finalOptions);
