@@ -189,6 +189,7 @@ const styles: Record<string, React.CSSProperties> = {
         fontFamily: "Segoe UI, sans-serif",
         background: "linear-gradient(180deg, #0b0f17 0%, #111827 100%)",
         minHeight: "100vh",
+        width: "100%"
     },
     header: {
         display: "flex",
