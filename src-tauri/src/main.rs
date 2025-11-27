@@ -57,7 +57,8 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             read_saved_variables,
             im_command::identify_match,
-            gc_command::get_config
+            gc_command::get_config,
+            gc_command::get_local_config
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri app");

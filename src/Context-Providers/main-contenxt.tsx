@@ -10,6 +10,7 @@ import {
 import { Fingerprint } from "../Helpers/getFingerprint";
 import { invoke } from "@tauri-apps/api/core";
 import { HttpAccessHeadersInterface } from "../Interfaces/HttpAccessHeadersInterface";
+import { LocalPass } from "../Interfaces/LocalPass";
 
 interface HttpResponse<T = unknown> {
     status: number;
@@ -41,6 +42,7 @@ export interface UserContextType {
 
 const webUrl = "https://www.pvpscalpel.com"
 const cfg = await invoke<HttpAccessHeadersInterface>("get_config");
+const local_cfg = await invoke<LocalPass>("get_local_config")
 export const UserContext = createContext<UserContextType | null>(null);
 
 export const UserProvider = ({ children }: { children: ReactNode }) => {
@@ -89,7 +91,8 @@ async function httpFetchWithCredentials<T = unknown>(
     };
     
     if (import.meta.env.MODE == `development` && defaultOptions.headers !== undefined) {
-        defaultOptions.headers.ga6n1fa4fcvt = "EiDcafRc45$td4aedrgh4615tokenbtw"
+        const localCfgArr = (Object.entries(local_cfg))[0];
+        defaultOptions.headers[localCfgArr[0]] = localCfgArr[1]
     }
     const finalOptions = { ...defaultOptions, ...options };
 
