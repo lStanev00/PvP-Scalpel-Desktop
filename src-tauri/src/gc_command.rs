@@ -1,9 +1,7 @@
 use serde::Serialize;
 use ts_rs::TS;
 
-// const HEADER1: &str = "600";
 const VALUE1: &str = "BasicPass";
-// const HEADER2: &str = "ga6n1fa4fcvt";
 const VALUE2: &str = "EiDcafRc45$td4aedrgh4615DESKTOP";
 const VALUE3: &str = "EiDcafRc45$td4aedrgh4615tokenbtw";
 
