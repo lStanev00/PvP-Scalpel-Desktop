@@ -13,6 +13,7 @@ export interface Player {
     kills: number;
     deaths: number;
     isOwner: boolean;
+    MSS?: [string, number][];
     pvpTalents?: number[]; // only present for owner
 }
 

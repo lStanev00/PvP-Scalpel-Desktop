@@ -68,6 +68,8 @@ export default function DemoContent() {
                 <TeamTable title="Alliance" players={alliance} />
                 <TeamTable title="Horde" players={horde} />
             </section>
+
+            <MSSStatsSection players={last.players} />
         </div>
     );
 }
@@ -163,6 +165,50 @@ function TeamTable({ title, players }: { title: string; players: Player[] }) {
     );
 }
 
+function MSSStatsSection({ players }: { players: Player[] }) {
+    // Collect all stats for all players
+    const allStats = players.flatMap((p) => p.MSS ?? []);
+
+    // If no map stats exist -> don't render
+    if (allStats.length === 0) {
+        return null;
+    }
+
+    return (
+        <div style={styles.MSSBox}>
+            <h3 style={styles.teamTitle}>Map-Specific Stats</h3>
+
+            <table style={styles.table}>
+                <thead>
+                    <tr>
+                        <th style={styles.th}>Player</th>
+                        <th style={styles.th}>Stat</th>
+                        <th style={styles.th}>Value</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {players.map((p, i) => {
+                        if (!p.MSS || p.MSS.length === 0) return null;
+
+                        return p.MSS.map(([statName, statValue], idx) => (
+                            <tr key={`${i}-${idx}`} style={styles.tr}>
+                                <td style={{ ...styles.td, fontWeight: p.isOwner ? "700" : "400",
+                                    color: p.isOwner ? "gold" : "white" }}>
+                                    {p.name}
+                                </td>
+                                <td style={styles.td}>{statName}</td>
+                                <td style={styles.td}>{statValue}</td>
+                            </tr>
+                        ));
+                    })}
+                </tbody>
+            </table>
+        </div>
+    );
+}
+
+
+
 function classColor(cls: string): string {
     const colors: Record<string, string> = {
         WARRIOR: "#C79C6E",
@@ -184,29 +230,33 @@ function classColor(cls: string): string {
 
 const styles: Record<string, React.CSSProperties> = {
     wrapper: {
-        color: "white",
+        color: "var(--color-text)",
         padding: "40px",
-        fontFamily: "Segoe UI, sans-serif",
-        background: "linear-gradient(180deg, #0b0f17 0%, #111827 100%)",
+        fontFamily: "var(--font-base)",
+        background: "var(--bg-main-card-char-details)",
         minHeight: "100vh",
-        width: "100%"
+        width: "100%",
     },
+
     header: {
         display: "flex",
         alignItems: "center",
         gap: "16px",
         marginBottom: "32px",
-        borderBottom: "1px solid rgba(255,255,255,0.12)",
+        borderBottom: `1px solid var(--divider-color)`,
         paddingBottom: "12px",
+        background: "var(--bg-header)",
     },
+
     noData: {
         padding: "60px",
         fontSize: "22px",
-        color: "white",
-        fontFamily: "Segoe UI, sans-serif",
+        color: "var(--color-text)",
+        fontFamily: "var(--font-base)",
         textAlign: "center",
         opacity: 0.85,
     },
+
     metaContainer: {
         display: "flex",
         flexWrap: "wrap",
@@ -219,14 +269,14 @@ const styles: Record<string, React.CSSProperties> = {
         flexDirection: "column",
         padding: "14px 18px",
         minWidth: "160px",
-        background: "rgba(255,255,255,0.06)",
-        borderRadius: "8px",
-        border: "1px solid rgba(255,255,255,0.1)",
+        background: "var(--bg-row)",
+        borderRadius: "var(--radius)",
+        border: `1px solid var(--border-color)`,
     },
 
     metaLabel: {
         fontSize: "13px",
-        opacity: 0.6,
+        color: "var(--color-muted)",
         marginBottom: "4px",
         textTransform: "uppercase",
         letterSpacing: "0.5px",
@@ -235,10 +285,11 @@ const styles: Record<string, React.CSSProperties> = {
     metaValue: {
         fontSize: "18px",
         fontWeight: 600,
+        color: "var(--color-text)",
     },
 
     metaMMR: {
-        boxShadow: "0 0 12px rgba(0,255,0,0.15)",
+        boxShadow: "0 0 12px rgba(0, 245, 212, 0.25)",
     },
 
     teams: {
@@ -246,15 +297,17 @@ const styles: Record<string, React.CSSProperties> = {
         gap: "28px",
         flexDirection: "column",
     },
+
     teamBox: {
         flex: 1,
-        background: "rgba(255,255,255,0.04)",
+        background: "var(--bg-table)",
         padding: "22px",
-        borderRadius: "12px",
-        border: "1px solid rgba(255,255,255,0.08)",
+        borderRadius: "var(--radius)",
+        border: `1px solid var(--border-color)`,
         boxShadow: "0 0 12px rgba(0,0,0,0.25)",
         overflowX: "auto",
     },
+
     teamTitle: {
         textAlign: "center",
         marginBottom: "18px",
@@ -262,30 +315,48 @@ const styles: Record<string, React.CSSProperties> = {
         fontWeight: 700,
         letterSpacing: "0.5px",
         textTransform: "uppercase",
+        color: "var(--color-header-accent)",
     },
+
     table: {
         width: "100%",
         borderCollapse: "separate",
         borderSpacing: "0",
         minWidth: "900px",
     },
+
     th: {
         textAlign: "left",
         padding: "10px 12px",
-        borderBottom: "2px solid rgba(255,255,255,0.18)",
-        borderRight: "1px solid rgba(255,255,255,0.08)",
+        borderBottom: `2px solid var(--divider-color)`,
+        borderRight: `1px solid var(--border-color)`,
         fontWeight: 600,
         fontSize: "14px",
-        background: "rgba(255,255,255,0.06)",
+        background: "var(--bg-row-alt)",
         backdropFilter: "blur(4px)",
+        color: "var(--color-text)",
     },
+
     tr: {
         transition: "background 0.18s ease",
     },
+
     td: {
         padding: "10px 12px",
-        borderBottom: "1px solid rgba(255,255,255,0.08)",
-        borderRight: "1px solid rgba(255,255,255,0.05)",
-        background: "rgba(0,0,0,0.22)",
+        borderBottom: `1px solid var(--divider-color)`,
+        borderRight: `1px solid var(--border-color)`,
+        background: "var(--bg-row)",
+        color: "var(--color-text)",
+    },
+
+    // MSS SECTION
+    MSSBox: {
+        marginTop: "32px",
+        background: "var(--bg-table)",
+        padding: "22px",
+        borderRadius: "var(--radius)",
+        border: `1px solid var(--border-color)`,
+        boxShadow: "0 0 12px rgba(0,0,0,0.25)",
+        overflowX: "auto",
     },
 };
