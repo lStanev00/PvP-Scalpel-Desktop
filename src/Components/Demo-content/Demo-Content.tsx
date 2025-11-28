@@ -1,13 +1,24 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import useMatches from "../../Hooks/useMatches";
-import { MatchWithId, Player } from "../../Interfaces/matches";
+import { Player } from "../../Interfaces/matches";
 import { open } from "@tauri-apps/plugin-shell";
 import useUserContext from "../../Hooks/useUserContext";
 
 export default function DemoContent() {
     const matches = useMatches();
-    const last: MatchWithId | undefined = matches.at(-1);
 
+    const [page, setPage] = useState(1);
+
+    useEffect(() => {
+        if (matches.length > 0) {
+            setPage(matches.length); // jump to newest match
+        }
+    }, [matches.length]);
+
+    const totalPages = matches.length;
+
+    // Correct: page 1 -> matches[0], last page -> matches[matches.length-1]
+    const last = matches[page - 1] ?? null;
     if (!last) {
         return (
             <div style={styles.noData}>
@@ -27,8 +38,48 @@ export default function DemoContent() {
         <div style={styles.wrapper}>
             <header style={styles.header}>
                 <img height={60} src="logo/logo.png" alt="PvP Scalpel" />
-                <h1>Last Match</h1>
+                <h1>Match history</h1>
             </header>
+
+            <div
+                style={{
+                    display: "flex",
+                    justifyContent: "center",
+                    gap: "16px",
+                    marginBottom: "24px",
+                }}>
+                <button
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    disabled={page === 1}
+                    style={{
+                        padding: "8px 14px",
+                        background: "rgba(255,255,255,0.08)",
+                        border: "1px solid var(--border-color)",
+                        borderRadius: "6px",
+                        cursor: page === 1 ? "not-allowed" : "pointer",
+                        opacity: page === 1 ? 0.4 : 1,
+                    }}>
+                    Prev
+                </button>
+
+                <span style={{ padding: "8px", color: "var(--color-text)" }}>
+                    Page {page} / {totalPages}
+                </span>
+
+                <button
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={page === totalPages}
+                    style={{
+                        padding: "8px 14px",
+                        background: "rgba(255,255,255,0.08)",
+                        border: "1px solid var(--border-color)",
+                        borderRadius: "6px",
+                        cursor: page === totalPages ? "not-allowed" : "pointer",
+                        opacity: page === totalPages ? 0.4 : 1,
+                    }}>
+                    Next
+                </button>
+            </div>
 
             <section style={styles.metaContainer}>
                 <div style={styles.metaItem}>
@@ -83,6 +134,9 @@ function TeamTable({ title, players }: { title: string; players: Player[] }) {
         background: i % 2 === 0 ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.06)",
     });
 
+const formatClass = (c?: string) =>
+    c ? c[0].toUpperCase() + c.slice(1).toLowerCase() : "-";
+
     return (
         <div style={styles.teamBox}>
             <h3 style={styles.teamTitle}>{title}</h3>
@@ -91,8 +145,7 @@ function TeamTable({ title, players }: { title: string; players: Player[] }) {
                 <thead>
                     <tr>
                         <th>Player</th>
-                        <th>Class</th>
-                        <th>Spec</th>
+                        <th>Spec(Class)</th>
                         <th>Kills</th>
                         <th>Deaths</th>
                         <th>Damage</th>
@@ -124,14 +177,13 @@ function TeamTable({ title, players }: { title: string; players: Player[] }) {
                                 onMouseLeave={() => setHovered(null)}>
                                 <td
                                     style={{
-                                        color: p.isOwner ? "gold" : "white",
                                         fontWeight: p.isOwner ? 700 : 400,
+                                        color: classColor(p.class) 
                                     }}>
-                                    {p.name}
+                                    {p.isOwner ? "• " : null}{p.name}
                                 </td>
 
-                                <td style={{ color: classColor(p.class) }}>{p.class}</td>
-                                <td>{p.spec ?? "-"}</td>
+                                <td>{p.spec ?? "-"} ({formatClass(p.class)})</td>
 
                                 <td>{p.kills ?? "-"}</td>
                                 <td>{p.deaths ?? "-"}</td>
@@ -166,13 +218,47 @@ function TeamTable({ title, players }: { title: string; players: Player[] }) {
 }
 
 function MSSStatsSection({ players }: { players: Player[] }) {
-    // Collect all stats for all players
-    const allStats = players.flatMap((p) => p.MSS ?? []);
+    // Collect ALL unique stat names from all players
+    const statSet = new Set<string>();
 
-    // If no map stats exist -> don't render
-    if (allStats.length === 0) {
-        return null;
-    }
+    players.forEach((p) => {
+        if (p.MSS) {
+            for (const [statName] of p.MSS) {
+                statSet.add(statName);
+            }
+        }
+    });
+
+    const statNames = Array.from(statSet);
+
+    if (statNames.length === 0) return null;
+
+    // Build grouped rows with ALL stats per player
+    const grouped = players.map((p) => {
+        const statsRecord: Record<string, number> = {};
+
+        // Initialize all stats to 0
+        statNames.forEach((s) => (statsRecord[s] = 0));
+
+        if (p.MSS) {
+            for (const [statName, statValue] of p.MSS) {
+                statsRecord[statName] = statValue;
+            }
+        }
+
+        return {
+            player: p.name,
+            isOwner: p.isOwner ?? false,
+            stats: statsRecord,
+        };
+    });
+
+    // ❗ FILTER OUT PLAYERS WHERE ALL STAT VALUES = 0
+    const filteredRows = grouped.filter((row) =>
+        Object.values(row.stats).some((v) => v > 0)
+    );
+
+    if (filteredRows.length === 0) return null;
 
     return (
         <div style={styles.MSSBox}>
@@ -182,31 +268,38 @@ function MSSStatsSection({ players }: { players: Player[] }) {
                 <thead>
                     <tr>
                         <th style={styles.th}>Player</th>
-                        <th style={styles.th}>Stat</th>
-                        <th style={styles.th}>Value</th>
+                        {statNames.map((stat) => (
+                            <th key={stat} style={styles.th}>
+                                {stat}
+                            </th>
+                        ))}
                     </tr>
                 </thead>
-                <tbody>
-                    {players.map((p, i) => {
-                        if (!p.MSS || p.MSS.length === 0) return null;
 
-                        return p.MSS.map(([statName, statValue], idx) => (
-                            <tr key={`${i}-${idx}`} style={styles.tr}>
-                                <td style={{ ...styles.td, fontWeight: p.isOwner ? "700" : "400",
-                                    color: p.isOwner ? "gold" : "white" }}>
-                                    {p.name}
+                <tbody>
+                    {filteredRows.map((row, i) => (
+                        <tr key={i} style={styles.tr}>
+                            <td
+                                style={{
+                                    ...styles.td,
+                                    color: row.isOwner ? "gold" : "white",
+                                    fontWeight: row.isOwner ? 700 : 400,
+                                }}>
+                                {row.player}
+                            </td>
+
+                            {statNames.map((stat) => (
+                                <td key={stat} style={styles.td}>
+                                    {row.stats[stat]}
                                 </td>
-                                <td style={styles.td}>{statName}</td>
-                                <td style={styles.td}>{statValue}</td>
-                            </tr>
-                        ));
-                    })}
+                            ))}
+                        </tr>
+                    ))}
                 </tbody>
             </table>
         </div>
     );
 }
-
 
 
 function classColor(cls: string): string {
