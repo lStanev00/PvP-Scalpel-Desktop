@@ -1,8 +1,8 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-mod im_command;
 mod gc_command;
+mod im_command;
 mod watcher;
 mod gwp_command;
 
@@ -43,7 +43,7 @@ fn main() {
                     .watch(&root, RecursiveMode::Recursive)
                     .expect("failed to watch folder");
 
-                // wathcer in mem stored
+                // Watcher in mem stored
                 let keeper = app.state::<WatcherKeeper>();
                 *keeper.0.lock().unwrap() = Some(watcher);
 
