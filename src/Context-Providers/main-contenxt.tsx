@@ -90,7 +90,7 @@ async function httpFetchWithCredentials<T = unknown>(
         },
     };
     
-    if (import.meta.env.MODE == `development` && defaultOptions.headers !== undefined) {
+    if (import.meta.env.DEV && defaultOptions.headers) {
         const localCfgArr = (Object.entries(local_cfg))[0];
         defaultOptions.headers[localCfgArr[0]] = localCfgArr[1]
     }
