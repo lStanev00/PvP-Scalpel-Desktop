@@ -7,8 +7,12 @@ import updatePersence from "../../Helpers/updatePresence";
 
 export default function DemoContent() {
     const matches = useMatches();
-
     const [page, setPage] = useState(1);
+    const [rpcUpdate, setRpcUpdate] = useState("");
+
+    useEffect(() => {
+        updatePersence(rpcUpdate === "" ? "" : `Checking ${owner?.name}`);
+    }, [rpcUpdate]);
 
     useEffect(() => {
         if (matches.length > 0) {
@@ -16,10 +20,10 @@ export default function DemoContent() {
         }
     }, [matches.length]);
 
-    const totalPages = matches.length;
-
     // Correct: page 1 -> matches[0], last page -> matches[matches.length-1]
     const last = matches[page - 1] ?? null;
+    const totalPages = matches.length;
+
     if (!last) {
         return (
             <div style={styles.noData}>
@@ -35,7 +39,9 @@ export default function DemoContent() {
     const alliance = last.players.filter((p) => p.faction === 0);
     const horde = last.players.filter((p) => p.faction === 1);
 
-    if(owner?.name) updatePersence(`Checking ${owner?.name}`);
+    if (owner?.name && owner.name !== rpcUpdate) {
+        setRpcUpdate(owner.name);
+    }
 
     return (
         <div style={styles.wrapper}>
@@ -137,8 +143,7 @@ function TeamTable({ title, players }: { title: string; players: Player[] }) {
         background: i % 2 === 0 ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.06)",
     });
 
-const formatClass = (c?: string) =>
-    c ? c[0].toUpperCase() + c.slice(1).toLowerCase() : "-";
+    const formatClass = (c?: string) => (c ? c[0].toUpperCase() + c.slice(1).toLowerCase() : "-");
 
     return (
         <div style={styles.teamBox}>
@@ -181,12 +186,15 @@ const formatClass = (c?: string) =>
                                 <td
                                     style={{
                                         fontWeight: p.isOwner ? 700 : 400,
-                                        color: classColor(p.class) 
+                                        color: classColor(p.class),
                                     }}>
-                                    {p.isOwner ? "• " : null}{p.name}
+                                    {p.isOwner ? "• " : null}
+                                    {p.name}
                                 </td>
 
-                                <td>{p.spec ?? "-"} ({formatClass(p.class)})</td>
+                                <td>
+                                    {p.spec ?? "-"} ({formatClass(p.class)})
+                                </td>
 
                                 <td>{p.kills ?? "-"}</td>
                                 <td>{p.deaths ?? "-"}</td>
@@ -257,9 +265,7 @@ function MSSStatsSection({ players }: { players: Player[] }) {
     });
 
     // ❗ FILTER OUT PLAYERS WHERE ALL STAT VALUES = 0
-    const filteredRows = grouped.filter((row) =>
-        Object.values(row.stats).some((v) => v > 0)
-    );
+    const filteredRows = grouped.filter((row) => Object.values(row.stats).some((v) => v > 0));
 
     if (filteredRows.length === 0) return null;
 
@@ -303,7 +309,6 @@ function MSSStatsSection({ players }: { players: Player[] }) {
         </div>
     );
 }
-
 
 function classColor(cls: string): string {
     const colors: Record<string, string> = {
