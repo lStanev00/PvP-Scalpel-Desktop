@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import useMatches from "../../Hooks/useMatches";
 import { Player } from "../../Interfaces/matches";
-import { open } from "@tauri-apps/plugin-shell";
 import useUserContext from "../../Hooks/useUserContext";
 import updatePersence from "../../Helpers/updatePresence";
+import { openUrl } from "../../Helpers/open";
 
 export default function DemoContent() {
     const matches = useMatches();
@@ -180,7 +180,7 @@ function TeamTable({ title, players }: { title: string; players: Player[] }) {
                                             : rowStyle(i).background,
                                     cursor: "pointer",
                                 }}
-                                onClick={() => open(`${webUrl}/check/eu/${p.realm}/${p.name}`)}
+                                onClick={() => openUrl(`${webUrl}/check/eu/${p.realm}/${p.name}`)}
                                 onMouseEnter={() => setHovered(i)}
                                 onMouseLeave={() => setHovered(null)}>
                                 <td

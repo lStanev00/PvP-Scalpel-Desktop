@@ -6,6 +6,7 @@ mod im_command;
 mod watcher;
 mod gwp_command;
 mod discord_rpc;
+mod ourl_command;
 
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 use std::sync::Mutex;
@@ -22,7 +23,6 @@ fn read_saved_variables(path: String) -> Result<String, String> {
 
 fn main() {
     tauri::Builder::default()
-    .plugin(tauri_plugin_shell::init())
     .manage(WatcherKeeper::default())
     .setup(|app| {
             let handle = app.handle().clone();
@@ -62,7 +62,8 @@ fn main() {
             im_command::identify_match,
             gc_command::get_config,
             gc_command::get_local_config,
-            discord_rpc::update_state_rich_presence
+            ourl_command::open_url,
+            discord_rpc::update_state_rich_presence,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri app");

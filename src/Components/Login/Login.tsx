@@ -4,7 +4,7 @@ import Style from "./Login.module.css";
 import { useNavigate } from "react-router-dom";
 import useUserContext from "../../Hooks/useUserContext.js";
 import getFingerprint from "../../Helpers/getFingerprint.js";
-import { open } from "@tauri-apps/plugin-shell";
+import { openUrl } from "../../Helpers/open.js";
 
 export default function Login() {
     const [error, setError] = useState<string | JSX.Element | undefined>();
@@ -62,7 +62,7 @@ export default function Login() {
                         <a
                             onClick={(e) => {
                                 e.preventDefault();
-                                open("https://www.pvpscalpel.com/reset/password");
+                                openUrl("https://www.pvpscalpel.com/reset/password");
                             }}></a>
                     </>
                 );
@@ -81,7 +81,7 @@ export default function Login() {
                         <a
                             onClick={(e) => {
                                 e.preventDefault();
-                                open("https://www.pvpscalpel.com/reset/password");
+                                openUrl("https://www.pvpscalpel.com/reset/password");
                             }}>
                             Reset password
                         </a>
@@ -135,7 +135,7 @@ export default function Login() {
                             <a
                                 onClick={(e) => {
                                     e.preventDefault();
-                                    open("https://www.pvpscalpel.com/reset/password");
+                                    openUrl("https://www.pvpscalpel.com/reset/password");
                                 }}>
                                 Reset here
                             </a>
@@ -145,7 +145,7 @@ export default function Login() {
                             <a
                                 onClick={(e) => {
                                     e.preventDefault();
-                                    open("https://www.pvpscalpel.com/register");
+                                    openUrl("https://www.pvpscalpel.com/register");
                                 }}>
                                 Register here
                             </a>
