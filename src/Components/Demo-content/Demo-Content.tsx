@@ -11,7 +11,7 @@ export default function DemoContent() {
     const [rpcUpdate, setRpcUpdate] = useState("");
 
     useEffect(() => {
-        updatePersence(rpcUpdate === "" ? "" : `Checking ${owner?.name}`);
+        updatePersence(rpcUpdate === "" ? "" : `Match lookup: ${owner?.name}`);
     }, [rpcUpdate]);
 
     useEffect(() => {
