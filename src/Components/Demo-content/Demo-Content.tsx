@@ -3,6 +3,7 @@ import useMatches from "../../Hooks/useMatches";
 import { Player } from "../../Interfaces/matches";
 import { open } from "@tauri-apps/plugin-shell";
 import useUserContext from "../../Hooks/useUserContext";
+import updatePersence from "../../Helpers/updatePresence";
 
 export default function DemoContent() {
     const matches = useMatches();
@@ -33,6 +34,8 @@ export default function DemoContent() {
 
     const alliance = last.players.filter((p) => p.faction === 0);
     const horde = last.players.filter((p) => p.faction === 1);
+
+    if(owner?.name) updatePersence(`Checking ${owner?.name}`);
 
     return (
         <div style={styles.wrapper}>
