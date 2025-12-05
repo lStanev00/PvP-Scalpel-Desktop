@@ -5,6 +5,7 @@ mod gc_command;
 mod im_command;
 mod watcher;
 mod gwp_command;
+mod discord_rpc;
 
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 use std::sync::Mutex;
@@ -52,13 +53,16 @@ fn main() {
                 println!("The root path does not exist. The watcher won't register.")
             };
 
+            discord_rpc::start_rich_presence(); // Start Discord presence
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             read_saved_variables,
             im_command::identify_match,
             gc_command::get_config,
-            gc_command::get_local_config
+            gc_command::get_local_config,
+            discord_rpc::update_stater_rich_presence
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri app");
