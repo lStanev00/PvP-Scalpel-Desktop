@@ -62,7 +62,7 @@ fn main() {
             im_command::identify_match,
             gc_command::get_config,
             gc_command::get_local_config,
-            discord_rpc::update_stater_rich_presence
+            discord_rpc::update_state_rich_presence
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri app");

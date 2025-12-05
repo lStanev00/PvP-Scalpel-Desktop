@@ -19,7 +19,6 @@ pub fn start_rich_presence() {
             .assets(
                 activity::Assets::new()
                     .large_image("logo")
-                    .large_text("PvP Scalpel Analytics"),
             );
 
         if client.set_activity(activity).is_err() {
@@ -31,16 +30,15 @@ pub fn start_rich_presence() {
 }
 
 #[tauri::command]
-pub fn update_stater_rich_presence(state: &str) {
+pub fn update_state_rich_presence(state: &str) {
     if let Some(wrapper) = CLIENT.get() {
         if let Ok(mut client) = wrapper.lock() {
             let activity = activity::Activity::new()
-                .details("PvP Scalpel Desktop")
+                .details("In Development")
                 .state(state)
                 .assets(
                     activity::Assets::new()
                         .large_image("logo")
-                        .large_text("PvP Scalpel Analytics"),
                 );
 
             let _ = client.set_activity(activity);
