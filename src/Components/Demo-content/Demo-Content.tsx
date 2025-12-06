@@ -4,6 +4,7 @@ import { Player } from "../../Interfaces/matches";
 import useUserContext from "../../Hooks/useUserContext";
 import updatePersence from "../../Helpers/updatePresence";
 import { openUrl } from "../../Helpers/open";
+import TimelineSection from "./Timeline-Section";
 
 export default function DemoContent() {
     const matches = useMatches();
@@ -130,6 +131,7 @@ export default function DemoContent() {
             </section>
 
             <MSSStatsSection players={last.players} />
+            <TimelineSection timeline={last.timeline ?? []} />
         </div>
     );
 }
