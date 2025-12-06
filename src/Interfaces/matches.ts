@@ -39,11 +39,25 @@ export interface MatchDetails {
     mapName: string; // "Nagrand Arena", "Warsong Gulch", etc.
 }
 
+export interface TimelineEntry {
+    t: number;               // seconds since match start
+    event: string;           // "START" | "STOP" | "SUCCEEDED" | ...
+    spellID: number;
+    castGUID: string;
+    hp: number | null;       // 0.0 - 1.0
+    power: number | null;    // 0.0 - 1.0
+    resourceType: number;    // Rage=1, Energy=3, Mana=0, etc.
+    pvpRole?: string | null; // Tank / Healer / Damage in PvP classification
+}
+
+
 export interface Match {
     matchDetails: MatchDetails;
     players: Player[];
     interrupts?: Interrupts;
     auras?: Auras;
+    timeline?: TimelineEntry[];
+    matchKey?: string
 }
 
 export interface MatchWithId extends Match {
