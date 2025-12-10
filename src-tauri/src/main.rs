@@ -11,14 +11,74 @@ mod ourl_command;
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 use std::sync::Mutex;
 use tauri::Manager;
-mod cascffi;
-use cascffi::CascStorage;
+use std::ffi::CString;
+
+pub mod bindings;
+use crate::bindings::cascffi::CascFFI;
+use tauri::AppHandle;
+
+pub struct CascRuntime {
+    pub ffi: CascFFI,
+    pub handle: usize,
+}
+
+pub struct CascGlobal {
+    pub runtime: Mutex<Option<CascRuntime>>,
+}
 
 #[tauri::command]
-fn casc_read(base_path: String, product: String, file: String) -> Result<Vec<u8>, String> {
-    let storage = CascStorage::open(&base_path, &product)?;
-    storage.read_file(&file)
+fn casc_init(app: AppHandle, state: tauri::State<CascGlobal>) -> Result<String, String> {
+    let ffi = CascFFI::load(&app)?; // LOAD DLL ONCE
+
+    let base = CString::new("Z:/Battle.NET Lyb/World of Warcraft").unwrap();
+    let product = CString::new("wow").unwrap();
+
+    let mut handle: usize = 0;
+    let ret = unsafe { (ffi.open)(base.as_ptr(), product.as_ptr(), &mut handle) };
+
+    if ret != 0 || handle == 0 {
+        return Err(format!("Failed to init CASC: ret={ret}, handle={handle}"));
+    }
+
+    // Save both ffi + handle together
+    let mut guard = state.runtime.lock().unwrap();
+    *guard = Some(CascRuntime { ffi, handle });
+
+    Ok("CASC initialized".into())
 }
+
+
+#[tauri::command]
+fn casc_try_read(
+    state: tauri::State<CascGlobal>,
+    path: String,
+) -> Result<String, String> {
+    let guard = state.runtime.lock().unwrap();
+    let rt = guard.as_ref().ok_or("CASC not initialized")?;
+
+    let cpath = CString::new(path.clone()).unwrap();
+
+    let mut buf_ptr: *mut u8 = std::ptr::null_mut();
+    let mut buf_len: u32 = 0;
+
+    let r = unsafe {
+        (rt.ffi.read_file)(rt.handle, cpath.as_ptr(), &mut buf_ptr, &mut buf_len)
+    };
+
+    if r != 0 {
+        return Err(format!("read failed ret={r} for '{path}'"));
+    }
+
+    let data = unsafe {
+        std::slice::from_raw_parts(buf_ptr, buf_len as usize).to_vec()
+    };
+
+    unsafe { (rt.ffi.free_buf)(buf_ptr) };
+
+    Ok(format!("Read {} bytes from '{}'", data.len(), path))
+}
+
+
 
 #[derive(Default)]
 struct WatcherKeeper(Mutex<Option<RecommendedWatcher>>);
@@ -32,8 +92,20 @@ fn read_saved_variables(path: String) -> Result<String, String> {
 fn main() {
     tauri::Builder::default()
     .manage(WatcherKeeper::default())
+    .manage(CascGlobal{
+        runtime: Mutex::new(None)
+    })
     .setup(|app| {
             let handle = app.handle().clone();
+            {
+                let state = app.state::<CascGlobal>();
+                if let Err(e) = casc_init(handle.clone(), state) {
+                    println!("CASC init error: {e}");
+                } else {
+                    println!("CASC initialized successfully.");
+                }
+            }
+
             let root = if let Some(path) = gwp_command::get_wow_path() {
                 std::path::PathBuf::from(path)
             } else {
@@ -72,7 +144,7 @@ fn main() {
             gc_command::get_local_config,
             ourl_command::open_url,
             discord_rpc::update_state_rich_presence,
-            casc_read,
+            casc_try_read,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri app");

@@ -25,14 +25,16 @@ export default function DemoContent() {
     const last = matches[page - 1] ?? null;
     const totalPages = matches.length;
 
-    if (!last) {
-        return (
-            <div style={styles.noData}>
-                <img height={60} src="logo/logo.png" alt="logo" />
-                <p>No PvP Scalpel data yet…</p>
-            </div>
-        );
-    }
+    if (!last) return <LoadSpellDB2 />;
+
+    // if (!last) {
+    //     return (
+    //         <div style={styles.noData}>
+    //             <img height={60} src="logo/logo.png" alt="logo" />
+    //             <p>No PvP Scalpel data yet…</p>
+    //         </div>
+    //     );
+    // }
 
     const owner = last.players.find((p) => p.isOwner);
     const delta = owner ? (owner.postmatchMMR ?? 0) - (owner.prematchMMR ?? 0) : 0;
@@ -463,3 +465,13 @@ const styles: Record<string, React.CSSProperties> = {
         overflowX: "auto",
     },
 };
+
+import { invoke } from "@tauri-apps/api/core";
+
+function LoadSpellDB2() {
+    invoke("casc_open_test")
+        .then(res => console.log(res))
+        .catch(err => console.error(err));
+
+    return "hello world";
+}
