@@ -11,6 +11,14 @@ mod ourl_command;
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 use std::sync::Mutex;
 use tauri::Manager;
+mod cascffi;
+use cascffi::CascStorage;
+
+#[tauri::command]
+fn casc_read(base_path: String, product: String, file: String) -> Result<Vec<u8>, String> {
+    let storage = CascStorage::open(&base_path, &product)?;
+    storage.read_file(&file)
+}
 
 #[derive(Default)]
 struct WatcherKeeper(Mutex<Option<RecommendedWatcher>>);
@@ -64,6 +72,7 @@ fn main() {
             gc_command::get_local_config,
             ourl_command::open_url,
             discord_rpc::update_state_rich_presence,
+            casc_read,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri app");
