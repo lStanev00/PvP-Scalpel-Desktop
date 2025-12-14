@@ -44,6 +44,18 @@ export default function DemoContent() {
         setRpcUpdate(owner.name);
     }
 
+    const spellIdSet = new Set<number>();
+
+    (last.timeline ?? []).forEach((entry) => {
+        if (entry.spellID != null) {
+            spellIdSet.add(entry.spellID);
+        }
+    });
+
+    const spellIds = Array.from(spellIdSet);
+
+    console.dir(spellIds);
+
     return (
         <div style={styles.wrapper}>
             <header style={styles.header}>
