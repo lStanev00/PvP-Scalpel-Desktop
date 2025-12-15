@@ -4,7 +4,7 @@ pub struct WowRoot {
         RootEntry
     >,
 }
-
+use crate::casc_storage::types::et_type::ContentKey;
 pub struct RootEntry {
     pub content_key: ContentKey,
     pub flags: u32,

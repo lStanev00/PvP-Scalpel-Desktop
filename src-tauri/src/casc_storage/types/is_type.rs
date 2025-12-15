@@ -7,6 +7,7 @@ pub struct LocalIndex {
     pub entries: Vec<IndexEntry>,
 }
 
+use crate::casc_storage::types::et_type::EncodingKey;
 pub struct IndexEntry {
     pub encoding_key: EncodingKey,
     pub offset: u64,

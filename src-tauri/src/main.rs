@@ -7,6 +7,7 @@ mod watcher;
 mod gwp_command;
 mod discord_rpc;
 mod ourl_command;
+mod casc_storage;
 
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 use std::sync::Mutex;
