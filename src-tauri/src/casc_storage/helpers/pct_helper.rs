@@ -1,19 +1,34 @@
-use crate::casc_storage::types::*;
+use crate::casc_storage::types::{CascConfig, CascError};
 
 pub fn parse_config_text(text: &str) -> Result<CascConfig, CascError> {
-    let mut build_name = None;
-    let mut root_hash = None;
-    let mut encoding_hash = None;
+    let mut build_name: Option<String> = None;
+    let mut root_hash: Option<Vec<u8>> = None;
+    let mut encoding_hash: Option<Vec<u8>> = None;
 
-    for line in text.lines() {
-        if let Some(v) = line.strip_prefix("build-name = ") {
-            build_name = Some(v.to_string());
-        } else if let Some(v) = line.strip_prefix("root = ") {
-            let first = v.split_whitespace().next().ok_or(CascError::InvalidConfig)?;
-            root_hash = Some(hex::decode(first).map_err(|_| CascError::InvalidConfig)?);
-        } else if let Some(v) = line.strip_prefix("encoding = ") {
-            let first = v.split_whitespace().next().ok_or(CascError::InvalidConfig)?;
-            encoding_hash = Some(hex::decode(first).map_err(|_| CascError::InvalidConfig)?);
+    for raw in text.lines() {
+        let line = raw.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+
+        let mut parts = line.splitn(2, '=');
+        let key = parts.next().map(|s| s.trim()).unwrap_or("");
+        let value = parts.next().map(|s| s.trim()).unwrap_or("");
+
+        if key.eq_ignore_ascii_case("build-name") {
+            if !value.is_empty() {
+                build_name = Some(value.to_string());
+            }
+        } else if key.eq_ignore_ascii_case("root") {
+            let first = value.split_whitespace().next().unwrap_or("");
+            if !first.is_empty() {
+                root_hash = Some(hex::decode(first).map_err(|_| CascError::InvalidConfig)?);
+            }
+        } else if key.eq_ignore_ascii_case("encoding") {
+            let first = value.split_whitespace().next().unwrap_or("");
+            if !first.is_empty() {
+                encoding_hash = Some(hex::decode(first).map_err(|_| CascError::InvalidConfig)?);
+            }
         }
     }
 

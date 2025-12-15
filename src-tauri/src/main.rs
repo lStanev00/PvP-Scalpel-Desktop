@@ -13,6 +13,7 @@ use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 use std::sync::Mutex;
 use tauri::Manager;
 use crate::casc_storage::storage::CascStorage;
+use crate::casc_storage::encoding::EncodingTable;
 
 #[derive(Default)]
 struct WatcherKeeper(Mutex<Option<RecommendedWatcher>>);
@@ -40,6 +41,19 @@ fn main() {
             match &result {
                 Ok(storage) => {
                     println!("CASC root: {:?}", storage.root_path);
+                    let data_dir = if storage.root_path.join("Data").exists() {
+                        storage.root_path.join("Data")
+                    } else {
+                        storage.root_path.clone()
+                    };
+                    match EncodingTable::load(&data_dir, storage.config.encoding_hash) {
+                        Ok(table) => {
+                            println!("Encoding entries: {}", table.entries.len());
+                        }
+                        Err(e) => {
+                            eprintln!("Failed to load encoding: {}", e);
+                        }
+                    }
                 }
                 Err(e) => {
                     eprintln!("Failed to open CASC: {}", e);

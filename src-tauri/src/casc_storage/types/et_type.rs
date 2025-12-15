@@ -1,8 +1,9 @@
+use std::collections::HashMap;
+
 pub struct EncodingTable {
-    pub entries: std::collections::HashMap<
-        ContentKey,
-        EncodingEntry
-    >,
+    pub entries: HashMap<ContentKey, EncodingEntry>,
+    pub ekey_to_ckey: HashMap<EncodingKey, ContentKey>,
+    pub encryption: HashMap<EncodingKey, Vec<u64>>,
 }
 
 pub struct EncodingEntry {
