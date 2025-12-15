@@ -1,46 +1,39 @@
 use std::path::Path;
 extern crate hex;
-use crate::casc_storage::types::*;
+use crate::casc_storage::types::CascError;
+use crate::casc_storage::types::CascConfig;
+use crate::casc_storage::helpers::pct_helper::parse_config_text;
 
 pub fn load_config(root: &Path) -> Result<CascConfig, CascError> {
-    let config_dir = root.join("Data").join("config");
-
-    if !config_dir.exists() {
+    let config_root = root.join("Data").join("config");
+    if !config_root.exists() {
         return Err(CascError::FileNotFound);
     }
 
-    let mut configs = std::fs::read_dir(&config_dir)?
-        .filter_map(|e| e.ok())
-        .collect::<Vec<_>>();
+    let mut last_good: Option<CascConfig> = None;
 
-    configs.sort_by_key(|e| e.metadata().ok().and_then(|m| m.modified().ok()));
+    for bucket in std::fs::read_dir(&config_root)? {
+        let bucket = bucket?;
+        if !bucket.path().is_dir() {
+            continue;
+        }
 
-    let latest = configs.last().ok_or(CascError::FileNotFound)?;
+        for entry in std::fs::read_dir(bucket.path())? {
+            let entry = entry?;
+            if !entry.path().is_file() {
+                continue;
+            }
 
-    let data = std::fs::read(latest.path())?;
-    let text = String::from_utf8_lossy(&data);
+            let text = match std::fs::read_to_string(entry.path()) {
+                Ok(t) => t,
+                Err(_) => continue,
+            };
 
-    let mut build_name = None;
-    let mut root_hash = None;
-    let mut encoding_hash = None;
-
-    for line in text.lines() {
-        if let Some(v) = line.strip_prefix("build-name = ") {
-            build_name = Some(v.to_string());
-        } else if let Some(v) = line.strip_prefix("root = ") {
-            root_hash = Some(hex::decode(v)?);
-        } else if let Some(v) = line.strip_prefix("encoding = ") {
-            encoding_hash = Some(hex::decode(v)?);
+            if let Ok(cfg) = parse_config_text(&text) {
+                last_good = Some(cfg);
+            }
         }
     }
 
-    Ok(CascConfig {
-        build_name: build_name.ok_or(CascError::InvalidConfig)?,
-        root_hash: root_hash.ok_or(CascError::InvalidConfig)?.try_into().unwrap(),
-        encoding_hash: encoding_hash.ok_or(CascError::InvalidConfig)?.try_into().unwrap(),
-        cdn_hosts: vec![],
-        archives: vec![],
-        build_key: [0; 16],
-        cdn_key: [0; 16],
-    })
+    last_good.ok_or(CascError::InvalidConfig)
 }

@@ -2,15 +2,15 @@ use std::path::PathBuf;
 use crate::casc_storage::types::*;
 
 pub struct CascStorage { // ./types/cs_types.rs <= 
-    pub product: String,               // "wow"
+    // pub product: String,               // "wow"
     pub root_path: std::path::PathBuf,  // _retail_ folder
 
     pub config: CascConfig,
-    pub encoding: EncodingTable,
-    pub index: IndexStore,
-    pub root: WowRoot,
+    // pub encoding: EncodingTable,
+    // pub index: IndexStore,
+    // pub root: WowRoot,
 
-    pub listfile: Option<ListFile>,     // optional but VERY useful
+    // pub listfile: Option<ListFile>,     // optional but VERY useful
 }
 
 impl CascStorage {

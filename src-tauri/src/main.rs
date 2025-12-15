@@ -12,6 +12,7 @@ mod casc_storage;
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 use std::sync::Mutex;
 use tauri::Manager;
+use crate::casc_storage::storage::CascStorage;
 
 #[derive(Default)]
 struct WatcherKeeper(Mutex<Option<RecommendedWatcher>>);
@@ -33,6 +34,17 @@ fn main() {
                 println!("WoW path not found");
                 return Ok(());
             };
+            let result = CascStorage::open(
+                "Z:/Battle.NET Lyb/World of Warcraft"
+            );
+            match &result {
+                Ok(storage) => {
+                    println!("CASC root: {:?}", storage.root_path);
+                }
+                Err(e) => {
+                    eprintln!("Failed to open CASC: {}", e);
+                }
+            }
 
             println!("Detected WoW path raw: {:?}", gwp_command::get_wow_path());
             println!("Full folder to watch: {:?}", root);
