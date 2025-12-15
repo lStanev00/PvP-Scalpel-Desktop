@@ -7,6 +7,7 @@ pub enum CascError {
     Unimplemented,
     FileNotFound,
     InvalidConfig,
+    InvalidHex,
     Io(std::io::Error),
 }
 
@@ -25,6 +26,8 @@ impl fmt::Display for CascError {
                 write!(f, "not implemented"),
             CascError::Io(err) =>
                 write!(f, "io error: {}", err),
+            CascError::InvalidHex =>
+                write!(f, "invalid hex string"),
         }
     }
 }
@@ -43,5 +46,11 @@ impl std::error::Error for CascError {
 impl From<std::io::Error> for CascError {
     fn from(err: std::io::Error) -> Self {
         CascError::Io(err)
+    }
+}
+
+impl From<hex::FromHexError> for CascError {
+    fn from(_: hex::FromHexError) -> Self {
+        CascError::InvalidHex
     }
 }
