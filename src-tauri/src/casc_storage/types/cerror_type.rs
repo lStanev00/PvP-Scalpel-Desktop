@@ -6,6 +6,7 @@ pub enum CascError {
     MissingEncoding,
     Unimplemented,
     FileNotFound,
+    InvalidConfig,
     Io(std::io::Error),
 }
 
@@ -16,15 +17,18 @@ impl fmt::Display for CascError {
                 write!(f, "invalid blte format"),
             CascError::MissingEncoding =>
                 write!(f, "missing encoding entry"),
+            CascError::FileNotFound =>
+                write!(f, "file not found"),
+            CascError::InvalidConfig =>
+                write!(f, "invalid config file"),
             CascError::Unimplemented =>
                 write!(f, "not implemented"),
             CascError::Io(err) =>
                 write!(f, "io error: {}", err),
-            CascError::FileNotFound =>
-                write!(f, "file not found"),
         }
     }
 }
+
 
 
 impl std::error::Error for CascError {
