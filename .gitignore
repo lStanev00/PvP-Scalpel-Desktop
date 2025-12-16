@@ -25,4 +25,4 @@ dist-ssr
 
 # Custom (project specific)
 listfile.csv
-debug_dumps/*
+debug_dumps

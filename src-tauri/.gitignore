@@ -8,4 +8,5 @@
 
 # Debug dumps (schema inspection)
 /src/casc_storage/debug_dumps/
+/src/casc_storage/debug_dumps/*.json
 debug_dumps/*
