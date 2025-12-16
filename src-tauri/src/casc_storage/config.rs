@@ -14,7 +14,7 @@ pub fn load_config(root: &Path) -> Result<CascConfig, CascError> {
     let build_info_bytes = std::fs::read(&build_info_path)?;
     let build_info_text = String::from_utf8_lossy(&build_info_bytes);
 
-    let (build_key, cdn_key, build_name) = parse_build_info(&build_info_text)?;
+    let (build_key, cdn_key, build_name, cdn_path, cdn_hosts) = parse_build_info(&build_info_text)?;
 
     let bk = build_key.to_ascii_lowercase();
     if bk.len() < 4 {
@@ -37,9 +37,31 @@ pub fn load_config(root: &Path) -> Result<CascConfig, CascError> {
     let mut cfg = parse_config_text(&cfg_text)?;
     cfg.build_key = hex16(&build_key)?;
     cfg.cdn_key = hex16(&cdn_key)?;
+    if cdn_path.is_empty() || cdn_hosts.is_empty() {
+        return Err(CascError::InvalidConfig);
+    }
+    cfg.cdn_path = cdn_path;
+    cfg.cdn_hosts = cdn_hosts;
     if cfg.build_name.is_empty() || cfg.build_name == "unknown" {
         cfg.build_name = build_name.unwrap_or_else(|| "unknown".to_string());
     }
+
+    // Load CDN config using cdn_key (archives, etc.)
+    let ck = cdn_key.to_ascii_lowercase();
+    if ck.len() < 4 {
+        return Err(CascError::InvalidConfig);
+    }
+
+    let cdn_cfg_path = data_dir
+        .join("config")
+        .join(&ck[0..2])
+        .join(&ck[2..4])
+        .join(&ck);
+
+    let cdn_bytes = std::fs::read(&cdn_cfg_path)?;
+    let cdn_text = String::from_utf8_lossy(&cdn_bytes);
+    let archives = parse_cdn_config_text(&cdn_text)?;
+    cfg.archives = archives;
 
     Ok(cfg)
 }
@@ -75,7 +97,7 @@ fn hex16(s: &str) -> Result<[u8; 16], CascError> {
     bytes.try_into().map_err(|_| CascError::InvalidConfig)
 }
 
-fn parse_build_info(text: &str) -> Result<(String, String, Option<String>), CascError> {
+fn parse_build_info(text: &str) -> Result<(String, String, Option<String>, String, Vec<String>), CascError> {
     let mut lines = text
         .lines()
         .map(|l| l.trim())
@@ -92,6 +114,8 @@ fn parse_build_info(text: &str) -> Result<(String, String, Option<String>), Casc
     let mut build_key = None;
     let mut cdn_key = None;
     let mut build_name = None;
+    let mut cdn_path = None;
+    let mut cdn_hosts: Vec<String> = Vec::new();
 
     let mut best_is_wow = false;
 
@@ -125,6 +149,10 @@ fn parse_build_info(text: &str) -> Result<(String, String, Option<String>), Casc
                 cdn_key = Some(v.to_string());
             } else if h == "version" || h == "build name" {
                 build_name = Some(v.to_string());
+            } else if h == "cdn path" {
+                cdn_path = Some(v.to_string());
+            } else if h == "cdn hosts" {
+                cdn_hosts = v.split_whitespace().map(|s| s.to_string()).collect();
             }
         }
     }
@@ -133,6 +161,8 @@ fn parse_build_info(text: &str) -> Result<(String, String, Option<String>), Casc
         build_key.ok_or(CascError::InvalidConfig)?,
         cdn_key.ok_or(CascError::InvalidConfig)?,
         build_name,
+        cdn_path.ok_or(CascError::InvalidConfig)?,
+        cdn_hosts,
     ))
 }
 
@@ -143,4 +173,35 @@ fn detect_delimiter(line: &str) -> char {
         }
     }
     ' '
+}
+
+fn parse_cdn_config_text(text: &str) -> Result<Vec<String>, CascError> {
+    let mut archives: Vec<String> = Vec::new();
+
+    for raw in text.lines() {
+        let line = raw.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+
+        let mut parts = line.splitn(2, '=');
+        let key = parts.next().map(|s| s.trim().to_ascii_lowercase()).unwrap_or_default();
+        let value = parts.next().map(|s| s.trim()).unwrap_or("");
+
+        if key.is_empty() {
+            continue;
+        }
+
+        let values: Vec<String> = value
+            .split_whitespace()
+            .filter(|v| !v.is_empty())
+            .map(|v| v.to_string())
+            .collect();
+
+        if key == "archives" {
+            archives = values;
+        }
+    }
+
+    Ok(archives)
 }

@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 pub struct WowRoot {
     pub entries: std::collections::HashMap<
         FileDataId,

@@ -1,5 +1,6 @@
 use std::fmt;
 
+#[allow(dead_code)]
 #[derive(Debug)]
 pub enum CascError {
     InvalidBlte,
@@ -9,6 +10,7 @@ pub enum CascError {
     InvalidConfig,
     InvalidHex,
     Io(std::io::Error),
+    MissingDecryptionKey(u64),
 }
 
 impl fmt::Display for CascError {
@@ -28,6 +30,8 @@ impl fmt::Display for CascError {
                 write!(f, "io error: {}", err),
             CascError::InvalidHex =>
                 write!(f, "invalid hex string"),
+            CascError::MissingDecryptionKey(k) =>
+                write!(f, "missing decryption key {:016x}", k),
         }
     }
 }

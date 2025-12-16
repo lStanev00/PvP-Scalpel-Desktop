@@ -29,3 +29,7 @@ xxhash-rust = { version = "0.8", features = ["xxh64"] }
 discord-rich-presence = "0.2"
 memmap2 = "0.9.9"
 hex = "0.4.3"
+flate2 = "1.0"
+md5 = "0.7"
+reqwest = { version = "0.11", features = ["blocking", "rustls-tls"] }
+salsa20 = "0.10"

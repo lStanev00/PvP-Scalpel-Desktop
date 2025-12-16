@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 pub struct BlteFile {
     pub header: BlteHeader,
     pub chunks: Vec<BlteChunk>,

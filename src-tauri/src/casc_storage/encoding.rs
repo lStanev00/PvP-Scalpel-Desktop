@@ -3,22 +3,15 @@ use std::path::Path;
 use crate::casc_storage::types::{
     CascError, ContentKey, EncodingEntry, EncodingKey, EncodingTable,
 };
+use crate::casc_storage::types::is_type::IndexStore;
+use crate::casc_storage::blte::read_blte;
+use crate::casc_storage::keys::KeyService;
 
 const CHUNK_SIZE: usize = 4096;
 
 impl EncodingTable {
-    pub fn load(data_dir: &Path, encoding_hash: [u8; 16]) -> Result<Self, CascError> {
-        let encoding_path = data_dir.join("data").join(hex::encode(encoding_hash));
-
-        let data = match std::fs::read(&encoding_path) {
-            Ok(bytes) => bytes,
-            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
-                return Err(CascError::MissingEncoding)
-            }
-            Err(err) => return Err(CascError::Io(err)),
-        };
-
-        let mut reader = Reader::new(&data);
+    pub fn load_from_bytes(data: &[u8]) -> Result<Self, CascError> {
+        let mut reader = Reader::new(data);
 
         reader.skip(2)?; // "EN"
         let _version = reader.read_u8()?;
@@ -41,7 +34,7 @@ impl EncodingTable {
         let mut ekey_to_ckey = std::collections::HashMap::new();
         let mut encryption = std::collections::HashMap::new();
 
-        let mut chunk_start = reader.pos;
+        let chunk_start = reader.pos;
         let mut i = 0;
         while i < ckey_page_count {
             loop {
@@ -124,6 +117,31 @@ impl EncodingTable {
             encryption,
         })
     }
+
+    pub fn load_from_index(
+        data_dir: &Path,
+        indices: &IndexStore,
+        encoding_ekey: [u8; 16],
+        keys: &KeyService,
+    ) -> Result<Self, CascError> {
+        let key = normalize_ekey(encoding_ekey);
+        let entry = indices
+            .entries
+            .get(&key)
+            .ok_or(CascError::MissingEncoding)?;
+
+        let decoded = read_blte(data_dir, entry, encoding_ekey, keys)?;
+        EncodingTable::load_from_bytes(&decoded)
+    }
+}
+
+pub fn normalize_ekey(raw: [u8; 16]) -> crate::casc_storage::types::et_type::EncodingKey {
+    // C# uses MD5HashComparer9 which compares only the first 9 bytes.
+    let mut k = raw;
+    for b in &mut k[9..] {
+        *b = 0;
+    }
+    crate::casc_storage::types::et_type::EncodingKey(k)
 }
 
 fn parse_encryption_keys(espec: &str) -> Vec<u64> {
