@@ -70,6 +70,7 @@ impl<'a> BitReader<'a> {
 
 pub fn decode_row_value(
     row_index: usize,
+    record_id: i32,
     col_index: usize,
     section: &Wdc5Section,
     meta: &Wdc5Meta,
@@ -78,7 +79,11 @@ pub fn decode_row_value(
     let field_meta = meta.field_meta.get(col_index)?;
     let column = meta.column_meta.get(col_index)?;
 
-    let mut base_offset = section.record_size as usize * row_index;
+    let mut base_offset = section
+        .record_offsets
+        .get(row_index)
+        .copied()
+        .unwrap_or_else(|| section.record_size as usize * row_index);
     if section.is_sparse {
         if let Some(entry) = section.sparse_entries.get(row_index) {
             base_offset = (entry.offset - section.record_size * (row_index as i32)) as usize;
@@ -94,7 +99,7 @@ pub fn decode_row_value(
         CompressionType::None | CompressionType::Immediate | CompressionType::SignedImmediate => {
             decode_bitpacked(field_meta, column, &mut reader)
         }
-        CompressionType::Common => decode_common(row_index, col_index, column, meta),
+        CompressionType::Common => decode_common(record_id, col_index, column, meta),
         CompressionType::Pallet => decode_pallet(field_meta, col_index, column, &mut reader, meta),
         CompressionType::PalletArray => {
             decode_pallet_array(field_meta, col_index, column, &mut reader, meta)
@@ -125,14 +130,14 @@ fn decode_bitpacked(
 }
 
 fn decode_common(
-    row_index: usize,
+    record_id: i32,
     col_index: usize,
     column: &ColumnMetaData,
     meta: &Wdc5Meta,
 ) -> Option<DecodedValue> {
     let default = Value32(column.val1);
     meta.common_data.get(col_index).map(|map| {
-        map.get(&(row_index as i32))
+        map.get(&record_id)
             .map(|v| DecodedValue::UInt(v.as_u32()))
             .unwrap_or(DecodedValue::UInt(default.as_u32()))
     })

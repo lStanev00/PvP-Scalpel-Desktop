@@ -6,18 +6,20 @@ use std::io::Read;
 
 use crate::casc_storage::types::CascError;
 
-use super::types::{
-    ColumnMetaData, CompressionType, FieldMetaData, SparseEntry, Value32, Wdc5Meta, Wdc5Section,
-};
+use super::types::{ColumnMetaData, CompressionType, FieldMetaData, Value32, Wdc5Meta, Wdc5Section};
 
 pub fn parse_wdc5(data: &[u8]) -> Result<Wdc5Meta, CascError> {
     let mut cur = Cursor::new(data);
 
-    if data.len() < 72 {
+    if data.len() < 204 {
         return Err(CascError::InvalidConfig);
     }
 
     let _magic = read_u32(&mut cur)?;
+    let _version = read_u32(&mut cur)?;
+    let mut build_string = [0u8; 128];
+    cur.read_exact(&mut build_string).map_err(CascError::Io)?;
+
     let records_count = read_i32(&mut cur)?;
     let fields_count = read_i32(&mut cur)?;
     let record_size = read_i32(&mut cur)?;
@@ -31,34 +33,34 @@ pub fn parse_wdc5(data: &[u8]) -> Result<Wdc5Meta, CascError> {
     let id_field_index = read_u16(&mut cur)?;
     let total_fields_count = read_i32(&mut cur)?;
     let _packed_data_offset = read_i32(&mut cur)?;
-    let _lookup_column_count = read_i32(&mut cur)?;
+    let _wdc2_unk1 = read_i32(&mut cur)?;
     let _column_meta_data_size = read_i32(&mut cur)?;
-    let _common_data_size = read_i32(&mut cur)?;
-    let _pallet_data_size = read_i32(&mut cur)?;
+    let _sparse_block_size = read_i32(&mut cur)?;
+    let _column_data_block_size = read_i32(&mut cur)?;
     let sections_count = read_i32(&mut cur)?;
 
     // sections
     let mut sections_raw = Vec::with_capacity(sections_count as usize);
     for _ in 0..sections_count {
         let tact = read_u64(&mut cur)?;
-        let file_offset = read_i32(&mut cur)?;
-        let num_records = read_i32(&mut cur)?;
-        let str_table_size = read_i32(&mut cur)?;
-        let sparse_data_end = read_i32(&mut cur)?;
-        let index_data_size = read_i32(&mut cur)?;
-        let parent_lookup_data_size = read_i32(&mut cur)?;
-        let num_sparse_records = read_i32(&mut cur)?;
-        let num_copy_records = read_i32(&mut cur)?;
+        let ptr_records = read_i32(&mut cur)?;
+        let total_records = read_i32(&mut cur)?;
+        let string_table_size = read_i32(&mut cur)?;
+        let ptr_blocks = read_i32(&mut cur)?;
+        let id_block_size = read_i32(&mut cur)?;
+        let key_block_size = read_i32(&mut cur)?;
+        let offset_map_entries = read_i32(&mut cur)?;
+        let clone_block_entries = read_i32(&mut cur)?;
         sections_raw.push(SectionRaw {
             tact_key_lookup: tact,
-            file_offset,
-            num_records,
-            string_table_size: str_table_size,
-            sparse_data_end_offset: sparse_data_end,
-            index_data_size,
-            parent_lookup_data_size,
-            num_sparse_records,
-            num_copy_records,
+            ptr_records,
+            total_records,
+            string_table_size,
+            ptr_blocks,
+            id_block_size,
+            key_block_size,
+            offset_map_entries,
+            clone_block_entries,
         });
     }
 
@@ -130,8 +132,14 @@ pub fn parse_wdc5(data: &[u8]) -> Result<Wdc5Meta, CascError> {
 
     // sections data
     let mut sections = Vec::with_capacity(sections_raw.len());
-    let mut previous_string_table_size = 0;
-    let mut _previous_record_count = 0;
+    let is_sparse = (flags & 0x1) != 0;
+    let record_size_u = usize::try_from(record_size.max(0)).map_err(|_| CascError::InvalidConfig)?;
+    let total_record_data = sections_raw
+        .iter()
+        .map(|s| record_size_u.saturating_mul(usize::try_from(s.total_records.max(0)).unwrap_or(0)))
+        .sum::<usize>();
+
+    let mut record_id_base = 0usize;
 
     for (idx, sec) in sections_raw.iter().enumerate() {
         if sec.tact_key_lookup != 0 {
@@ -139,82 +147,98 @@ pub fn parse_wdc5(data: &[u8]) -> Result<Wdc5Meta, CascError> {
             continue;
         }
 
-        if (sec.file_offset as usize) > data.len() {
+        let records_offset = sec.ptr_records.max(0) as usize;
+        if records_offset > data.len() {
             return Err(CascError::InvalidConfig);
         }
 
-        let mut cursor = Cursor::new(&data[sec.file_offset as usize..]);
-        let is_sparse = (flags & 0x1) != 0 || sec.num_sparse_records > 0;
+        let offsets = compute_section_offsets(sec, record_size_u);
+        let record_count = if sec.ptr_blocks > 0 && sec.offset_map_entries > 0 {
+            sec.offset_map_entries as usize
+        } else {
+            sec.total_records as usize
+        };
 
-        let records_data;
-        let mut string_table = HashMap::new();
-        let mut sparse_entries = Vec::new();
+        let records_len = if sec.ptr_blocks > 0 {
+            offsets.ptr_blocks.saturating_sub(records_offset)
+        } else {
+            record_size_u.saturating_mul(sec.total_records as usize)
+        };
+        let records_end = records_offset
+            .checked_add(records_len)
+            .ok_or(CascError::InvalidConfig)?;
+        let records_data = data
+            .get(records_offset..records_end)
+            .ok_or(CascError::InvalidConfig)?
+            .to_vec();
 
-        if is_sparse {
-            let size = (sec.sparse_data_end_offset - sec.file_offset) as usize;
-            records_data = read_bytes(&mut cursor, size)?;
-            // sparse entries
-            for _ in 0..sec.num_sparse_records {
-                let offset = read_i32(&mut cursor)?;
-                let sz = read_u16(&mut cursor)?;
-                let _pad = read_u16(&mut cursor).ok(); // ignore padding if present
-                sparse_entries.push(SparseEntry { offset, size: sz });
+        let mut record_offsets = Vec::with_capacity(record_count);
+        let mut record_sizes = Vec::with_capacity(record_count);
+
+        if offsets.ptr_offset_map > 0 && record_count > 0 {
+            for i in 0..record_count {
+                let entry_offset = offsets.ptr_offset_map + i * 6;
+                let data_offset = read_u32_at(data, entry_offset)? as usize;
+                let size = read_u16_at(data, entry_offset + 4)? as usize;
+                let rel = if data_offset >= records_offset {
+                    data_offset - records_offset
+                } else {
+                    data_offset
+                };
+                record_offsets.push(rel);
+                record_sizes.push(size);
             }
         } else {
-            let size = (sec.num_records as i32 * record_size) as usize;
-            records_data = read_bytes(&mut cursor, size)?;
-            // string table
-            let mut read_bytes_total = 0usize;
-            while read_bytes_total < sec.string_table_size as usize {
-                let start_pos = cursor.position() as usize;
-                let s = read_cstring(&mut cursor)?;
-                let end_pos = cursor.position() as usize;
-                let consumed = end_pos - start_pos;
-                string_table.insert(
-                    (read_bytes_total + previous_string_table_size) as u32,
-                    s,
-                );
-                read_bytes_total += consumed;
+            for i in 0..record_count {
+                record_offsets.push(record_size_u * i);
+                record_sizes.push(record_size_u);
             }
         }
 
-        // index data
-        let mut index_data = Vec::new();
-        if sec.index_data_size > 0 {
-            let count = (sec.index_data_size / 4) as usize;
-            for _ in 0..count {
-                index_data.push(read_i32(&mut cursor)?);
-            }
-        }
-
-        // copy data
-        let mut copy_data = HashMap::new();
-        for _ in 0..sec.num_copy_records {
-            let dst = read_i32(&mut cursor)?;
-            let src = read_i32(&mut cursor)?;
-            copy_data.insert(dst, src);
-        }
+        let string_table = parse_string_table(data, &offsets, record_size_u, sec, records_offset)?;
+        let record_ids = parse_record_ids(
+            data,
+            &offsets,
+            sec,
+            record_count,
+            record_size_u,
+            &records_data,
+            &record_offsets,
+            &column_meta,
+            &field_meta,
+            id_field_index as usize,
+        )?;
+        let parent_ids = parse_key_block(data, &offsets, sec, record_count)?;
+        let copy_data = parse_clone_block(data, &offsets, sec)?;
 
         sections.push(Wdc5Section {
-            num_records: sec.num_records,
+            num_records: record_count as i32,
             string_table_size: sec.string_table_size,
             record_size,
             is_sparse,
+            ptr_records: records_offset,
+            total_records: sec.total_records.max(0) as usize,
+            record_id_base,
+            ptr_string_block: offsets.ptr_string_block,
+            ptr_offset_map: offsets.ptr_offset_map,
             records_data,
+            record_offsets,
+            record_sizes,
             string_table,
-            index_data,
+            record_ids,
+            parent_ids,
             copy_data,
-            sparse_entries,
+            sparse_entries: Vec::new(),
         });
 
-        previous_string_table_size += sec.string_table_size as usize;
-        _previous_record_count += sec.num_records as usize;
+        record_id_base = record_id_base.saturating_add(sec.total_records.max(0) as usize);
     }
 
     Ok(Wdc5Meta {
         records_count,
         fields_count,
         record_size,
+        total_record_data,
         id_field_index,
         field_meta,
         column_meta,
@@ -228,14 +252,24 @@ pub fn parse_wdc5(data: &[u8]) -> Result<Wdc5Meta, CascError> {
 
 struct SectionRaw {
     tact_key_lookup: u64,
-    file_offset: i32,
-    num_records: i32,
+    ptr_records: i32,
+    total_records: i32,
     string_table_size: i32,
-    sparse_data_end_offset: i32,
-    index_data_size: i32,
-    parent_lookup_data_size: i32,
-    num_sparse_records: i32,
-    num_copy_records: i32,
+    ptr_blocks: i32,
+    id_block_size: i32,
+    key_block_size: i32,
+    offset_map_entries: i32,
+    clone_block_entries: i32,
+}
+
+struct SectionOffsets {
+    ptr_blocks: usize,
+    ptr_string_block: usize,
+    ptr_id_block: usize,
+    ptr_clone_block: usize,
+    ptr_offset_map: usize,
+    ptr_id_map: usize,
+    ptr_key_block: usize,
 }
 
 fn read_u16(cur: &mut Cursor<&[u8]>) -> Result<u16, CascError> {
@@ -264,21 +298,201 @@ fn read_u64(cur: &mut Cursor<&[u8]>) -> Result<u64, CascError> {
     Ok(u64::from_le_bytes(buf))
 }
 
-fn read_bytes(cur: &mut Cursor<&[u8]>, len: usize) -> Result<Vec<u8>, CascError> {
-    let mut buf = vec![0u8; len];
-    cur.read_exact(&mut buf).map_err(CascError::Io)?;
-    Ok(buf)
+fn read_u32_at(data: &[u8], offset: usize) -> Result<u32, CascError> {
+    let slice = data.get(offset..offset + 4).ok_or(CascError::InvalidConfig)?;
+    Ok(u32::from_le_bytes([slice[0], slice[1], slice[2], slice[3]]))
 }
 
-fn read_cstring(cur: &mut Cursor<&[u8]>) -> Result<String, CascError> {
-    let mut bytes = Vec::new();
-    loop {
-        let mut b = [0u8; 1];
-        cur.read_exact(&mut b).map_err(CascError::Io)?;
-        if b[0] == 0 {
-            break;
-        }
-        bytes.push(b[0]);
+fn read_u16_at(data: &[u8], offset: usize) -> Result<u16, CascError> {
+    let slice = data.get(offset..offset + 2).ok_or(CascError::InvalidConfig)?;
+    Ok(u16::from_le_bytes([slice[0], slice[1]]))
+}
+
+fn compute_section_offsets(sec: &SectionRaw, record_size: usize) -> SectionOffsets {
+    let ptr_records = sec.ptr_records.max(0) as usize;
+    let total_records = sec.total_records.max(0) as usize;
+
+    let mut ptr_string_block = 0usize;
+    let mut running_offset = if sec.ptr_blocks == 0 {
+        ptr_string_block = ptr_records.saturating_add(record_size.saturating_mul(total_records));
+        ptr_string_block + sec.string_table_size.max(0) as usize
+    } else {
+        sec.ptr_blocks.max(0) as usize
+    };
+
+    let ptr_id_block = if sec.id_block_size > 0 {
+        let off = running_offset;
+        running_offset += sec.id_block_size.max(0) as usize;
+        off
+    } else {
+        0
+    };
+
+    let ptr_clone_block = if sec.clone_block_entries > 0 {
+        let off = running_offset;
+        running_offset += sec.clone_block_entries.max(0) as usize * 8;
+        off
+    } else {
+        0
+    };
+
+    let (ptr_offset_map, ptr_id_map) = if sec.ptr_blocks > 0 && sec.offset_map_entries > 0 {
+        let off_map = running_offset;
+        running_offset += sec.offset_map_entries.max(0) as usize * 6;
+        let id_map = running_offset;
+        running_offset += sec.offset_map_entries.max(0) as usize * 4;
+        (off_map, id_map)
+    } else {
+        (0, 0)
+    };
+
+    let ptr_key_block = if sec.key_block_size > 0 {
+        let off = running_offset;
+        off
+    } else {
+        0
+    };
+
+    SectionOffsets {
+        ptr_blocks: sec.ptr_blocks.max(0) as usize,
+        ptr_string_block,
+        ptr_id_block,
+        ptr_clone_block,
+        ptr_offset_map,
+        ptr_id_map,
+        ptr_key_block,
     }
-    Ok(String::from_utf8_lossy(&bytes).to_string())
+}
+
+fn parse_string_table(
+    data: &[u8],
+    offsets: &SectionOffsets,
+    _record_size: usize,
+    sec: &SectionRaw,
+    _records_offset: usize,
+) -> Result<HashMap<u32, String>, CascError> {
+    let mut table = HashMap::new();
+    if offsets.ptr_string_block == 0 || sec.string_table_size == 0 {
+        return Ok(table);
+    }
+
+    let start = offsets.ptr_string_block;
+    let size = sec.string_table_size as usize;
+    let end = start.checked_add(size).ok_or(CascError::InvalidConfig)?;
+    let block = data.get(start..end).ok_or(CascError::InvalidConfig)?;
+
+    let mut offset = 0usize;
+    while offset < block.len() {
+        let zero_pos = block[offset..]
+            .iter()
+            .position(|b| *b == 0)
+            .unwrap_or(block.len() - offset);
+        let end_pos = offset + zero_pos;
+        let s = String::from_utf8_lossy(&block[offset..end_pos]).to_string();
+        table.insert(offset as u32, s);
+        offset = end_pos + 1;
+    }
+    Ok(table)
+}
+
+fn parse_record_ids(
+    data: &[u8],
+    offsets: &SectionOffsets,
+    sec: &SectionRaw,
+    record_count: usize,
+    record_size: usize,
+    records_data: &[u8],
+    record_offsets: &[usize],
+    column_meta: &[ColumnMetaData],
+    field_meta: &[FieldMetaData],
+    id_field_index: usize,
+) -> Result<Vec<i32>, CascError> {
+    if offsets.ptr_id_block > 0 && sec.id_block_size > 0 {
+        let count = (sec.id_block_size.max(0) as usize) / 4;
+        let mut ids = Vec::with_capacity(count);
+        for i in 0..count {
+            ids.push(read_u32_at(data, offsets.ptr_id_block + i * 4)? as i32);
+        }
+        return Ok(ids);
+    }
+
+    if offsets.ptr_id_map > 0 && record_count > 0 {
+        let mut ids = Vec::with_capacity(record_count);
+        for i in 0..record_count {
+            ids.push(read_u32_at(data, offsets.ptr_id_map + i * 4)? as i32);
+        }
+        return Ok(ids);
+    }
+
+    if id_field_index >= column_meta.len() {
+        return Err(CascError::InvalidConfig);
+    }
+
+    let field = &field_meta[id_field_index];
+    let column = &column_meta[id_field_index];
+    let bit_width = if field.bits < 32 {
+        (32 - field.bits) as usize
+    } else {
+        column.val2 as usize
+    };
+
+    let mut ids = Vec::with_capacity(record_count);
+    for i in 0..record_count {
+        let base_offset = *record_offsets.get(i).unwrap_or(&(record_size * i));
+        if base_offset >= records_data.len() {
+            ids.push(0);
+            continue;
+        }
+        let mut reader = super::decoder::BitReader::new(records_data, base_offset);
+        reader.set_position(column.record_offset as usize);
+        let val = reader.read_bits(bit_width).unwrap_or(0) as i32;
+        ids.push(val);
+    }
+    Ok(ids)
+}
+
+fn parse_key_block(
+    data: &[u8],
+    offsets: &SectionOffsets,
+    sec: &SectionRaw,
+    record_count: usize,
+) -> Result<Vec<i32>, CascError> {
+    let mut parent_ids = vec![0; record_count];
+    if offsets.ptr_key_block == 0 || sec.key_block_size <= 0 {
+        return Ok(parent_ids);
+    }
+
+    let mut offset = offsets.ptr_key_block;
+    let records = read_u32_at(data, offset)? as usize;
+    offset += 12;
+
+    for _ in 0..records {
+        let parent_id = read_u32_at(data, offset)? as i32;
+        let record_index = read_u32_at(data, offset + 4)? as usize;
+        if record_index < record_count {
+            parent_ids[record_index] = parent_id;
+        }
+        offset += 8;
+    }
+    Ok(parent_ids)
+}
+
+fn parse_clone_block(
+    data: &[u8],
+    offsets: &SectionOffsets,
+    sec: &SectionRaw,
+) -> Result<HashMap<i32, i32>, CascError> {
+    let mut copy_data = HashMap::new();
+    if offsets.ptr_clone_block == 0 || sec.clone_block_entries <= 0 {
+        return Ok(copy_data);
+    }
+
+    let mut offset = offsets.ptr_clone_block;
+    for _ in 0..sec.clone_block_entries {
+        let dst = read_u32_at(data, offset)? as i32;
+        let src = read_u32_at(data, offset + 4)? as i32;
+        copy_data.insert(dst, src);
+        offset += 8;
+    }
+    Ok(copy_data)
 }

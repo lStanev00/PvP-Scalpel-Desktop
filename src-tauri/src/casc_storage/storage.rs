@@ -62,6 +62,8 @@ impl CascStorage {
         {
             let _ = keys.load_from_file(&p);
         }
+        // Also try a local temp WoW.txt (if present) to seed additional keys early.
+        let _ = keys.load_from_file(&std::env::temp_dir().join("WoW.txt"));
 
         let indices_dir = data_dir.join("data");
         let index_store = IndexStore::load(&indices_dir)?;
@@ -245,8 +247,9 @@ pub fn read_file_by_filedataid(storage: &CascStorage, file_data_id: u32) -> Resu
             CascError::FileNotFound
         })?;
         println!("[CDN] range fetch OK bytes={}", bytes.len());
+        let ekey_hex = hex::encode(ekey_raw);
         let mut keys = storage.keys.lock().unwrap();
-        let result = parse_blte_with_keys(&bytes, Some(&*keys));
+        let result = parse_blte_with_keys(&bytes, Some(&*keys), Some(ekey_hex.as_str()));
         match result {
             Ok(decoded) => {
                 println!("[CASC] BLTE decoded: outputBytes={}", decoded.len());
@@ -255,7 +258,7 @@ pub fn read_file_by_filedataid(storage: &CascStorage, file_data_id: u32) -> Resu
             Err(CascError::MissingDecryptionKey(k)) => {
                 if keys.fetch_remote_if_needed(k)? {
                     println!("[KEYS] retrying BLTE decode");
-                    let decoded = parse_blte_with_keys(&bytes, Some(&*keys))?;
+                    let decoded = parse_blte_with_keys(&bytes, Some(&*keys), Some(ekey_hex.as_str()))?;
                     println!("[CASC] BLTE decoded: outputBytes={}", decoded.len());
                     Ok(decoded)
                 } else {
@@ -320,7 +323,7 @@ fn fetch_from_cdn(storage: &CascStorage, ekey_raw: [u8; 16]) -> Result<Vec<u8>, 
     println!("[CDN] received bytes={}", bytes.len());
 
     let mut keys = storage.keys.lock().unwrap();
-    let result = parse_blte_with_keys(&bytes, Some(&*keys));
+    let result = parse_blte_with_keys(&bytes, Some(&*keys), Some(ekey_hex.as_str()));
     match result {
         Ok(decoded) => {
             println!("[CDN] BLTE decoded bytes={}", decoded.len());
@@ -329,7 +332,7 @@ fn fetch_from_cdn(storage: &CascStorage, ekey_raw: [u8; 16]) -> Result<Vec<u8>, 
         Err(CascError::MissingDecryptionKey(k)) => {
             if keys.fetch_remote_if_needed(k)? {
                 println!("[KEYS] retrying BLTE decode");
-                let decoded = parse_blte_with_keys(&bytes, Some(&*keys))?;
+                let decoded = parse_blte_with_keys(&bytes, Some(&*keys), Some(ekey_hex.as_str()))?;
                 println!("[CDN] BLTE decoded bytes={}", decoded.len());
                 Ok(decoded)
             } else {

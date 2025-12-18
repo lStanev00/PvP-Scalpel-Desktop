@@ -1,14 +1,16 @@
 use std::fs::File;
+use std::fs;
 use std::io::{Read, Seek, SeekFrom};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use flate2::read::DeflateDecoder;
-use salsa20::cipher::{KeyIvInit, StreamCipher};
-use salsa20::cipher::generic_array::GenericArray;
+use salsa20::cipher::{consts::U10, StreamCipher, StreamCipherCoreWrapper};
+use salsa20::SalsaCore;
 
 use crate::casc_storage::keys::KeyService;
 use crate::casc_storage::types::is_type::IndexEntry;
 use crate::casc_storage::types::CascError;
+use crate::logger;
 
 #[allow(dead_code)]
 const BLTE_MAGIC: u32 = 0x4554_4C42; // "BLTE"
@@ -49,16 +51,20 @@ pub fn read_blte(data_dir: &Path, entry: &IndexEntry, _ekey: [u8; 16], keys: &cr
     let mut buf = vec![0u8; payload_size];
     file.read_exact(&mut buf).map_err(CascError::Io)?;
 
-    parse_blte_with_keys(&buf, Some(keys))
+    let tag = hex::encode(_ekey);
+    parse_blte_with_keys(&buf, Some(keys), Some(tag.as_str()))
 }
 
 #[allow(dead_code)]
 pub fn parse_blte(src: &[u8]) -> Result<Vec<u8>, CascError> {
-    parse_blte_with_keys(src, None)
+    parse_blte_with_keys(src, None, None)
 }
 
-pub fn parse_blte_with_keys(src: &[u8], key_service: Option<&KeyService>) -> Result<Vec<u8>, CascError> {
-    println!("[BLTE] decode start: bytes={}", src.len());
+pub fn parse_blte_with_keys(src: &[u8], key_service: Option<&KeyService>, tag: Option<&str>) -> Result<Vec<u8>, CascError> {
+    match tag {
+        Some(t) => logger::info("BLTE", format!("decode start: bytes={} ekey={}", src.len(), t)),
+        None => logger::info("BLTE", format!("decode start: bytes={}", src.len())),
+    }
 
     if src.len() < 8 {
         return Err(CascError::InvalidBlte);
@@ -126,7 +132,7 @@ pub fn parse_blte_with_keys(src: &[u8], key_service: Option<&KeyService>) -> Res
         });
     }
 
-    println!("[BLTE] header parsed: chunks={}", blocks.len());
+    logger::info("BLTE", format!("header parsed: chunks={}", blocks.len()));
 
     let total_out: usize = blocks.iter().map(|b| b.decomp_size).sum();
     let mut out = Vec::with_capacity(total_out);
@@ -143,18 +149,55 @@ pub fn parse_blte_with_keys(src: &[u8], key_service: Option<&KeyService>) -> Res
             }
         }
 
-        handle_block(block_data, &mut out, i, key_service)?;
+        let start_len = out.len();
+        if let Err(e) = handle_block(block_data, &mut out, i, block.decomp_size, key_service) {
+            let bt = block_data.first().copied().unwrap_or(b'?');
+            logger::error(
+                "BLTE",
+                format!(
+                    "chunk decode failed: ekey={} chunk={} type='{}' comp={} out={} err={}",
+                    tag.unwrap_or("unknown"),
+                    i,
+                    printable_block_type(bt),
+                    block.comp_size,
+                    block.decomp_size,
+                    e
+                ),
+            );
+            let _ = dump_failed_chunk(tag, i, block_data);
+            return Err(e);
+        }
+        if out.len().saturating_sub(start_len) != block.decomp_size {
+            logger::error(
+                "BLTE",
+                format!(
+                    "chunk size mismatch: ekey={} chunk={} produced={} expected={}",
+                    tag.unwrap_or("unknown"),
+                    i,
+                    out.len().saturating_sub(start_len),
+                    block.decomp_size
+                ),
+            );
+            let _ = dump_failed_chunk(tag, i, block_data);
+            return Err(CascError::InvalidBlte);
+        }
     }
 
     if out.len() != total_out {
         return Err(CascError::InvalidBlte);
     }
 
-    println!("[BLTE] decoded bytes={}", out.len());
+    logger::info("BLTE", format!("decoded bytes={}", out.len()));
     Ok(out)
 }
 
-fn handle_block(block: &[u8], out: &mut Vec<u8>, index: usize, key_service: Option<&KeyService>) -> Result<(), CascError> {
+fn handle_block(
+    block: &[u8],
+    out: &mut Vec<u8>,
+    index: usize,
+    expected_out: usize,
+    key_service: Option<&KeyService>,
+) -> Result<(), CascError> {
     if block.is_empty() {
         return Err(CascError::InvalidBlte);
     }
@@ -164,6 +207,9 @@ fn handle_block(block: &[u8], out: &mut Vec<u8>, index: usize, key_service: Opti
 
     match block_type {
         b'N' => {
+            if payload.len() != expected_out {
+                return Err(CascError::InvalidBlte);
+            }
             out.extend_from_slice(payload);
             Ok(())
         }
@@ -171,21 +217,69 @@ fn handle_block(block: &[u8], out: &mut Vec<u8>, index: usize, key_service: Opti
             if payload.len() < 2 {
                 return Err(CascError::InvalidBlte);
             }
+            let mut tmp = Vec::with_capacity(expected_out);
             let mut decoder = DeflateDecoder::new(&payload[2..]);
-            decoder
-                .read_to_end(out)
-                .map_err(|_| CascError::InvalidBlte)?;
+            decoder.read_to_end(&mut tmp).map_err(|e| {
+                logger::error(
+                    "BLTE",
+                    format!(
+                        "deflate decode failed: chunk={} expected_out={} err={}",
+                        index, expected_out, e
+                    ),
+                );
+                CascError::InvalidBlte
+            })?;
+            if tmp.len() != expected_out {
+                return Err(CascError::InvalidBlte);
+            }
+            out.extend_from_slice(&tmp);
             Ok(())
         }
-        b'E' => decrypt_and_handle(payload, out, index, key_service),
+        b'E' => decrypt_and_handle(payload, out, index, expected_out, key_service),
         b'F' => Err(CascError::InvalidBlte),
         _ => Err(CascError::InvalidBlte),
     }
 }
 
-type Salsa20Cipher = salsa20::Salsa20;
+type Salsa20Core = SalsaCore<U10>;
+type Salsa20Cipher = StreamCipherCoreWrapper<Salsa20Core>;
 
-fn decrypt_and_handle(data: &[u8], out: &mut Vec<u8>, index: usize, key_service: Option<&KeyService>) -> Result<(), CascError> {
+const SALSA20_TAU: [u32; 4] = [0x6170_7865, 0x3120_646e, 0x7962_2d36, 0x6b20_6574];
+
+fn salsa20_decrypt_128(key: &[u8; 16], nonce: &[u8; 8], data: &[u8]) -> Vec<u8> {
+    // Salsa20 128-bit keys use the "expand 16-byte k" constants (tau) and repeat the key.
+    let mut state = [0u32; 16];
+    state[0] = SALSA20_TAU[0];
+    state[5] = SALSA20_TAU[1];
+    state[10] = SALSA20_TAU[2];
+    state[15] = SALSA20_TAU[3];
+
+    for (i, chunk) in key.chunks(4).enumerate() {
+        state[1 + i] = u32::from_le_bytes(chunk.try_into().unwrap());
+        state[11 + i] = u32::from_le_bytes(chunk.try_into().unwrap());
+    }
+
+    state[6] = u32::from_le_bytes(nonce[0..4].try_into().unwrap());
+    state[7] = u32::from_le_bytes(nonce[4..8].try_into().unwrap());
+    state[8] = 0;
+    state[9] = 0;
+
+    let core = Salsa20Core::from_raw_state(state);
+    let mut cipher = Salsa20Cipher::from_core(core);
+    let mut out = data.to_vec();
+    cipher.apply_keystream(&mut out);
+    out
+}
+
+const STRICT_MISSING_KEYS: bool = false;
+
+fn decrypt_and_handle(
+    data: &[u8],
+    out: &mut Vec<u8>,
+    index: usize,
+    expected_out: usize,
+    key_service: Option<&KeyService>,
+) -> Result<(), CascError> {
     if data.len() < 1 + 8 + 1 + 4 {
         return Err(CascError::InvalidBlte);
     }
@@ -227,40 +321,84 @@ fn decrypt_and_handle(data: &[u8], out: &mut Vec<u8>, index: usize, key_service:
     let key_bytes = key_service.and_then(|ks| ks.get(key_name));
 
     if key_bytes.is_none() {
-        println!("[BLTE] missing decrypt key: {:016x}", key_name);
-        return Err(CascError::MissingDecryptionKey(key_name));
+        logger::warn(
+            "BLTE",
+            format!(
+                "missing decrypt key: {:016x} (chunk={} out={})",
+                key_name, index, expected_out
+            ),
+        );
+
+        // If the payload isn't actually encrypted, it can already be a nested BLTE block ('N'/'Z'/...).
+        if !body.is_empty() && matches!(body[0], b'N' | b'Z' | b'E' | b'F') {
+            let start_len = out.len();
+            if handle_block(body, out, index, expected_out, key_service).is_ok() {
+                if out.len().saturating_sub(start_len) == expected_out {
+                    return Ok(());
+                }
+            }
+            out.truncate(start_len);
+        }
+
+        if STRICT_MISSING_KEYS {
+            return Err(CascError::MissingDecryptionKey(key_name));
+        }
+
+        // CASCExplorer parity: missing key -> zero-fill the expected output size and continue.
+        out.extend(std::iter::repeat(0u8).take(expected_out));
+        return Ok(());
     }
 
     if enc_type == b'A' {
         return Err(CascError::InvalidBlte);
     };
 
-    // Salsa20 supports 256-bit keys. TACT keys are 128-bit, so duplicate to 32 bytes.
     let key_arr = key_bytes.unwrap();
-    let mut key32 = [0u8; 32];
-    key32[..16].copy_from_slice(&key_arr);
-    key32[16..].copy_from_slice(&key_arr);
+    let mut nonce = [0u8; 8];
+    nonce.copy_from_slice(&iv[..8]);
+    let decrypted = salsa20_decrypt_128(&key_arr, &nonce, body);
 
-    let nonce = &iv[..8];
-    let mut cipher = Salsa20Cipher::new(GenericArray::from_slice(&key32), GenericArray::from_slice(nonce));
-    let mut decrypted = body.to_vec();
-    cipher.apply_keystream(&mut decrypted);
-
-    println!(
-        "[BLTE] encrypted chunk: key={:016x} iv={} comp={}",
-        key_name,
-        hex::encode(&iv),
-        decrypted.len()
+    logger::debug(
+        "BLTE",
+        format!(
+            "encrypted chunk: key={:016x} iv={} comp={}",
+            key_name,
+            hex::encode(&iv),
+            decrypted.len()
+        ),
     );
 
     // Some payloads are raw after decryption (no nested BLTE block header). If the first byte is
     // not a known block type, treat the decrypted data as literal.
+    let start_len = out.len();
     if decrypted.is_empty() || !matches!(decrypted[0], b'N' | b'Z' | b'E' | b'F') {
+        logger::warn(
+            "BLTE",
+            format!(
+                "decrypted payload missing BLTE block type: chunk={} key={:016x} first={} len={} expected_out={}",
+                index,
+                key_name,
+                decrypted
+                    .get(0)
+                    .copied()
+                    .map(|b| format!("0x{b:02X}"))
+                    .unwrap_or_else(|| "EOF".to_string()),
+                decrypted.len(),
+                expected_out
+            ),
+        );
         out.extend_from_slice(&decrypted);
+        if out.len().saturating_sub(start_len) != expected_out {
+            return Err(CascError::InvalidBlte);
+        }
         return Ok(());
     }
 
-    handle_block(&decrypted, out, index, key_service)
+    handle_block(&decrypted, out, index, expected_out, key_service)?;
+    if out.len().saturating_sub(start_len) != expected_out {
+        return Err(CascError::InvalidBlte);
+    }
+    Ok(())
 }
 
 struct Reader<'a> {
@@ -295,4 +433,30 @@ struct DataBlock {
     comp_size: usize,
     decomp_size: usize,
     hash: Vec<u8>,
+}
+
+fn printable_block_type(b: u8) -> char {
+    match b {
+        b'N' | b'Z' | b'E' | b'F' => b as char,
+        _ => '?',
+    }
+}
+
+fn repo_root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap_or_else(|| Path::new(env!("CARGO_MANIFEST_DIR")))
+        .to_path_buf()
+}
+
+fn dump_failed_chunk(tag: Option<&str>, index: usize, block: &[u8]) -> Result<(), CascError> {
+    let base = repo_root().join("debug_inputs").join("blte_failed");
+    fs::create_dir_all(&base)?;
+
+    let name = tag.unwrap_or("unknown");
+    let path = base.join(format!("{name}_chunk{index:04}_raw.bin"));
+    fs::write(&path, block)?;
+
+    logger::warn("BLTE", format!("dumped failed chunk to {}", path.display()));
+    Ok(())
 }

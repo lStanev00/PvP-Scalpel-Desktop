@@ -3,6 +3,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::casc_storage::types::CascError;
+use crate::logger;
 
 // Minimal key service mirroring CASCExplorer's KeyService behaviour.
 // Loads a small built-in set plus optional keys from TactKey.csv if present.
@@ -23,52 +24,56 @@ impl KeyService {
 
     pub fn load_from_file(&mut self, path: &Path) -> Result<(), CascError> {
         if !path.exists() {
+            logger::debug("KEYS", format!("load_from_file: missing path={}", path.display()));
             return Ok(());
         }
         let data = fs::read_to_string(path).map_err(CascError::Io)?;
-        let mut new_entries: Vec<(u64, [u8; 16])> = Vec::new();
+        let mut added = 0usize;
         for line in data.lines() {
-            let line = line.trim();
-            if line.is_empty() || line.starts_with('#') {
-                continue;
-            }
-            let mut parts = line.split(';');
-            let key_name = match parts.next() {
-                Some(v) => u64::from_str_radix(v.trim().to_ascii_uppercase().as_str(), 16).ok(),
-                None => None,
-            };
-            let key_hex = parts.next().unwrap_or("").trim().to_ascii_uppercase();
-            if key_hex.len() != 32 {
-                continue;
-            }
-            if let Some(name) = key_name {
-                if let Ok(bytes) = hex::decode(&key_hex) {
-                    if bytes.len() == 16 {
-                        let mut arr = [0u8; 16];
-                        arr.copy_from_slice(&bytes);
-                        if !self.keys.contains_key(&name) {
-                            self.keys.insert(name, arr);
-                            new_entries.push((name, arr));
-                        }
-                    }
+            if let Some((name, arr)) = parse_key_line(line) {
+                if !self.keys.contains_key(&name) {
+                    self.keys.insert(name, arr);
+                    added += 1;
                 }
             }
         }
-        if !new_entries.is_empty() {
-            println!(
-                "[KEYS] loaded {} entries from {}",
-                new_entries.len(),
+        logger::info(
+            "KEYS",
+            format!(
+                "load_from_file: added={} total={} path={}",
+                added,
+                self.keys.len(),
                 path.display()
-            );
-            for (i, (k, v)) in new_entries.iter().take(10).enumerate() {
-                println!("[KEYS] [{}] {:016X} => {}", i, k, hex::encode_upper(v));
-            }
-        }
+            ),
+        );
         Ok(())
     }
 
     pub fn get(&self, name: u64) -> Option<[u8; 16]> {
         self.keys.get(&name).copied()
+    }
+
+    pub fn insert_key(&mut self, name: u64, key: [u8; 16]) -> bool {
+        match self.keys.get(&name) {
+            None => {
+                self.keys.insert(name, key);
+                true
+            }
+            Some(existing) if *existing == key => false,
+            Some(existing) => {
+                logger::warn(
+                    "KEYS",
+                    format!(
+                        "duplicate key name {:016X} with different key (old={} new={})",
+                        name,
+                        hex::encode_upper(existing),
+                        hex::encode_upper(key)
+                    ),
+                );
+                self.keys.insert(name, key);
+                true
+            }
+        }
     }
 
     pub fn fetch_remote_if_needed(&mut self, missing_key: u64) -> Result<bool, CascError> {
@@ -77,7 +82,7 @@ impl KeyService {
             return Ok(true);
         }
 
-        // Try local files first (no network). Temp WoW.txt and debug_inputs WoW.txt if present.
+        // Local-only lookup. Try temp WoW.txt and debug_inputs WoW.txt if present.
         let mut tried_local = false;
         let temp_path = std::env::temp_dir().join("WoW.txt");
         if temp_path.exists() {
@@ -103,85 +108,21 @@ impl KeyService {
             }
         }
 
-        // Avoid repeated attempts if already tried and nothing new added.
-        if self.fetch_attempted && tried_local {
-            return Ok(false);
-        }
-        if self.fetch_attempted {
-            return Ok(false);
-        }
-
-        println!("[KEYS] missing decrypt key: {:016X}", missing_key);
-        println!("[KEYS] attempting remote key fetch");
-
-        let url = std::env::var("TACT_KEYS_URL")
-            .unwrap_or_else(|_| "https://raw.githubusercontent.com/wowdev/TACTKeys/master/WoW.txt".to_string());
-        let cache_path = std::env::temp_dir().join("WoW.txt");
-
-        let resp = reqwest::blocking::get(&url).map_err(|e| {
-            self.fetch_attempted = true;
-            println!("[KEYS] fetch failed: {}", e);
-            CascError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))
-        })?;
-
-        if !resp.status().is_success() {
-            self.fetch_attempted = true;
-            println!("[KEYS] fetch failed: http {}", resp.status());
-            return Ok(false);
-        }
-
-        let text = resp.text().map_err(|e| {
-            self.fetch_attempted = true;
-            CascError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))
-        })?;
-
-        fs::write(&cache_path, &text).ok();
-
         self.fetch_attempted = true;
-        let added = self.load_wow_txt(&text);
-        println!("[KEYS] fetched WoW.txt (entries={})", added);
+        if !tried_local {
+            logger::warn("KEYS", format!("missing decrypt key: {:016X}", missing_key));
+            logger::warn("KEYS", "no local WoW.txt/TactKey.csv found");
+        }
 
         // Return true if the missing key is now present, even if it was already counted.
         Ok(self.keys.contains_key(&missing_key))
     }
 
-    fn load_wow_txt(&mut self, text: &str) -> usize {
-        let mut added = 0usize;
-        for line in text.lines() {
-            let line = line.trim();
-            if line.is_empty() || line.starts_with('#') {
-                continue;
-            }
-            let mut parts = line.split_whitespace();
-            let key_name_str = parts.next().unwrap_or("");
-            let key_hex = parts.next().unwrap_or("");
-
-            let key_name_clean = key_name_str.trim_start_matches("0x").to_ascii_uppercase();
-            let key_name = match u64::from_str_radix(&key_name_clean, 16) {
-                Ok(v) => v,
-                Err(_) => continue,
-            };
-            let key_hex = key_hex.to_ascii_uppercase();
-            if key_hex.len() != 32 {
-                continue;
-            }
-            if let Ok(bytes) = hex::decode(&key_hex) {
-                if bytes.len() == 16 {
-                    let mut arr = [0u8; 16];
-                    arr.copy_from_slice(&bytes);
-                    if !self.keys.contains_key(&key_name) {
-                        self.keys.insert(key_name, arr);
-                        added += 1;
-                    }
-                }
-            }
-        }
-        added
-    }
-
     fn load_builtin(&mut self) {
         // Minimal set of WoW TACT keys commonly needed; extend if required.
         let builtins: &[(u64, &str)] = &[
+            // Needed to decrypt DBFilesClient/TactKeyLookup.db2 (CASCExplorer KeyService.cs)
+            (0x2915DA21ADE22EA8, "3D4B4C0FE8411CDD8E14FD2D5E43BD0B"),
             (0xE07E107F1390A3DF, "290D27B0E871F8C5B14A14E514D0F0D9"),
             (0xFA505078126ACB3E, "BDC51862ABED79B2DE48C8E7E66C6200"),
             (0xFF813F7D062AC0BC, "AA0B5C77F088CCC2D39049BD267F066D"),
@@ -211,5 +152,40 @@ impl KeyService {
                 }
             }
         }
+        logger::info("KEYS", format!("builtin keys loaded: {}", self.keys.len()));
     }
+}
+
+fn parse_key_line(line: &str) -> Option<(u64, [u8; 16])> {
+    let line = line.trim();
+    if line.is_empty() || line.starts_with('#') {
+        return None;
+    }
+
+    let mut parts = if line.contains(';') {
+        line.split(';').collect::<Vec<_>>()
+    } else {
+        line.split_whitespace().collect::<Vec<_>>()
+    };
+
+    if parts.len() < 2 {
+        return None;
+    }
+
+    let key_name_str = parts.remove(0).trim().trim_start_matches("0x");
+    let key_hex = parts.remove(0).trim();
+
+    if key_hex.len() != 32 {
+        return None;
+    }
+
+    let key_name = u64::from_str_radix(&key_name_str.to_ascii_uppercase(), 16).ok()?;
+    let bytes = hex::decode(key_hex).ok()?;
+    if bytes.len() != 16 {
+        return None;
+    }
+
+    let mut arr = [0u8; 16];
+    arr.copy_from_slice(&bytes);
+    Some((key_name, arr))
 }

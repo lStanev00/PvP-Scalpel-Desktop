@@ -10,5 +10,7 @@ pub mod root;
 pub mod db2;
 pub mod listfile;
 pub mod keys;
+pub mod tact_keys;
+pub mod bootstrap;
 #[allow(dead_code)]
 pub mod db2_schema;
