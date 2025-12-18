@@ -1,0 +1,53 @@
+PRIVACY NOTICE
+
+1. Overview
+This software respects user privacy and is designed to minimize data collection.
+
+------------------------------------------------------------
+
+2. Data Collected
+By default, this software:
+    - Does NOT collect personal information
+    - Does NOT collect Blizzard account credentials
+    - Does NOT access Battle.net authentication data
+    - Does NOT upload game assets
+    - Does NOT record gameplay input
+
+Any data processed locally (such as logs or analysis data) remains on the user’s device
+unless the user explicitly chooses to upload derived data to a server.
+
+------------------------------------------------------------
+
+3. Server Communication (If Enabled)
+If the user enables optional server features:
+    - Only derived, non-proprietary data may be transmitted
+    - No Blizzard-owned assets are uploaded
+    - No personal data is sold or shared with third parties
+
+Server communication is limited to functionality explicitly initiated by the user.
+
+------------------------------------------------------------
+
+4. Cookies and Tracking
+This desktop application:
+    - Does NOT use tracking cookies
+    - Does NOT embed third-party trackers
+    - Does NOT perform behavioral tracking
+
+------------------------------------------------------------
+
+5. Future Changes
+If privacy-relevant features are added in the future:
+    - This notice will be updated
+    - Users will be informed where required by law
+
+------------------------------------------------------------
+
+6. User Responsibility
+Users are responsible for:
+    - Complying with Blizzard’s End User License Agreement
+    - Ensuring lawful use of locally installed game assets
+
+------------------------------------------------------------
+
+END OF PRIVACY NOTICE

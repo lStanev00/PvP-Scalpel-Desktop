@@ -1,0 +1,25 @@
+DISCLAIMER
+
+This software is provided for informational, analytical, and visualization purposes only.
+
+The software is not affiliated with Blizzard Entertainment, Inc.
+Blizzard does not review, approve, or support this project.
+
+No Blizzard-owned content is distributed, hosted, or sold by this software.
+All Blizzard assets remain the property of Blizzard Entertainment, Inc.
+Any use of locally installed game assets occurs solely on the user’s device
+under the user’s existing license.
+
+The authors make no guarantees regarding:
+    - Accuracy of data
+    - Completeness of analysis
+    - Fitness for a particular purpose
+    - Continued compatibility with game updates
+
+This software does not provide gameplay advantages, automation, or competitive benefits.
+
+Use of this software is voluntary and at the user’s own risk.
+
+------------------------------------------------------------
+
+END OF DISCLAIMER

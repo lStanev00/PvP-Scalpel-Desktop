@@ -1,0 +1,117 @@
+LEGAL NOTICE
+
+1. Independent Project
+This software is an independent, third-party application.
+It is not affiliated with, endorsed by, sponsored by, or approved by Blizzard Entertainment, Inc.
+
+World of Warcraft® and Blizzard® are trademarks or registered trademarks of
+Blizzard Entertainment, Inc. in the United States and/or other countries.
+All trademarks are the property of their respective owners.
+
+------------------------------------------------------------
+
+2. Use of Local Game Assets
+This application may access game assets that are already installed locally on the
+user’s computer as part of a lawfully licensed installation of World of Warcraft®.
+
+All Blizzard-owned assets remain the exclusive property of Blizzard Entertainment, Inc.
+
+This application:
+    - Does not distribute Blizzard-owned assets
+    - Does not upload Blizzard-owned assets
+    - Does not host Blizzard-owned assets
+    - Does not sell Blizzard-owned assets
+
+All asset usage occurs strictly on the user’s local device.
+The user is responsible for ensuring they hold a valid license for any game assets
+accessed by this software.
+
+------------------------------------------------------------
+
+3. No Redistribution of Blizzard Content
+This software does not include, bundle, redistribute, transmit, or cache any of the following:
+    - Game models
+    - Textures
+    - Animations
+    - Visual effects (VFX)
+    - Sound files
+    - Icons
+    - User interface artwork
+    - Any other proprietary Blizzard Entertainment content
+
+Any visualization features rely solely on:
+    - User-owned local assets
+    - Abstract or generated representations
+
+------------------------------------------------------------
+
+4. Derived and Analytical Data
+All data generated or displayed by this software consists of derived, transformed,
+or analytical information.
+
+This data:
+    - Does not contain original Blizzard files
+    - Cannot be used to reconstruct proprietary assets
+    - Is provided for informational, analytical, or visualization purposes only
+
+The structure, transformations, analytics, and presentation logic of derived data
+are the intellectual property of the software author(s).
+
+------------------------------------------------------------
+
+5. Blizzard Web API (Optional)
+This application does not require Blizzard’s official Web APIs to function.
+
+If external web services or links are provided that utilize Blizzard Web APIs:
+    - Those services are governed separately by Blizzard’s Developer API Terms of Use
+    - API-powered features are optional and isolated
+    - No paid features depend on Blizzard Web API data
+
+------------------------------------------------------------
+
+6. No Gameplay Modification
+This software:
+    - Does not modify game files
+    - Does not automate gameplay
+    - Does not provide in-game advantages
+    - Does not function as a bot, cheat, or exploit
+    - Does not interfere with Blizzard services
+
+The software is intended solely for analysis, visualization, and informational use.
+
+------------------------------------------------------------
+
+7. Hardware and Performance
+Certain features may be limited by the user’s hardware capabilities, including:
+    - CPU performance
+    - Available memory (RAM)
+    - GPU performance
+
+The application may automatically reduce or disable visual features to maintain
+stability. No specific performance level is guaranteed.
+
+------------------------------------------------------------
+
+8. Limitation of Liability
+This software is provided “AS IS”, without warranties of any kind.
+
+The authors and contributors shall not be liable for:
+    - Data loss
+    - Performance degradation
+    - Hardware limitations
+    - Third-party software behavior
+    - Changes to Blizzard Entertainment products or services
+
+Use of this software is entirely at the user’s own risk.
+
+------------------------------------------------------------
+
+9. Acceptance
+By installing or using this software, you acknowledge that:
+    - You have read and understood this notice
+    - You agree to comply with applicable Blizzard license agreements
+    - You accept responsibility for your use of the software
+
+------------------------------------------------------------
+
+END OF LEGAL NOTICE
