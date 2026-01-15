@@ -29,10 +29,7 @@ jobs:
 
             - name: Upload Tauri NSIS installers to S3
               run: |
-                  aws s3 sync src-tauri/target/release/bundle/nsis \
-                      s3://${{ secrets.AWS_S3_BUCKET_NAME }}/Desktop \
-                      --endpoint-url ${{ secrets.AWS_ENDPOINT_URL }} \
-                      --delete
+                  aws s3 sync "src-tauri/target/release/bundle/nsis" "s3://${{ secrets.AWS_S3_BUCKET_NAME }}/Desktop" --endpoint-url "${{ secrets.AWS_ENDPOINT_URL }}" --delete
               env:
                   AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
                   AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -40,13 +37,10 @@ jobs:
 
             - name: Update desktop version manifest
               run: |
-                  aws s3 cp s3://${{ secrets.AWS_S3_BUCKET_NAME }}/manifest.json manifest.json \
-                      --endpoint-url ${{ secrets.AWS_ENDPOINT_URL }} || echo '{}' > manifest.json
+                  aws s3 cp "s3://${{ secrets.AWS_S3_BUCKET_NAME }}/manifest.json" manifest.json --endpoint-url "${{ secrets.AWS_ENDPOINT_URL }}" || echo '{}' > manifest.json
                   VERSION=$(node -p "require('./src-tauri/tauri.conf.json').package.version")
                   node -e "const fs=require('fs');const p='manifest.json';const v=process.env.VERSION;let data={};try{data=JSON.parse(fs.readFileSync(p,'utf8'));}catch{};data.desktop=v;fs.writeFileSync(p,JSON.stringify(data));"
-                  aws s3 cp manifest.json \
-                      s3://${{ secrets.AWS_S3_BUCKET_NAME }}/manifest.json \
-                      --endpoint-url ${{ secrets.AWS_ENDPOINT_URL }}
+                  aws s3 cp manifest.json "s3://${{ secrets.AWS_S3_BUCKET_NAME }}/manifest.json" --endpoint-url "${{ secrets.AWS_ENDPOINT_URL }}"
               env:
                   AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
                   AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
