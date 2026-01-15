@@ -1,3 +1,4 @@
+// opens an url in browser
 #[tauri::command]
 pub fn open_url(path: String) -> Result<(), String> {
     #[cfg(target_os = "windows")]
