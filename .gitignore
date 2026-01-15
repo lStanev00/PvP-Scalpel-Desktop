@@ -23,5 +23,8 @@ dist-ssr
 *.sln
 *.sw?
 
+# Project specific
 docs
 listfile.csv
+debug_inputs
+patcher
