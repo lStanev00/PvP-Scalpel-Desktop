@@ -1,0 +1,52 @@
+name: Production Tauri Build
+
+on:
+    push:
+        branches:
+            - production
+
+jobs:
+    build-upload:
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Setup Node
+              uses: actions/setup-node@v4
+              with:
+                  node-version: 20
+
+            - name: Setup Rust
+              uses: dtolnay/rust-toolchain@stable
+
+            - name: Install dependencies
+              run: npm ci
+
+            - name: Tauri build (production)
+              run: npm run tauri build
+
+            - name: Configure AWS credentials
+              uses: aws-actions/configure-aws-credentials@v4
+              with:
+                  aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+                  aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+                  aws-region: ${{ secrets.AWS_DEFAULT_REGION }}
+
+            - name: Upload Tauri NSIS installers to S3
+              run: |
+                  aws s3 sync src-tauri/target/release/bundle/nsis \
+                      s3://${{ secrets.AWS_S3_BUCKET_NAME }}/Desktop \
+                      --endpoint-url ${{ secrets.AWS_ENDPOINT_URL }} \
+                      --delete
+
+            - name: Update desktop version manifest
+              run: |
+                  aws s3 cp s3://${{ secrets.AWS_S3_BUCKET_NAME }}/manifest.json manifest.json \
+                      --endpoint-url ${{ secrets.AWS_ENDPOINT_URL }} || echo '{}' > manifest.json
+                  VERSION=$(node -p "require('./src-tauri/tauri.conf.json').package.version")
+                  node -e "const fs=require('fs');const p='manifest.json';const v=process.env.VERSION;let data={};try{data=JSON.parse(fs.readFileSync(p,'utf8'));}catch{};data.desktop=v;fs.writeFileSync(p,JSON.stringify(data));"
+                  aws s3 cp manifest.json \
+                      s3://${{ secrets.AWS_S3_BUCKET_NAME }}/manifest.json \
+                      --endpoint-url ${{ secrets.AWS_ENDPOINT_URL }}
