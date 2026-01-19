@@ -1,0 +1,35 @@
+.panel {
+    border-radius: var(--r20);
+    background: rgba(18, 24, 33, 0.82);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: var(--shadow);
+    padding: 16px;
+    display: grid;
+    gap: 12px;
+}
+
+.panelTitle {
+    font-weight: 850;
+    letter-spacing: 0.2px;
+}
+
+.logBody {
+    display: grid;
+    gap: 6px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: rgba(230, 234, 240, 0.9);
+    background: rgba(12, 16, 24, 0.65);
+    border-radius: 12px;
+    padding: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.logLine {
+    padding: 6px 0;
+    border-bottom: 1px dashed rgba(255, 255, 255, 0.08);
+}
+
+.logLine:last-child {
+    border-bottom: 0;
+}

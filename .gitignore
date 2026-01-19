@@ -29,3 +29,7 @@ listfile.csv
 debug_inputs
 patchline
 external
+
+# Allow tracked UI logs page (case-insensitive "logs" rule would ignore it on Windows)
+!src/Pages/Logs/
+!src/Pages/Logs/**
