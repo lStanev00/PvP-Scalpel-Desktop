@@ -1,0 +1,160 @@
+.header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 18px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    gap: 12px;
+    -webkit-app-region: drag;
+}
+
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+}
+
+.logo {
+    width: 42px;
+    height: 42px;
+    border-radius: 14px;
+    background-image: url("/logo/logo.png");
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    box-shadow: 0 0 30px rgba(58, 167, 255, 0.25), 0 0 35px rgba(124, 242, 194, 0.18);
+}
+
+.name {
+    font-weight: 850;
+    letter-spacing: 0.5px;
+    font-size: 15px;
+}
+
+.sub {
+    margin-top: 2px;
+    font-size: 12px;
+    color: rgba(138, 148, 166, 0.95);
+}
+
+.actions {
+    display: flex;
+    gap: 10px;
+    -webkit-app-region: no-drag;
+}
+
+.actionBtn {
+    border-radius: 12px;
+    padding: 8px 12px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.05);
+    cursor: pointer;
+    font-size: 12px;
+    letter-spacing: 0.4px;
+    transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
+    -webkit-app-region: no-drag;
+}
+
+.actionBtn:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.18);
+}
+
+.status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-left: 12px;
+    border-left: 1px solid rgba(255, 255, 255, 0.08);
+    min-width: 0;
+    -webkit-app-region: no-drag;
+}
+
+.statusDot {
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background: rgba(58, 210, 159, 0.95);
+    box-shadow: 0 0 12px rgba(58, 210, 159, 0.55);
+}
+
+.statusText {
+    font-size: 12px;
+    color: rgba(230, 234, 240, 0.9);
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.windowControls {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding-left: 10px;
+    border-left: 1px solid rgba(255, 255, 255, 0.08);
+    -webkit-app-region: no-drag;
+}
+
+.winBtn {
+    border-radius: 10px;
+    padding: 6px 8px;
+    min-width: 28px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.04);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: rgba(230, 234, 240, 0.9);
+    transition: background 160ms ease, border-color 160ms ease;
+    -webkit-app-region: no-drag;
+}
+
+.winBtn:hover {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.winClose:hover {
+    background: rgba(255, 77, 79, 0.2);
+    border-color: rgba(255, 77, 79, 0.4);
+}
+
+.winIcon {
+    width: 12px;
+    height: 12px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.4;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+@media (max-width: 900px) {
+    .header {
+        flex-wrap: wrap;
+    }
+
+    .status {
+        border-left: 0;
+        padding-left: 0;
+    }
+
+    .right {
+        width: 100%;
+        justify-content: space-between;
+        flex-wrap: wrap;
+    }
+
+    .windowControls {
+        border-left: 0;
+        padding-left: 0;
+    }
+}

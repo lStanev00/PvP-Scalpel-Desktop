@@ -1,0 +1,73 @@
+.panel {
+    border-radius: var(--r20);
+    background: rgba(18, 24, 33, 0.62);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: var(--shadow2);
+    padding: 18px;
+    display: grid;
+    gap: 16px;
+}
+
+.brandRow {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.logo {
+    width: 54px;
+    height: 54px;
+    border-radius: 16px;
+    background-image: url("/logo/logo.png");
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    box-shadow: 0 0 24px rgba(58, 167, 255, 0.22), 0 0 20px rgba(124, 242, 194, 0.18);
+}
+
+.name {
+    font-weight: 850;
+    letter-spacing: 0.3px;
+    font-size: 16px;
+}
+
+.meta {
+    margin-top: 4px;
+    font-size: 12px;
+    color: rgba(138, 148, 166, 0.95);
+}
+
+.copy {
+    font-size: 13px;
+    line-height: 1.6;
+    color: rgba(230, 234, 240, 0.92);
+    margin: 0;
+}
+
+.kvList {
+    display: grid;
+    gap: 8px;
+}
+
+.kv {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.kv:last-child {
+    border-bottom: 0;
+}
+
+.k {
+    font-size: 12px;
+    color: rgba(138, 148, 166, 0.95);
+}
+
+.v {
+    font-size: 12px;
+    font-family: var(--mono);
+    color: rgba(230, 234, 240, 0.95);
+}

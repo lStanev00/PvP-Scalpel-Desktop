@@ -1,224 +1,147 @@
+.shell {
+    height: 100%;
+    width: 100%;
+    display: grid;
+    place-items: center;
+    padding: 24px;
+}
+
 .container {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-
-    width: 100%;
-    max-width: 520px;
-    margin: 2rem auto;
-    padding: 2.2rem 2.4rem;
-
-    background: var(--bg-char-details-card);
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius);
-    box-shadow:
-        inset 0 0 10px rgba(0, 245, 212, 0.05),
-        0 0 28px rgba(0, 0, 0, 0.65);
-    backdrop-filter: blur(10px);
-
-    animation: fadeRise 0.4s ease-out forwards;
-    opacity: 0;
-    transform: translateY(10px);
+    width: min(420px, 92vw);
+    background: rgba(18, 24, 33, 0.72);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: var(--r20);
+    box-shadow: var(--shadow);
+    padding: 24px;
+    display: grid;
+    gap: 20px;
 }
 
-@keyframes fadeRise {
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-/* ===== HEADER ===== */
-.inner-section h4 {
-    position: relative;
+.header {
     display: flex;
     align-items: center;
-    justify-content: center;
-    gap: 0.6rem;
+    gap: 14px;
+}
 
-    font-size: 2rem;
-    font-weight: 700;
-    text-transform: uppercase;
+.logo {
+    width: 56px;
+    height: 56px;
+    border-radius: 16px;
+    background-image: url("/logo/logo.png");
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    box-shadow: 0 0 24px rgba(58, 167, 255, 0.22), 0 0 20px rgba(124, 242, 194, 0.18);
+}
+
+.title {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 850;
     letter-spacing: 0.6px;
-    text-align: center;
-
-
-    background: linear-gradient(180deg, #fff9c4 0%, #ffd700 35%, #caa400 100%);
-    background-clip: text;
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-
-    text-shadow:
-        0 2px 4px rgba(0, 0, 0, 0.6),
-        0 0 6px rgba(255, 225, 120, 0.25),
-        0 0 12px rgba(255, 255, 255, 0.1);
 }
 
-.inner-section h4::after {
-    content: "";
-    position: absolute;
-    bottom: -8px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 130px;
-    height: 2px;
-
-    background: linear-gradient(90deg, transparent, rgba(255, 215, 0, 0.6), transparent);
-    box-shadow: 0 0 10px rgba(255, 200, 50, 0.3);
+.subtitle {
+    margin: 6px 0 0;
+    font-size: 12px;
+    color: rgba(138, 148, 166, 0.95);
 }
 
-
-/* ===== FORM ===== */
-form {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    width: 100%;
-    color: var(--color-text);
-    gap: 1.5rem;
+.form {
+    display: grid;
+    gap: 14px;
 }
 
-form label {
-    align-self: flex-start;
-    font-size: 0.95rem;
-    color: var(--color-muted);
-    margin-left: 4px;
-    line-height: 1.4rem;
+.field {
+    display: grid;
+    gap: 8px;
 }
 
-/* ===== INPUTS ===== */
-form input[type="text"],
-form input[type="email"],
-form input[type="password"] {
-    width: 100%;
-    padding: 0.75rem 1rem;
-    border-radius: var(--radius);
-    border: 1px solid var(--border-color);
-    background: rgba(18, 22, 35, 0.85);
-    color: var(--color-text);
-    font-family: var(--font-base);
-    font-size: 0.95rem;
-    transition: all 0.25s ease;
+.field label {
+    font-size: 12px;
+    color: rgba(138, 148, 166, 0.95);
+}
+
+.field input {
+    padding: 10px 12px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.04);
     outline: none;
-    box-shadow: inset 0 0 6px rgba(0, 245, 212, 0.05);
 }
 
-form input:focus {
-    border-color: var(--color-accent);
-    box-shadow:
-        0 0 6px rgba(0, 245, 212, 0.3),
-        inset 0 0 4px rgba(0, 245, 212, 0.2);
+.field input:focus {
+    border-color: rgba(124, 242, 194, 0.4);
+    box-shadow: 0 0 0 2px rgba(124, 242, 194, 0.15);
 }
 
-/* ===== CHECKBOX AREA ===== */
-.checkbox {
-    appearance: none;
-    width: 20px;
-    height: 20px;
-    border: 2px solid var(--color-accent);
-    border-radius: 6px;
-    background-color: transparent;
-    position: relative;
-    cursor: pointer;
-    transition: all 0.25s ease;
+.errorBox {
+    border-radius: 12px;
+    border: 1px solid rgba(255, 77, 79, 0.3);
+    background: rgba(255, 77, 79, 0.08);
+    padding: 12px;
+    display: grid;
+    gap: 6px;
 }
 
-.checkbox:hover {
-    border-color: var(--color-gold);
-    box-shadow: 0 0 6px rgba(0, 245, 212, 0.3);
-}
-
-.checkbox:checked {
-    background-color: var(--color-accent);
-    box-shadow: 0 0 8px rgba(0, 245, 212, 0.4);
-}
-
-.checkbox:checked::after {
-    content: "";
-    position: absolute;
-    left: 5px;
-    top: 1px;
-    width: 4px;
-    height: 8px;
-    border: solid #0a0a0a;
-    border-width: 0 2px 2px 0;
-    transform: rotate(45deg);
-}
-
-/* ===== BUTTON ===== */
-form button {
-    margin-top: 0.6rem;
-    padding: 0.9rem 1.4rem;
-    width: 100%;
-    border: none;
-    border-radius: var(--radius);
-    cursor: pointer;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.4px;
-
-    background: linear-gradient(90deg, var(--color-accent), rgba(0, 245, 212, 0.6));
-    color: var(--color-text);
-    font-family: var(--font-base);
-    transition: all 0.25s ease;
-    box-shadow:
-        0 0 12px rgba(0, 245, 212, 0.15),
-        inset 0 0 8px rgba(255, 255, 255, 0.05);
-}
-
-form button:hover {
-    background: linear-gradient(90deg, rgba(0, 245, 212, 0.8), var(--color-accent));
-    box-shadow:
-        0 0 18px rgba(0, 245, 212, 0.25),
-        inset 0 0 6px rgba(255, 255, 255, 0.08);
-    transform: translateY(-1px);
-}
-
-form button:active {
-    transform: scale(0.97);
-    background: var(--color-accent);
-}
-
-/* ===== LINKS ===== */
-form p {
-    font-size: 0.9rem;
-    color: var(--color-muted);
-    margin-top: 0.5rem;
-    text-align: center;
-}
-
-form a {
-    color: var(--color-accent);
+.errorText {
+    margin: 0;
+    color: rgba(255, 77, 79, 0.95);
+    font-size: 12px;
     font-weight: 600;
-    text-decoration: none;
-    transition: color 0.25s ease, text-shadow 0.25s ease;
 }
 
-form a:hover {
-    color: var(--color-gold);
-    text-shadow: 0 0 8px rgba(255, 215, 0, 0.3);
+.errorHint {
+    margin: 0;
+    font-size: 12px;
+    color: rgba(230, 234, 240, 0.9);
 }
 
-/* ===== ERRORS ===== */
-.error-msg {
-    background: rgba(255, 50, 50, 0.08);
-    border: 1px solid rgba(255, 100, 100, 0.3);
-    color: #ff4d4d;
-    padding: 0.5rem 0.8rem;
-    border-radius: var(--radius);
-    font-size: 0.85rem;
+.errorLink {
+    border: 0;
+    background: transparent;
+    color: rgba(124, 242, 194, 0.95);
+    font-size: 12px;
+    cursor: pointer;
+    padding: 0;
+    text-align: left;
+}
+
+.errorLink:hover {
+    color: rgba(58, 167, 255, 0.95);
+}
+
+.submit {
     width: 100%;
-    text-align: center;
-    margin-top: -0.4rem;
-    box-shadow: inset 0 0 8px rgba(255, 50, 50, 0.1);
+    border: 0;
+    cursor: pointer;
+    border-radius: 14px;
+    padding: 12px;
+    font-weight: 760;
+    letter-spacing: 1px;
+    background: linear-gradient(90deg, rgba(58, 167, 255, 0.82), rgba(124, 242, 194, 0.68));
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35), 0 0 30px rgba(58, 167, 255, 0.22);
 }
 
-/* ===== SECTION WRAPPER ===== */
-.inner-section {
-    display: flex;
-    flex-direction: column;
-    width: 100%;
-    gap: 1rem;
-    padding: 1.4rem;
+.submit:hover {
+    filter: brightness(1.05);
+}
+
+.links {
+    display: grid;
+    gap: 6px;
+}
+
+.link {
+    border: 0;
+    background: transparent;
+    padding: 0;
+    text-align: left;
+    cursor: pointer;
+    font-size: 12px;
+    color: rgba(138, 148, 166, 0.95);
+}
+
+.link:hover {
+    color: rgba(230, 234, 240, 0.95);
 }

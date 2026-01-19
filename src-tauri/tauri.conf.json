@@ -17,7 +17,10 @@
       {
         "title": "PvP Scalpel",
         "width": 1200,
-        "height": 900
+        "height": 900,
+        "decorations": false,
+        "transparent": true,
+        "shadow": false
       }
     ],
     "security": {

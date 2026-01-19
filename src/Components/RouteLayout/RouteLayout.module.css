@@ -1,0 +1,40 @@
+.layout {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.title {
+    font-size: 22px;
+    font-weight: 880;
+    letter-spacing: 0.2px;
+    margin: 0;
+}
+
+.description {
+    margin: 6px 0 0;
+    font-size: 12px;
+    color: rgba(138, 148, 166, 0.95);
+    max-width: 64ch;
+}
+
+.actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.body {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
