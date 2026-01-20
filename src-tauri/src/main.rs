@@ -7,6 +7,9 @@ mod watcher;
 mod gwp_command;
 mod discord_rpc;
 mod ourl_command;
+mod version_command;
+mod manifest_command;
+mod launcher_command;
 
 use tauri::{
     menu::{Menu, MenuItem, PredefinedMenuItem},
@@ -173,6 +176,11 @@ fn main() {
             exit_app,
             update_tray_state,
             scan_saved_vars,
+            version_command::get_desktop_version,
+            version_command::get_addon_version,
+            version_command::get_local_versions,
+            manifest_command::fetch_manifest,
+            launcher_command::launch_launcher,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri app");

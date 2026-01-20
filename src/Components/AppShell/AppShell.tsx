@@ -4,9 +4,20 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import { usePreferences } from "../../Context-Providers/preferences-context";
+import { useAppInfo } from "../../Context-Providers/app-info-context";
 import TopBar from "../TopBar/TopBar";
 import NavigationMenu from "../NavigationMenu/NavigationMenu";
+import PrimaryActionButton from "../PrimaryActionButton/PrimaryActionButton";
 import styles from "./AppShell.module.css";
+
+type ManifestPayload = {
+    desktop?: {
+        version?: string;
+    };
+    addon?: {
+        version?: string;
+    };
+};
 
 export default function AppShell() {
     const [introActive, setIntroActive] = useState(true);
@@ -14,7 +25,11 @@ export default function AppShell() {
     const [showUi, setShowUi] = useState(false);
     const [introCycle, setIntroCycle] = useState(0);
     const [forceIntro, setForceIntro] = useState(true);
+    const [versionMismatch, setVersionMismatch] = useState(false);
+    const [requiredVersion, setRequiredVersion] = useState<string | null>(null);
+    const [requiredAddonVersion, setRequiredAddonVersion] = useState<string | null>(null);
     const { minimizeToTray, navCollapsed, setNavCollapsed } = usePreferences();
+    const { desktopVersion, addonVersion } = useAppInfo();
     const minimizeToTrayRef = useRef(minimizeToTray);
     const closeListenerRef = useRef<null | (() => void)>(null);
     const entranceTimerRef = useRef<number | null>(null);
@@ -34,6 +49,44 @@ export default function AppShell() {
     useEffect(() => {
         minimizeToTrayRef.current = minimizeToTray;
     }, [minimizeToTray]);
+
+    useEffect(() => {
+        if (!desktopVersion && !addonVersion) return;
+        const intervalMs = 30 * 60 * 1000;
+        let intervalId: number | null = null;
+        let stopped = false;
+
+        const checkManifest = async () => {
+            if (stopped) return;
+            try {
+                const manifest = await invoke<ManifestPayload>("fetch_manifest");
+                const manifestVersion = manifest?.desktop?.version;
+                const manifestAddonVersion = manifest?.addon?.version;
+                const desktopMismatch =
+                    !!manifestVersion && !!desktopVersion && manifestVersion !== desktopVersion;
+                const addonMismatch =
+                    !!manifestAddonVersion && !!addonVersion && manifestAddonVersion !== addonVersion;
+                if (desktopMismatch || addonMismatch) {
+                    // Lock the UI on version mismatch so the launcher can update.
+                    setRequiredVersion(manifestVersion ?? null);
+                    setRequiredAddonVersion(manifestAddonVersion ?? null);
+                    setVersionMismatch(true);
+                    stopped = true;
+                    if (intervalId) window.clearInterval(intervalId);
+                }
+            } catch {
+                // Ignore manifest errors; next interval will retry.
+            }
+        };
+
+        checkManifest();
+        intervalId = window.setInterval(checkManifest, intervalMs);
+
+        return () => {
+            stopped = true;
+            if (intervalId) window.clearInterval(intervalId);
+        };
+    }, [desktopVersion, addonVersion]);
 
     const finishIntro = () => {
         if (introDoneRef.current) return;
@@ -169,6 +222,11 @@ export default function AppShell() {
         await invoke("exit_app").catch(() => win.close());
     };
 
+    const handleLaunchLauncher = async () => {
+        await invoke("launch_launcher").catch(() => undefined);
+        await invoke("exit_app").catch(() => undefined);
+    };
+
     const shellClass = `${styles.shell} ${introActive || forceIntro ? styles.shellIntro : ""}`;
 
     return (
@@ -198,6 +256,30 @@ export default function AppShell() {
                             </main>
                         </div>
                     </>
+                ) : null}
+                {versionMismatch ? (
+                    <div className={styles.lockOverlay} role="dialog" aria-modal="true">
+                        <div className={styles.lockCard}>
+                            <div className={styles.lockTitle}>Version mismatch</div>
+                            <p className={styles.lockCopy}>
+                                This build does not match the required desktop or addon version. Update via the
+                                launcher to continue.
+                            </p>
+                            <div className={styles.lockMeta}>
+                                <span>Desktop current</span>
+                                <span>{desktopVersion ?? "Unknown"}</span>
+                                <span>Desktop required</span>
+                                <span>{requiredVersion ?? "Unknown"}</span>
+                                <span>Addon current</span>
+                                <span>{addonVersion ?? "Unknown"}</span>
+                                <span>Addon required</span>
+                                <span>{requiredAddonVersion ?? "Unknown"}</span>
+                            </div>
+                            <div className={styles.lockActions}>
+                                <PrimaryActionButton label="Start launcher" onClick={handleLaunchLauncher} />
+                            </div>
+                        </div>
+                    </div>
                 ) : null}
             </div>
         </div>

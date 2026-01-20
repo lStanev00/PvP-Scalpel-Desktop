@@ -1,7 +1,11 @@
 import RouteLayout from "../../Components/RouteLayout/RouteLayout";
+import { useAppInfo } from "../../Context-Providers/app-info-context";
 import styles from "./About.module.css";
 
 export default function About() {
+    const { desktopVersion } = useAppInfo();
+    const versionLabel = desktopVersion ?? "Not detected";
+
     return (
         <RouteLayout
             title="About PvP Scalpel"
@@ -32,7 +36,7 @@ export default function About() {
                 <div className={styles.kvList}>
                     <div className={styles.kv}>
                         <span className={styles.k}>Version</span>
-                        <span className={styles.v}>0.1.0</span>
+                        <span className={styles.v}>{versionLabel}</span>
                     </div>
                     <div className={styles.kv}>
                         <span className={styles.k}>Build channel</span>
