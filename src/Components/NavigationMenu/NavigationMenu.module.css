@@ -6,6 +6,19 @@
     display: flex;
     flex-direction: column;
     gap: 12px;
+    transition: width 180ms ease;
+}
+
+.collapsed {
+    width: 72px;
+}
+
+.sectionHeader {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 8px;
+    padding: 0 6px;
 }
 
 .sectionLabel {
@@ -13,13 +26,50 @@
     letter-spacing: 1.4px;
     text-transform: uppercase;
     color: rgba(138, 148, 166, 0.95);
-    padding: 0 8px;
+}
+
+.toggle {
+    width: 28px;
+    height: 28px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.05);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+.toggle:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.18);
+}
+
+.toggleIcon {
+    width: 14px;
+    height: 14px;
+}
+
+.collapsed .sectionHeader {
+    justify-content: flex-end;
+}
+
+.collapsed .toggle {
+    margin-left: auto;
 }
 
 .list {
     display: flex;
     flex-direction: column;
     gap: 6px;
+}
+
+.bottomList {
+    margin-top: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding-bottom: 6px;
 }
 
 .link {
@@ -31,6 +81,12 @@
     border: 1px solid transparent;
     color: rgba(230, 234, 240, 0.85);
     transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
+    position: relative;
+}
+
+.collapsed .link {
+    justify-content: center;
+    padding: 10px;
 }
 
 .link:hover {
@@ -68,6 +124,48 @@
     letter-spacing: 0.2px;
 }
 
+.collapsed .label {
+    display: none;
+}
+
+.collapsed .sectionLabel {
+    display: none;
+}
+
+.tooltip {
+    display: none;
+}
+
+.collapsed .tooltip {
+    display: inline-flex;
+    align-items: center;
+    padding: 6px 10px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(18, 24, 33, 0.92);
+    color: rgba(230, 234, 240, 0.96);
+    font-size: 12px;
+    letter-spacing: 0.2px;
+    white-space: nowrap;
+    position: absolute;
+    left: calc(100% + 8px);
+    top: 50%;
+    transform: translate(-8px, -50%);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    box-shadow: 0 8px 18px rgba(8, 12, 18, 0.45);
+    transition: opacity 140ms ease, transform 140ms ease, visibility 140ms ease;
+    z-index: 4;
+}
+
+.collapsed .link:hover .tooltip,
+.collapsed .link:focus-visible .tooltip {
+    opacity: 1;
+    visibility: visible;
+    transform: translate(0, -50%);
+}
+
 @media (max-width: 980px) {
     .nav {
         width: 100%;
@@ -78,12 +176,34 @@
         overflow-x: auto;
     }
 
+    .collapsed {
+        width: 100%;
+    }
+
     .list {
         flex-direction: row;
         flex-wrap: nowrap;
     }
 
+    .bottomList {
+        margin-top: 0;
+        padding-bottom: 0;
+        flex-direction: row;
+    }
+
     .sectionLabel {
+        display: none;
+    }
+
+    .label {
+        display: inline;
+    }
+
+    .link {
+        justify-content: flex-start;
+    }
+
+    .toggle {
         display: none;
     }
 }

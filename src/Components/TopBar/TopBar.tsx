@@ -1,6 +1,7 @@
 import { MouseEvent } from "react";
 import { NavLink } from "react-router-dom";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { LuMinus, LuSquare, LuX } from "react-icons/lu";
 import useUserContext from "../../Hooks/useUserContext";
 import styles from "./TopBar.module.css";
 
@@ -54,20 +55,13 @@ export default function TopBar({ onMinimize, onMaximize, onClose }: TopBarProps)
 
                 <div className={styles.windowControls} data-no-drag>
                     <button className={styles.winBtn} type="button" onClick={onMinimize}>
-                        <svg className={styles.winIcon} viewBox="0 0 12 12" aria-hidden="true">
-                            <line x1="2" y1="9" x2="10" y2="9" />
-                        </svg>
+                        <LuMinus className={styles.winIcon} aria-hidden="true" />
                     </button>
                     <button className={styles.winBtn} type="button" onClick={onMaximize}>
-                        <svg className={styles.winIcon} viewBox="0 0 12 12" aria-hidden="true">
-                            <rect x="2.2" y="2.2" width="7.6" height="7.6" />
-                        </svg>
+                        <LuSquare className={styles.winIcon} aria-hidden="true" />
                     </button>
                     <button className={`${styles.winBtn} ${styles.winClose}`} type="button" onClick={onClose}>
-                        <svg className={styles.winIcon} viewBox="0 0 12 12" aria-hidden="true">
-                            <line x1="3" y1="3" x2="9" y2="9" />
-                            <line x1="9" y1="3" x2="3" y2="9" />
-                        </svg>
+                        <LuX className={styles.winIcon} aria-hidden="true" />
                     </button>
                 </div>
             </div>

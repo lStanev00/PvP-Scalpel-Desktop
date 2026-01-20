@@ -14,7 +14,7 @@ export default function AppShell() {
     const [showUi, setShowUi] = useState(false);
     const [introCycle, setIntroCycle] = useState(0);
     const [forceIntro, setForceIntro] = useState(true);
-    const { minimizeToTray } = usePreferences();
+    const { minimizeToTray, navCollapsed, setNavCollapsed } = usePreferences();
     const minimizeToTrayRef = useRef(minimizeToTray);
     const closeListenerRef = useRef<null | (() => void)>(null);
     const entranceTimerRef = useRef<number | null>(null);
@@ -189,7 +189,10 @@ export default function AppShell() {
                             <TopBar onMinimize={handleMinimize} onMaximize={handleMaximize} onClose={handleClose} />
                         </div>
                         <div className={styles.body}>
-                            <NavigationMenu />
+                            <NavigationMenu
+                                collapsed={navCollapsed}
+                                onToggle={() => setNavCollapsed((value) => !value)}
+                            />
                             <main className={styles.main}>
                                 <Outlet />
                             </main>
