@@ -4,7 +4,7 @@
     width: 100%;
     padding: 0;
     z-index: 1;
-    border-radius: 22px;
+    border-radius: 22px 22px 0 0;
     overflow: hidden;
 }
 
@@ -35,7 +35,7 @@
 
 .frame {
     height: 100%;
-    border-radius: 22px;
+    border-radius: 22px 22px 0 0;
     border: 0;
     background: linear-gradient(180deg, rgba(18, 24, 33, 0.96), rgba(14, 18, 25, 0.98));
     box-shadow: none;
