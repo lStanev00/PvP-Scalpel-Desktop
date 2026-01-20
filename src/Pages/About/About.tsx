@@ -8,12 +8,12 @@ export default function About() {
             description="PvP match intelligence that tells you why games are won or lost."
         >
             <div className={styles.panel}>
-                <div className={styles.brandRow}>
-                    <div className={styles.logo} aria-hidden="true" />
+                {/* <div className={styles.brandRow}>
+                    <img className={styles.logo} src="/logo/logo.png" alt="" aria-hidden="true" />
                     <div>
                         <div className={styles.name}>PvP Scalpel Desktop</div>
                     </div>
-                </div>
+                </div> */}
                 <div className={styles.kvList}>
                     <div className={styles.meta}>What PvP Scalpel Does</div>
                     <p className={styles.copy}>- Analyzes rated PvP matches automatically.</p>

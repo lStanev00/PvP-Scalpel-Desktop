@@ -31,7 +31,7 @@ export default function TopBar({ onMinimize, onMaximize, onClose }: TopBarProps)
     return (
         <header className={styles.header} onMouseDown={handleHeaderDrag} data-tauri-drag-region>
             <div className={styles.brand}>
-                <div className={styles.logo} aria-hidden="true" />
+                <img className={styles.logo} src="/logo/logo.png" alt="" aria-hidden="true" />
                 <div>
                     <div className={styles.name}>PvP Scalpel</div>
                     <div className={styles.sub}>Desktop Analytics Suite</div>
