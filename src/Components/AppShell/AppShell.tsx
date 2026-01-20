@@ -68,6 +68,13 @@ export default function AppShell() {
                     !!manifestAddonVersion && !!addonVersion && manifestAddonVersion !== addonVersion;
                 if (desktopMismatch || addonMismatch) {
                     // Lock the UI on version mismatch so the launcher can update.
+                    const desktopCurrent = desktopVersion ?? "Unknown";
+                    const desktopTarget = manifestVersion ?? "Unknown";
+                    const addonCurrent = addonVersion ?? "Unknown";
+                    const addonTarget = manifestAddonVersion ?? "Unknown";
+                    invoke("push_log", {
+                        message: `Version mismatch detected (Desktop ${desktopCurrent} -> ${desktopTarget}, Addon ${addonCurrent} -> ${addonTarget})`,
+                    }).catch(() => undefined);
                     setRequiredVersion(manifestVersion ?? null);
                     setRequiredAddonVersion(manifestAddonVersion ?? null);
                     setVersionMismatch(true);

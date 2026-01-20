@@ -10,6 +10,7 @@ mod ourl_command;
 mod version_command;
 mod manifest_command;
 mod launcher_command;
+mod log_command;
 
 use tauri::{
     menu::{Menu, MenuItem, PredefinedMenuItem},
@@ -61,7 +62,12 @@ fn update_tray_state(
 fn scan_saved_vars(app: AppHandle) -> Result<(), String> {
     if let Some(path) = gwp_command::get_wow_path() {
         let root = std::path::PathBuf::from(path);
-        watcher::emit_existing_saved_vars(&app, &root);
+        let found = watcher::emit_existing_saved_vars(&app, &root);
+        if found {
+            log_command::emit_log(&app, "SavedVariables discovered");
+        } else {
+            log_command::emit_log(&app, "SavedVariables not found");
+        }
     }
     Ok(())
 }
@@ -76,14 +82,12 @@ fn main() {
             }
             let handle = app.handle().clone();
             let root = if let Some(path) = gwp_command::get_wow_path() {
+                log_command::emit_log(&handle, "WoW path detected");
                 std::path::PathBuf::from(path)
             } else {
-                println!("WoW path not found");
+                log_command::emit_log(&handle, "WoW path not found");
                 return Ok(());
             };
-
-            println!("Detected WoW path raw: {:?}", gwp_command::get_wow_path());
-            println!("Full folder to watch: {:?}", root);
 
             if root.exists() {
                 let mut watcher =
@@ -96,10 +100,9 @@ fn main() {
                 // Watcher in mem stored
                 let keeper = app.state::<WatcherKeeper>();
                 *keeper.0.lock().unwrap() = Some(watcher);
-
-                println!("Watching {:?}", root);
+                log_command::emit_log(&app.handle(), "Addon watcher registered");
             } else {
-                println!("The root path does not exist. The watcher won't register.")
+                log_command::emit_log(&app.handle(), "Addon watcher started");
             };
 
             discord_rpc::start_rich_presence(); // Start Discord presence
@@ -110,6 +113,7 @@ fn main() {
                 std::thread::spawn(move || {
                     for _ in 0..30 {
                         if watcher::emit_existing_saved_vars(&app_handle, &root) {
+                            log_command::emit_log(&app_handle, "Addon SavedVariables discovered");
                             break;
                         }
                         std::thread::sleep(Duration::from_millis(500));
@@ -157,13 +161,32 @@ fn main() {
                     }
                 })
                 .build(app)?;
+            log_command::emit_log(&app.handle(), "Tray ready");
 
             Ok(())
         })
         .on_page_load(|window, _| {
+            log_command::emit_log(window.app_handle(), "App initialized");
             if let Some(path) = gwp_command::get_wow_path() {
                 let root = std::path::PathBuf::from(path);
                 watcher::emit_existing_saved_vars(window, &root);
+            }
+            let versions = version_command::get_local_versions();
+            match versions.desktop_version.as_deref() {
+                Some(version) => {
+                    log_command::emit_log(window.app_handle(), &format!("Desktop version detected ({version})"));
+                }
+                None => {
+                    log_command::emit_log(window.app_handle(), "Desktop version not found");
+                }
+            }
+            match versions.addon_version.as_deref() {
+                Some(version) => {
+                    log_command::emit_log(window.app_handle(), &format!("Addon version detected ({version})"));
+                }
+                None => {
+                    log_command::emit_log(window.app_handle(), "Addon version not found");
+                }
             }
         })
         .invoke_handler(tauri::generate_handler![
@@ -181,6 +204,8 @@ fn main() {
             version_command::get_local_versions,
             manifest_command::fetch_manifest,
             launcher_command::launch_launcher,
+            log_command::push_log,
+            log_command::get_logs,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri app");
