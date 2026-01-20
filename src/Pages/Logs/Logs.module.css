@@ -8,9 +8,46 @@
     gap: 12px;
 }
 
+.panelHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
 .panelTitle {
     font-weight: 850;
     letter-spacing: 0.2px;
+}
+
+.copyBtn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.05);
+    color: rgba(230, 234, 240, 0.92);
+    cursor: pointer;
+    font-size: 12px;
+    letter-spacing: 0.2px;
+    transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+
+.copyBtn:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.18);
+}
+
+.copyIcon {
+    width: 14px;
+    height: 14px;
+    stroke: currentColor;
+}
+
+.copyLabel {
+    white-space: nowrap;
 }
 
 .logBody {

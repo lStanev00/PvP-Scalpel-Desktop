@@ -1,4 +1,4 @@
-import { createContext, ReactNode, useEffect, useState } from "react";
+import { createContext, ReactNode, useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import luaJson from "lua-json";
@@ -8,6 +8,8 @@ export const MatchesContext = createContext<MatchWithId[] | null>(null);
 
 export const MatchesProvider = ({ children }: { children: ReactNode }) => {
     const [matches, setMatches] = useState<MatchWithId[]>([]);
+    const lastLoggedCount = useRef<number | null>(null);
+    const hasParseError = useRef(false);
 
     useEffect(() => {
         let timeout: ReturnType<typeof setTimeout> | null = null;
@@ -59,9 +61,22 @@ export const MatchesProvider = ({ children }: { children: ReactNode }) => {
                         }
 
                         setMatches(results);
+                        if (lastLoggedCount.current !== results.length) {
+                            lastLoggedCount.current = results.length;
+                            invoke("push_log", {
+                                message: `Match data updated (${results.length} matches)`,
+                            }).catch(() => undefined);
+                        }
+                        hasParseError.current = false;
                     } catch (err) {
                         if (import.meta.env.DEV) {
                             console.error("SavedVariables read error:", err);
+                        }
+                        if (!hasParseError.current) {
+                            hasParseError.current = true;
+                            invoke("push_log", {
+                                message: "Match data update failed",
+                            }).catch(() => undefined);
                         }
                     }
                 }, 350);

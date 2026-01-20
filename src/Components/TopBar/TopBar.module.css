@@ -18,12 +18,10 @@
 .logo {
     width: 42px;
     height: 42px;
-    border-radius: 14px;
-    background-image: url("/logo/logo.png");
-    background-size: cover;
-    background-position: center;
-    background-repeat: no-repeat;
-    box-shadow: 0 0 30px rgba(58, 167, 255, 0.25), 0 0 35px rgba(124, 242, 194, 0.18);
+    display: block;
+    object-fit: contain;
+    filter: drop-shadow(0 0 18px rgba(58, 167, 255, 0.26))
+        drop-shadow(0 0 16px rgba(124, 242, 194, 0.2));
 }
 
 .name {

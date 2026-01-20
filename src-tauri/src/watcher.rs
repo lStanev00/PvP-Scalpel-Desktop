@@ -3,6 +3,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Runtime};
+use crate::log_command;
 
 pub fn create_watcher(app: AppHandle) -> notify::Result<RecommendedWatcher> {
     RecommendedWatcher::new(
@@ -11,21 +12,21 @@ pub fn create_watcher(app: AppHandle) -> notify::Result<RecommendedWatcher> {
                 for path in event.paths {
 
                     if is_our_saved_vars(&path) {
-                        println!("SavedVars updated: {}", path.to_string_lossy());
+                        log_command::emit_log(&app, "SavedVariables updated");
                         if let Some(account) = extract_account_name(&path) {
                             let payload = serde_json::json!({
                                 "account": account,
                                 "path": path.to_string_lossy()
                             });
 
-                            if let Err(err) = app.emit("savedvars-updated", payload) {
-                                eprintln!("emit error: {err}");
+                            if app.emit("savedvars-updated", payload).is_err() {
+                                log_command::emit_log(&app, "SavedVariables event failed");
                             }
                         }
                     }
                 }
             }
-            Err(err) => eprintln!("watch error: {err}"),
+            Err(_) => log_command::emit_log(&app, "Watcher error"),
         },
         Config::default().with_poll_interval(Duration::from_millis(400)),
     )
@@ -53,7 +54,6 @@ pub fn emit_existing_saved_vars<R: Runtime, E: Emitter<R>>(emitter: &E, root: &P
             }
 
             if is_our_saved_vars(&path) {
-                println!("SavedVars found: {}", path.to_string_lossy());
                 found_any = true;
                 let payload = serde_json::json!({
                     "account": extract_account_name(&path).unwrap_or_default(),

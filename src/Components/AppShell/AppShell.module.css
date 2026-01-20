@@ -113,6 +113,59 @@
     transform: translate(-50%, -50%);
 }
 
+.lockOverlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(7, 10, 16, 0.78);
+    display: grid;
+    place-items: center;
+    z-index: 10;
+    backdrop-filter: blur(8px);
+}
+
+.lockCard {
+    width: min(520px, 90%);
+    border-radius: 18px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(18, 24, 33, 0.92);
+    box-shadow: 0 18px 40px rgba(8, 12, 18, 0.6);
+    padding: 20px;
+    display: grid;
+    gap: 12px;
+}
+
+.lockTitle {
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+}
+
+.lockCopy {
+    margin: 0;
+    font-size: 13px;
+    color: rgba(230, 234, 240, 0.88);
+    line-height: 1.5;
+}
+
+.lockMeta {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 6px 12px;
+    font-size: 12px;
+    color: rgba(138, 148, 166, 0.95);
+}
+
+.lockMeta span:nth-child(2n) {
+    color: rgba(230, 234, 240, 0.95);
+    font-family: var(--mono);
+}
+
+.lockActions {
+    display: flex;
+    justify-content: flex-end;
+    padding-top: 4px;
+}
+
 @keyframes introTravel {
     0% {
         transform: translate(-50%, -50%) scale(1);

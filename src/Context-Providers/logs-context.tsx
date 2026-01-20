@@ -1,0 +1,62 @@
+import { createContext, ReactNode, useContext, useEffect, useState } from "react";
+import { listen } from "@tauri-apps/api/event";
+import { invoke } from "@tauri-apps/api/core";
+
+interface LogsContextValue {
+    logs: string[];
+}
+
+const LogsContext = createContext<LogsContextValue | null>(null);
+const MAX_LOGS = 100;
+
+export const LogsProvider = ({ children }: { children: ReactNode }) => {
+    const [logs, setLogs] = useState<string[]>([]);
+
+    useEffect(() => {
+        let active = true;
+        let unlisten: (() => void) | null = null;
+
+        invoke<string[]>("get_logs")
+            .then((stored) => {
+                if (active && Array.isArray(stored)) {
+                    setLogs(stored.slice(-MAX_LOGS));
+                }
+            })
+            .catch(() => {
+                // Ignore log fetch failures.
+            });
+
+        listen<string>("app-log", ({ payload }) => {
+            if (!active) return;
+            setLogs((prev) => {
+                const next = [...prev, payload];
+                return next.length > MAX_LOGS ? next.slice(-MAX_LOGS) : next;
+            });
+        })
+            .then((stop) => {
+                if (active) {
+                    unlisten = stop;
+                } else {
+                    stop();
+                }
+            })
+            .catch(() => {
+                // Ignore log listener failures.
+            });
+
+        return () => {
+            active = false;
+            if (unlisten) unlisten();
+        };
+    }, []);
+
+    return <LogsContext.Provider value={{ logs }}>{children}</LogsContext.Provider>;
+};
+
+export const useLogs = () => {
+    const ctx = useContext(LogsContext);
+    if (!ctx) {
+        throw new Error("LogsContext must be used inside <LogsProvider>");
+    }
+    return ctx;
+};
