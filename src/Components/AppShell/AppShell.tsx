@@ -191,7 +191,7 @@ export default function AppShell() {
                         <div className={styles.body}>
                             <NavigationMenu
                                 collapsed={navCollapsed}
-                                onToggle={() => setNavCollapsed((value) => !value)}
+                                onToggle={() => setNavCollapsed(!navCollapsed)}
                             />
                             <main className={styles.main}>
                                 <Outlet />
