@@ -169,8 +169,10 @@ export default function AppShell() {
         await invoke("exit_app").catch(() => win.close());
     };
 
+    const shellClass = `${styles.shell} ${introActive || forceIntro ? styles.shellIntro : ""}`;
+
     return (
-        <div className={styles.shell}>
+        <div className={shellClass}>
             <div className={styles.bgGlow} />
             <div className={styles.bgNoise} />
             <div

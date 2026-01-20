@@ -8,6 +8,11 @@
     overflow: hidden;
 }
 
+.shellIntro .bgGlow,
+.shellIntro .bgNoise {
+    opacity: 0;
+}
+
 .bgGlow {
     position: absolute;
     inset: 0;
@@ -101,7 +106,7 @@
     height: var(--intro-logo-size);
     border-radius: 24px;
     background-image: url("/logo/logo.png");
-    background-size: cover;
+    background-size: contain;
     background-position: center;
     background-repeat: no-repeat;
     box-shadow: none;
