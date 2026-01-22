@@ -28,6 +28,8 @@ export default function AppShell() {
     const [versionMismatch, setVersionMismatch] = useState(false);
     const [requiredVersion, setRequiredVersion] = useState<string | null>(null);
     const [requiredAddonVersion, setRequiredAddonVersion] = useState<string | null>(null);
+    const [launcherBusy, setLauncherBusy] = useState(false);
+    const [launcherError, setLauncherError] = useState<string | null>(null);
     const { minimizeToTray, navCollapsed, setNavCollapsed } = usePreferences();
     const { desktopVersion, addonVersion } = useAppInfo();
     const minimizeToTrayRef = useRef(minimizeToTray);
@@ -230,7 +232,28 @@ export default function AppShell() {
     };
 
     const handleLaunchLauncher = async () => {
-        await invoke("launch_launcher").catch(() => undefined);
+        if (launcherBusy) return;
+        setLauncherError(null);
+        setLauncherBusy(true);
+        try {
+            await invoke("launch_launcher");
+            await invoke("exit_app");
+        } catch (err) {
+            const message =
+                typeof err === "string"
+                    ? err
+                    : err && typeof err === "object" && "message" in err
+                      ? String((err as { message?: string }).message)
+                      : "Failed to launch launcher.";
+            setLauncherError(message);
+            setLauncherBusy(false);
+            invoke("push_log", {
+                message: `Launcher launch failed: ${message}`,
+            }).catch(() => undefined);
+        }
+    };
+
+    const handleExitMismatch = async () => {
         await invoke("exit_app").catch(() => undefined);
     };
 
@@ -282,8 +305,21 @@ export default function AppShell() {
                                 <span>Addon required</span>
                                 <span>{requiredAddonVersion ?? "Unknown"}</span>
                             </div>
+                            {launcherError ? (
+                                <div className={styles.lockError}>{launcherError}</div>
+                            ) : null}
                             <div className={styles.lockActions}>
-                                <PrimaryActionButton label="Start launcher" onClick={handleLaunchLauncher} />
+                                <PrimaryActionButton
+                                    label={launcherBusy ? "Starting launcher..." : "Start launcher"}
+                                    onClick={handleLaunchLauncher}
+                                    disabled={launcherBusy}
+                                />
+                                <PrimaryActionButton
+                                    label="Exit"
+                                    tone="muted"
+                                    onClick={handleExitMismatch}
+                                    disabled={launcherBusy}
+                                />
                             </div>
                         </div>
                     </div>
