@@ -163,7 +163,7 @@ export default function AppShell() {
                 await hideToTray();
                 return;
             }
-            await invoke("exit_app").catch(() => win.close());
+            await invoke("exit_app").catch(() => undefined);
         }).then((stop) => {
             if (cancelled) {
                 stop();
@@ -228,7 +228,7 @@ export default function AppShell() {
             return;
         }
         const win = getCurrentWindow();
-        await invoke("exit_app").catch(() => win.close());
+        await invoke("exit_app").catch(() => undefined);
     };
 
     const handleLaunchLauncher = async () => {

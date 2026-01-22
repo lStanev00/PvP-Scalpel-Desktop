@@ -18,8 +18,6 @@ use tauri::{
     AppHandle,
     Emitter,
     Manager,
-    Runtime,
-    State,
 };
 
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
@@ -29,11 +27,6 @@ use std::time::Duration;
 #[derive(Default)]
 struct WatcherKeeper(Mutex<Option<RecommendedWatcher>>);
 
-#[derive(Default)]
-struct TrayMenuState<R: Runtime> {
-    status: Mutex<Option<MenuItem<R>>>,
-}
-
 #[tauri::command] // Ship a custom command to the FE
 fn read_saved_variables(path: String) -> Result<String, String> {
     std::fs::read_to_string(&path).map_err(|e| format!("Failed reading file: {e}"))
@@ -41,14 +34,23 @@ fn read_saved_variables(path: String) -> Result<String, String> {
 
 #[tauri::command]
 fn exit_app(app: AppHandle) {
+    clear_tray(&app);
     app.exit(0);
 }
 
+fn clear_tray(app: &AppHandle) {
+    if let Some(tray) = app.remove_tray_by_id("main") {
+        drop(tray);
+    }
+}
+
+/*
 #[tauri::command]
 fn update_tray_state(
     state: State<TrayMenuState<tauri::Wry>>,
     status_text: String,
 ) -> Result<(), String> {
+    // Unused: keep commented out to avoid registering/initializing it.
     if let Ok(mut stored) = state.status.lock() {
         if let Some(item) = stored.as_mut() {
             item.set_text(format!("Status: {}", status_text))
@@ -57,6 +59,7 @@ fn update_tray_state(
     }
     Ok(())
 }
+*/
 
 #[tauri::command]
 fn scan_saved_vars(app: AppHandle) -> Result<(), String> {
@@ -130,10 +133,6 @@ fn main() {
             let menu = Menu::with_items(app, &[&status, &sep1, &show, &hide, &sep2, &quit])?;
             let icon = app.default_window_icon().cloned();
 
-            app.manage(TrayMenuState {
-                status: Mutex::new(Some(status.clone())),
-            });
-
             let mut tray_builder = TrayIconBuilder::with_id("main")
                 .menu(&menu)
                 .show_menu_on_left_click(true);
@@ -150,7 +149,7 @@ fn main() {
                         let _ = app.emit_to("main", "tray-hide", ());
                     }
                     "quit" => {
-                        app.exit(0);
+                        exit_app(app.clone());
                     }
                     _ => {}
                 })
@@ -197,14 +196,9 @@ fn main() {
             ourl_command::open_url,
             discord_rpc::update_state_rich_presence,
             exit_app,
-            update_tray_state,
             scan_saved_vars,
-            version_command::get_desktop_version,
-            version_command::get_addon_version,
             version_command::get_local_versions,
-            version_command::get_launcher_version,
             manifest_command::fetch_manifest,
-            launcher_command::launch_launcher,
             launcher_command::get_launcher_path,
             launcher_command::launch_launcher_path,
             log_command::push_log,
