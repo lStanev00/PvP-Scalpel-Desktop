@@ -236,7 +236,8 @@ export default function AppShell() {
         setLauncherError(null);
         setLauncherBusy(true);
         try {
-            await invoke("launch_launcher");
+            const launcherPath = await invoke<string>("get_launcher_path");
+            await invoke("launch_launcher_path", { path: launcherPath });
             await invoke("exit_app");
         } catch (err) {
             const message =

@@ -202,8 +202,11 @@ fn main() {
             version_command::get_desktop_version,
             version_command::get_addon_version,
             version_command::get_local_versions,
+            version_command::get_launcher_version,
             manifest_command::fetch_manifest,
             launcher_command::launch_launcher,
+            launcher_command::get_launcher_path,
+            launcher_command::launch_launcher_path,
             log_command::push_log,
             log_command::get_logs,
         ])

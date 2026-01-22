@@ -17,6 +17,10 @@ fn launcher_display_names() -> [&'static str; 2] {
     ["PVP-S Launcher", "PvP-S Launcher"]
 }
 
+fn launcher_shortcut_names() -> [&'static str; 2] {
+    ["PVP-S Launcher.lnk", "PvP-S Launcher.lnk"]
+}
+
 fn launcher_dir_candidates() -> [&'static str; 3] {
     ["PVP-S Launcher", "PvP-S Launcher", "PvP Scalpel Launcher"]
 }
@@ -86,6 +90,19 @@ fn is_valid_launcher_exe(path: &Path, current_exe: Option<&Path>) -> bool {
     true
 }
 
+fn is_valid_launcher_shortcut(path: &Path) -> bool {
+    if !path.is_file() {
+        return false;
+    }
+    let name = match path.file_name().and_then(|value| value.to_str()) {
+        Some(value) => value,
+        None => return false,
+    };
+    launcher_shortcut_names()
+        .iter()
+        .any(|candidate| candidate.eq_ignore_ascii_case(name))
+}
+
 fn possible_install_roots() -> Vec<PathBuf> {
     let mut roots = Vec::new();
     if let Ok(path) = std::env::var("PROGRAMFILES") {
@@ -101,6 +118,53 @@ fn possible_install_roots() -> Vec<PathBuf> {
         roots.push(PathBuf::from(path));
     }
     roots
+}
+
+fn start_menu_roots() -> Vec<PathBuf> {
+    let mut roots = Vec::new();
+    if let Ok(path) = std::env::var("APPDATA") {
+        roots.push(
+            Path::new(&path)
+                .join("Microsoft")
+                .join("Windows")
+                .join("Start Menu")
+                .join("Programs"),
+        );
+    }
+    if let Ok(path) = std::env::var("PROGRAMDATA") {
+        roots.push(
+            Path::new(&path)
+                .join("Microsoft")
+                .join("Windows")
+                .join("Start Menu")
+                .join("Programs"),
+        );
+    }
+    roots
+}
+
+fn scan_dir_for_shortcut(dir: &Path) -> Option<PathBuf> {
+    let entries = std::fs::read_dir(dir).ok()?;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            if let Some(found) = scan_dir_for_shortcut(&path) {
+                return Some(found);
+            }
+        } else if is_valid_launcher_shortcut(&path) {
+            return Some(path);
+        }
+    }
+    None
+}
+
+fn find_launcher_shortcut() -> Option<PathBuf> {
+    for root in start_menu_roots() {
+        if let Some(found) = scan_dir_for_shortcut(&root) {
+            return Some(found);
+        }
+    }
+    None
 }
 
 fn resolve_launcher_from_key(key: &RegKey, current_exe: Option<&Path>) -> Option<PathBuf> {
@@ -219,7 +283,41 @@ fn find_launcher_exe() -> Option<PathBuf> {
         }
     }
 
-    None
+    find_launcher_shortcut()
+}
+
+#[tauri::command]
+pub fn get_launcher_path() -> Result<String, String> {
+    find_launcher_exe()
+        .and_then(|path| path.to_str().map(|value| value.to_string()))
+        .ok_or_else(|| "Launcher not found".to_string())
+}
+
+#[tauri::command]
+pub fn launch_launcher_path(path: String) -> Result<(), String> {
+    let exe = PathBuf::from(path);
+    let current_exe = std::env::current_exe().ok();
+    if is_valid_launcher_exe(&exe, current_exe.as_deref()) {
+        let mut cmd = Command::new(&exe);
+        #[cfg(windows)]
+        {
+            cmd.creation_flags(CREATE_NO_WINDOW);
+        }
+        cmd.spawn()
+            .map_err(|err| format!("Failed to launch launcher: {err}"))?;
+    } else if is_valid_launcher_shortcut(&exe) {
+        let mut cmd = Command::new("cmd");
+        cmd.args(["/c", "start", "", exe.to_string_lossy().as_ref()]);
+        #[cfg(windows)]
+        {
+            cmd.creation_flags(CREATE_NO_WINDOW);
+        }
+        cmd.spawn()
+            .map_err(|err| format!("Failed to launch launcher shortcut: {err}"))?;
+    } else {
+        return Err("Invalid launcher path".to_string());
+    }
+    Ok(())
 }
 
 #[tauri::command]
