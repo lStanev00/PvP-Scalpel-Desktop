@@ -7,7 +7,6 @@ use std::path::Path;
 // Cache registry and addon lookups so we only touch disk/registry once per run.
 static DESKTOP_VERSION_CACHE: OnceLock<Option<String>> = OnceLock::new();
 static ADDON_VERSION_CACHE: OnceLock<Option<String>> = OnceLock::new();
-static LAUNCHER_VERSION_CACHE: OnceLock<Option<String>> = OnceLock::new();
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -84,44 +83,10 @@ fn read_addon_version_from_root(addons_root: &str) -> Option<String> {
     None
 }
 
-fn read_launcher_version() -> Option<String> {
-    let uninstall_key = r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall";
-    let version_values = ["DisplayVersion", "Version", "ProductVersion"];
-    let hives = [Hive::CurrentUser, Hive::LocalMachine];
-
-    for hive in hives {
-        let root = match hive.open(uninstall_key, Security::Read) {
-            Ok(key) => key,
-            Err(_) => continue,
-        };
-
-        for key_ref in root.keys().flatten() {
-            let subkey = match key_ref.open(Security::Read) {
-                Ok(key) => key,
-                Err(_) => continue,
-            };
-            let display = match subkey.value("DisplayName") {
-                Ok(Data::String(name)) => name.to_string_lossy().to_string(),
-                _ => continue,
-            };
-            let display_lower = display.to_lowercase();
-            if !(display_lower.contains("pvp") && display_lower.contains("launcher")) {
-                continue;
-            }
-
-            for value in version_values {
-                if let Ok(Data::String(version)) = subkey.value(value) {
-                    return Some(version.to_string_lossy().to_string());
-                }
-            }
-        }
-    }
-
-    None
-}
-
+/*
 #[tauri::command]
 pub fn get_desktop_version() -> Option<String> {
+    // Unused: keep commented out to avoid registering/initializing it.
     DESKTOP_VERSION_CACHE
         .get_or_init(read_desktop_version)
         .clone()
@@ -129,8 +94,10 @@ pub fn get_desktop_version() -> Option<String> {
 
 #[tauri::command]
 pub fn get_addon_version() -> Option<String> {
+    // Unused: keep commented out to avoid registering/initializing it.
     ADDON_VERSION_CACHE.get_or_init(read_addon_version).clone()
 }
+*/
 
 #[tauri::command]
 pub fn get_local_versions() -> LocalVersions {
@@ -140,9 +107,12 @@ pub fn get_local_versions() -> LocalVersions {
     }
 }
 
+/*
 #[tauri::command]
 pub fn get_launcher_version() -> Option<String> {
+    // Unused: keep commented out to avoid registering/initializing it.
     LAUNCHER_VERSION_CACHE
         .get_or_init(read_launcher_version)
         .clone()
 }
+*/

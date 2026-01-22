@@ -320,8 +320,10 @@ pub fn launch_launcher_path(path: String) -> Result<(), String> {
     Ok(())
 }
 
+/*
 #[tauri::command]
 pub fn launch_launcher() -> Result<(), String> {
+    // Unused: keep commented out to avoid registering/initializing it.
     let exe = find_launcher_exe().ok_or_else(|| "Launcher not found".to_string())?;
     let mut cmd = Command::new(&exe);
     #[cfg(windows)]
@@ -332,3 +334,4 @@ pub fn launch_launcher() -> Result<(), String> {
         .map_err(|err| format!("Failed to launch launcher: {err}"))?;
     Ok(())
 }
+*/
