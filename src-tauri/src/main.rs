@@ -41,7 +41,14 @@ fn read_saved_variables(path: String) -> Result<String, String> {
 
 #[tauri::command]
 fn exit_app(app: AppHandle) {
+    clear_tray(&app);
     app.exit(0);
+}
+
+fn clear_tray(app: &AppHandle) {
+    if let Some(tray) = app.remove_tray_by_id("main") {
+        drop(tray);
+    }
 }
 
 #[tauri::command]
@@ -150,7 +157,7 @@ fn main() {
                         let _ = app.emit_to("main", "tray-hide", ());
                     }
                     "quit" => {
-                        app.exit(0);
+                        exit_app(app.clone());
                     }
                     _ => {}
                 })
