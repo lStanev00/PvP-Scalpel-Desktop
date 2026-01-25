@@ -227,7 +227,6 @@ export default function AppShell() {
             await hideToTray();
             return;
         }
-        const win = getCurrentWindow();
         await invoke("exit_app").catch(() => undefined);
     };
 
