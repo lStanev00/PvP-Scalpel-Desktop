@@ -39,6 +39,49 @@ export interface MatchDetails {
     mapName: string; // "Nagrand Arena", "Warsong Gulch", etc.
 }
 
+export interface SoloShuffleOutcome {
+    result: string;
+    reason?: string;
+}
+
+export interface SoloShuffleScoreSnapshot {
+    statColumns: string[];
+    players: Player[];
+}
+
+export interface SoloShuffleRound {
+    roundIndex: number;
+    stateStartTime: number;
+    stateEndTime: number;
+    duration: number;
+    timeline?: TimelineEntry[];
+    scoreSnapshot?: SoloShuffleScoreSnapshot;
+    outcome?: SoloShuffleOutcome;
+}
+
+export interface SoloShuffleMatchSummary {
+    statColumns: string[];
+    players: Player[];
+    ratingChange: number | null;
+    prematchMMR: number | null;
+    postmatchMMR: number | null;
+}
+
+export interface SoloShuffleIntegrity {
+    scoreboardComplete: boolean;
+    timelineComplete: boolean;
+    roundsComplete: boolean;
+    notes: string[];
+}
+
+export interface SoloShuffleData {
+    roundsExpected: number;
+    roundsCaptured: number;
+    rounds: SoloShuffleRound[];
+    matchSummary?: SoloShuffleMatchSummary;
+    integrity?: SoloShuffleIntegrity;
+}
+
 export interface TimelineEntry {
     t: number;               // seconds since match start
     event: string;           // "START" | "STOP" | "SUCCEEDED" | ...
@@ -57,7 +100,8 @@ export interface Match {
     interrupts?: Interrupts;
     auras?: Auras;
     timeline?: TimelineEntry[];
-    matchKey?: string
+    matchKey?: string;
+    soloShuffle?: SoloShuffleData;
 }
 
 export interface MatchWithId extends Match {

@@ -13,7 +13,10 @@ fn hash_match_from_full_match(obj: &Value) -> String {
     let format = obj["matchDetails"]["format"].as_str().unwrap_or("");
 
     let empty: Vec<Value> = Vec::new();
-    let players = obj["players"].as_array().unwrap_or(&empty);
+    let players = obj["players"]
+        .as_array()
+        .or_else(|| obj["soloShuffle"]["matchSummary"]["players"].as_array())
+        .unwrap_or(&empty);
 
     // gather all player-related stable fields (order-independent)
     let mut realms: Vec<String> = players

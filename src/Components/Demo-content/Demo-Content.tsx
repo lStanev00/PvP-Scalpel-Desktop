@@ -25,6 +25,9 @@ export default function DemoContent() {
     const owner = last?.players.find((p) => p.isOwner);
     const ownerName = owner?.name ?? "";
     const delta = owner ? (owner.postmatchMMR ?? 0) - (owner.prematchMMR ?? 0) : 0;
+    const isSoloShuffle = (last?.matchDetails.format ?? "")
+        .toLowerCase()
+        .includes("solo shuffle");
 
     useEffect(() => {
         updatePersence(rpcUpdate === "" ? "" : `Match lookup: ${ownerName}`);
@@ -38,6 +41,8 @@ export default function DemoContent() {
 
     const alliance = last ? last.players.filter((p) => p.faction === 0) : [];
     const horde = last ? last.players.filter((p) => p.faction === 1) : [];
+    const showFactions = !isSoloShuffle && alliance.length > 0 && horde.length > 0;
+    const playersTitle = isSoloShuffle ? "Solo Shuffle Lobby" : "Players";
     const deltaClass =
         delta > 0 ? styles.deltaPositive : delta < 0 ? styles.deltaNegative : styles.deltaNeutral;
 
@@ -128,8 +133,14 @@ export default function DemoContent() {
             </section>
 
             <section className={styles.tables}>
-                <TeamTable title="Alliance" players={alliance} />
-                <TeamTable title="Horde" players={horde} />
+                {showFactions ? (
+                    <>
+                        <TeamTable title="Alliance" players={alliance} />
+                        <TeamTable title="Horde" players={horde} />
+                    </>
+                ) : (
+                    <TeamTable title={playersTitle} players={last.players} />
+                )}
             </section>
 
             <MSSStatsSection players={last.players} />
