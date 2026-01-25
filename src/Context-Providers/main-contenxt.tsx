@@ -48,12 +48,14 @@ export const UserContext = createContext<UserContextType | null>(null);
 export const UserProvider = ({ children }: { children: ReactNode }) => {
     const [user, setUser] = useState<User | undefined>(undefined);
     const inputRef = useRef<HTMLInputElement | null>(null);
+    const lastAuthSuccess = useRef(0);
 
     const httpFetch = useCallback(
         async (endpoint: string, options: HttpOptions = {}): Promise<HttpResponse> => {
+            const startedAt = Date.now();
             const req = await httpFetchWithCredentials(endpoint, options);
             if (req.status === 403) {
-                setUser(undefined);
+                setUser((prev) => (startedAt < lastAuthSuccess.current ? prev : undefined));
 
                 if (import.meta.env.DEV) {
                     console.warn("Session expired please login again (403 expected)");
@@ -62,7 +64,10 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
                 }
             }
 
-            if (endpoint === "/verify/me") setUser(prev => prev ?? (req.data as User));
+            if (endpoint === "/verify/me" && req.ok) {
+                lastAuthSuccess.current = Date.now();
+                setUser((prev) => prev ?? (req.data as User));
+            }
 
             return req;
         },

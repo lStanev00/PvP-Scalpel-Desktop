@@ -18,6 +18,8 @@ export default function Login() {
     const navigate = useNavigate();
     const { setUser, httpFetch } = useUserContext();
 
+    const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
     async function handleSubmit(e: FormEvent<HTMLFormElement>) {
         e.preventDefault();
 
@@ -56,9 +58,27 @@ export default function Login() {
             if (req.error) setError(req.error);
 
             if (req.status === 200) {
-                await httpFetch(`/verify/me`);
+                if (req.data && typeof req.data === "object") {
+                    setUser(req.data as any);
+                } else {
+                    setUser({ _id: "pending", email, fingerprint });
+                }
+
                 navigate(`/`);
-                await new Promise((resolve) => setTimeout(resolve, 200));
+
+                void (async () => {
+                    await wait(150);
+                    for (let attempt = 0; attempt < 4; attempt += 1) {
+                        const verify = await httpFetch(`/verify/me`);
+                        if (verify.ok && verify.data) {
+                            setUser(verify.data as any);
+                            return;
+                        }
+                        await wait(250);
+                    }
+                })();
+
+                await wait(200);
                 return;
             }
 
