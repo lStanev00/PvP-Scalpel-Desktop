@@ -23,7 +23,7 @@ pub fn start_rich_presence() {
         START_TS.set(now).ok();
 
         let activity = activity::Activity::new()
-            .details("In Development")
+            .details("Private Beta")
             .timestamps(activity::Timestamps::new().start(now))
             .assets(
                 activity::Assets::new()
