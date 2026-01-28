@@ -2,7 +2,106 @@ import { createContext, ReactNode, useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import luaJson from "lua-json";
-import { Match, MatchWithId } from "../Interfaces/matches";
+import { Match, MatchV2, MatchWithId } from "../Interfaces/matches";
+
+const logSchemaMismatch = (message: string, details?: unknown) => {
+    if (import.meta.env.DEV) {
+        console.warn(`[matches] ${message}`, details ?? "");
+    }
+};
+
+const isPlainObject = (value: unknown): value is Record<string, unknown> =>
+    typeof value === "object" && value !== null && !Array.isArray(value);
+
+const extractLuaTable = (content: string, key: string) => {
+    const idx = content.indexOf(key);
+    if (idx === -1) return null;
+
+    const startEq = content.indexOf("=", idx);
+    if (startEq === -1) return null;
+
+    let i = startEq + 1;
+    while (i < content.length && /\s/.test(content[i])) i += 1;
+    if (content[i] !== "{") return null;
+
+    let depth = 0;
+    let inString = false;
+    let stringChar = "";
+    let escaped = false;
+    const tableStart = i;
+
+    for (; i < content.length; i += 1) {
+        const ch = content[i];
+        const next = content[i + 1];
+
+        if (inString) {
+            if (escaped) {
+                escaped = false;
+                continue;
+            }
+            if (ch === "\\") {
+                escaped = true;
+                continue;
+            }
+            if (ch === stringChar) {
+                inString = false;
+                stringChar = "";
+            }
+            continue;
+        }
+
+        if (ch === "\"" || ch === "'") {
+            inString = true;
+            stringChar = ch;
+            continue;
+        }
+
+        if (ch === "-" && next === "-") {
+            while (i < content.length && content[i] !== "\n") i += 1;
+            continue;
+        }
+
+        if (ch === "{") {
+            depth += 1;
+        } else if (ch === "}") {
+            depth -= 1;
+            if (depth === 0) {
+                return content.slice(tableStart, i + 1);
+            }
+        }
+    }
+
+    return null;
+};
+
+const validateMatchV1 = (value: unknown) => {
+    if (!isPlainObject(value)) {
+        logSchemaMismatch("Match is not an object", value);
+        return;
+    }
+    if (!isPlainObject(value.matchDetails)) {
+        logSchemaMismatch("MatchDetails missing or invalid", value.matchDetails);
+    }
+    if (!Array.isArray(value.players)) {
+        logSchemaMismatch("Players missing or invalid", value.players);
+    }
+};
+
+const validateMatchV2 = (value: unknown) => {
+    if (!isPlainObject(value)) {
+        logSchemaMismatch("Match v2 is not an object", value);
+        return;
+    }
+    if (value.telemetryVersion !== 2) {
+        logSchemaMismatch("Match v2 telemetryVersion is not 2", value.telemetryVersion);
+    }
+    if (!isPlainObject(value.matchDetails)) {
+        logSchemaMismatch("Match v2 matchDetails missing or invalid", value.matchDetails);
+    }
+    if (!Array.isArray(value.players)) {
+        logSchemaMismatch("Match v2 players missing or invalid", value.players);
+    }
+};
 
 export const MatchesContext = createContext<MatchWithId[] | null>(null);
 
@@ -27,14 +126,15 @@ export const MatchesProvider = ({ children }: { children: ReactNode }) => {
 
                         if (!fileContent) return;
 
-                        const match = fileContent.match(/PvP_Scalpel_DB\s*=\s*(\{[\s\S]*\})/);
-                        if (!match) return;
-
-                        const luaTable = "return " + match[1];
+                        const table = extractLuaTable(fileContent, "PvP_Scalpel_DB");
+                        if (!table) {
+                            logSchemaMismatch("PvP_Scalpel_DB not found or malformed");
+                            return;
+                        }
 
                         let parsedArray: unknown;
                         try {
-                            parsedArray = luaJson.parse(luaTable);
+                            parsedArray = luaJson.parse("return " + table);
                         } catch {
                             return;
                         }
@@ -51,9 +151,21 @@ export const MatchesProvider = ({ children }: { children: ReactNode }) => {
                                     obj: parsedMatch,
                                 });
 
+                                const isTelemetryV2 =
+                                    typeof parsedMatch === "object" &&
+                                    parsedMatch !== null &&
+                                    "telemetryVersion" in parsedMatch &&
+                                    (parsedMatch as { telemetryVersion?: unknown }).telemetryVersion === 2;
+
+                                if (isTelemetryV2) {
+                                    validateMatchV2(parsedMatch);
+                                } else {
+                                    validateMatchV1(parsedMatch);
+                                }
+
                                 results.push({
                                     id,
-                                    ...(parsedMatch as Match),
+                                    ...(isTelemetryV2 ? (parsedMatch as MatchV2) : (parsedMatch as Match)),
                                 });
                             } catch {
                                 // Skip matches that fail to parse.

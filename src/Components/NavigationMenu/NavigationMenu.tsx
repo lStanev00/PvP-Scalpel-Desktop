@@ -12,7 +12,7 @@ import styles from "./NavigationMenu.module.css";
 
 const navItems = [
     { label: "Dashboard", to: "/dashboard", icon: <LuLayoutGrid /> },
-    { label: "Data & Activity", to: "/data", icon: <LuDatabase /> },
+    { label: "Match History", to: "/data", icon: <LuDatabase /> },
     { label: "Logs", to: "/logs", icon: <LuFileText /> },
     { label: "Settings", to: "/settings", icon: <LuSettings /> },
     { label: "About", to: "/about", icon: <LuInfo /> },

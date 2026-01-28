@@ -1,0 +1,694 @@
+.page {
+    --result-win: rgba(58, 210, 159, 0.95);
+    --result-loss: rgba(255, 77, 79, 0.95);
+    --result-neutral: rgba(138, 148, 166, 0.95);
+    --result-win-soft: rgba(58, 210, 159, 0.16);
+    --result-loss-soft: rgba(255, 77, 79, 0.16);
+    --result-neutral-soft: rgba(138, 148, 166, 0.16);
+    --row-hover: rgba(58, 167, 255, 0.12);
+    --row-selected: rgba(58, 167, 255, 0.22);
+    --focus-ring: rgba(124, 242, 194, 0.55);
+    display: grid;
+    gap: 18px;
+}
+
+.headerActions {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.ghostButton {
+    border-radius: 14px;
+    padding: 10px 12px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.05);
+    cursor: pointer;
+    font-size: 12px;
+    transition: background 160ms ease, border-color 160ms ease;
+}
+
+.ghostButton:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+.ghostButton:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+.filtersBar {
+    display: grid;
+    grid-template-columns: 1fr;
+    align-items: center;
+    gap: 16px;
+    padding: 14px 16px;
+    border-radius: var(--r20);
+    background: var(--panel);
+    border: 1px solid var(--stroke);
+    box-shadow: var(--shadow2);
+    overflow: visible;
+}
+
+.filtersLeft {
+    display: grid;
+    grid-template-columns: 180px 200px minmax(240px, 1fr);
+    gap: 14px;
+    align-items: center;
+    min-width: 0;
+}
+
+.filterGroup {
+    display: grid;
+    gap: 6px;
+    min-width: 0;
+}
+
+.filterLabel {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--muted);
+}
+
+.filterSelect,
+.filterInput {
+    height: 38px;
+    min-height: 38px;
+    border-radius: var(--r12);
+    border: 1px solid var(--stroke2);
+    background: rgba(12, 16, 24, 0.85);
+    padding: 6px 12px;
+    font-size: 13px;
+    color: var(--text);
+    min-width: 160px;
+    transition: border-color 160ms ease, background 160ms ease;
+    box-sizing: border-box;
+    width: 100%;
+}
+
+.filterSelect:focus-visible,
+.filterInput:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+}
+
+.selectControl {
+    position: relative;
+    display: grid;
+    align-items: center;
+}
+
+.selectControl::after {
+    content: "";
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    width: 0;
+    height: 0;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 6px solid var(--muted);
+    transform: translateY(-50%);
+    pointer-events: none;
+}
+
+.filterSelect {
+    appearance: none;
+    padding-right: 28px;
+    background-image: none;
+}
+
+.filterInput {
+    min-width: 220px;
+    flex: 1 1 240px;
+}
+
+.filterMeta {
+    font-size: 12px;
+    color: rgba(230, 234, 240, 0.8);
+    pointer-events: none;
+    line-height: 1;
+}
+
+.headerMeta {
+    font-size: 12px;
+    color: var(--muted);
+    pointer-events: none;
+}
+
+.viewPanel {
+    display: grid;
+    gap: 16px;
+    animation: viewFadeIn 200ms ease;
+}
+
+.viewList {
+    grid-template-rows: auto 1fr;
+}
+
+.viewDetails {
+    grid-template-rows: 1fr;
+}
+
+.detailsCard {
+    background: var(--panel);
+    border: 1px solid var(--stroke);
+    border-radius: var(--r24);
+    box-shadow: var(--shadow2);
+    padding: 16px;
+    display: grid;
+    gap: 16px;
+    min-height: 200px;
+}
+
+.historyList {
+    display: grid;
+    gap: 0;
+    overflow: visible;
+}
+
+.historyRow {
+    border: none;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 0;
+    background: transparent;
+    display: grid;
+    grid-template-columns: 6px 130px 1.6fr 110px 1.4fr 70px 70px;
+    gap: 12px;
+    padding: 10px 12px;
+    text-align: left;
+    color: inherit;
+    cursor: pointer;
+    transition: background 140ms ease, border-color 140ms ease;
+    align-items: center;
+    min-height: 58px;
+    min-width: 820px;
+}
+
+.historyRow:hover {
+    background: var(--row-hover);
+}
+
+.historyRowSelected {
+    border-color: rgba(124, 242, 194, 0.4);
+    background: var(--row-selected);
+}
+
+.historyRowSelected .resultIndicator {
+    box-shadow: 0 0 6px rgba(124, 242, 194, 0.35);
+}
+
+.historyRow:hover .roleIcon {
+    color: rgba(230, 234, 240, 0.85);
+}
+
+.historyRowSelected .roleIcon {
+    color: rgba(230, 234, 240, 0.9);
+}
+
+.historyRow:last-child {
+    border-bottom: none;
+}
+
+.historyRow:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+}
+
+.resultIndicator {
+    width: 3px;
+    border-radius: 999px;
+    background: var(--result-neutral);
+    align-self: stretch;
+}
+
+.historyRow[data-result="win"] .resultIndicator {
+    color: var(--result-win);
+}
+
+.historyRow[data-result="loss"] .resultIndicator {
+    color: var(--result-loss);
+}
+
+.historyRow[data-result="neutral"] .resultIndicator {
+    color: var(--result-neutral);
+}
+
+.historyRow[data-result="win"] .resultIndicator {
+    background: var(--result-win);
+}
+
+.historyRow[data-result="loss"] .resultIndicator {
+    background: var(--result-loss);
+}
+
+.historyRow[data-result="neutral"] .resultIndicator {
+    background: var(--result-neutral);
+}
+
+.rowTime {
+    font-size: 12px;
+    color: rgba(230, 234, 240, 0.6);
+    white-space: nowrap;
+}
+
+.ownerBlock {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+}
+
+.ownerName {
+    font-weight: 700;
+    color: rgba(244, 247, 255, 0.96);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+}
+
+.modeText {
+    font-size: 12px;
+    color: rgba(230, 234, 240, 0.7);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.roleIcon {
+    width: 20px;
+    height: 20px;
+    display: grid;
+    place-items: center;
+    color: #bfc7d5;
+}
+
+.roleIcon svg {
+    width: 18px;
+    height: 18px;
+    stroke: currentColor;
+    fill: currentColor;
+}
+
+.mapName {
+    font-weight: 500;
+    color: rgba(230, 234, 240, 0.75);
+    font-size: 12px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.duration {
+    font-variant-numeric: tabular-nums;
+    font-size: 12px;
+    color: rgba(230, 234, 240, 0.55);
+}
+
+.modeBadge {
+    padding: 3px 8px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 600;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    background: rgba(15, 20, 28, 0.7);
+    color: rgba(230, 234, 240, 0.8);
+}
+
+.resultBadge {
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    border: 1px solid transparent;
+}
+
+.resultBadgeCompact {
+    padding: 3px 8px;
+    font-size: 10px;
+}
+
+.resultBadge_win {
+    color: var(--result-win);
+    background: var(--result-win-soft);
+    border-color: rgba(58, 210, 159, 0.45);
+}
+
+.resultBadge_loss {
+    color: var(--result-loss);
+    background: var(--result-loss-soft);
+    border-color: rgba(255, 77, 79, 0.45);
+}
+
+.resultBadge_neutral {
+    color: var(--result-neutral);
+    background: var(--result-neutral-soft);
+    border-color: rgba(138, 148, 166, 0.45);
+}
+
+.deltaValue {
+    font-weight: 700;
+    font-size: 14px;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    justify-self: end;
+}
+
+.detailsHeader {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    align-items: flex-start;
+    flex-wrap: wrap;
+}
+
+.detailsBadges {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.detailsTitle {
+    margin: 10px 0 4px;
+    font-size: 20px;
+}
+
+.detailsMeta {
+    margin: 0;
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.detailsStats {
+    display: grid;
+    gap: 12px;
+}
+
+.detailStat {
+    display: grid;
+    gap: 4px;
+}
+
+.detailLabel {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--muted);
+}
+
+.detailValue {
+    font-size: 16px;
+    font-weight: 700;
+}
+
+.detailMono {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: rgba(230, 234, 240, 0.85);
+}
+
+.detailsBody {
+    display: grid;
+    gap: 16px;
+}
+
+.backButton {
+    justify-self: flex-start;
+    padding: 8px 12px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.06);
+    cursor: pointer;
+    font-size: 12px;
+    transition: background 160ms ease, border-color 160ms ease;
+}
+
+.backButton:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.inlineError {
+    padding: 10px 12px;
+    border-radius: var(--r12);
+    background: rgba(255, 77, 79, 0.12);
+    border: 1px solid rgba(255, 77, 79, 0.35);
+    color: rgba(255, 212, 213, 0.9);
+    font-size: 12px;
+}
+
+.teamGrid {
+    display: grid;
+    gap: 16px;
+}
+
+.timelinePanel {
+    background: rgba(18, 24, 33, 0.4);
+    border-radius: var(--r20);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 12px;
+    display: grid;
+    gap: 10px;
+}
+
+.timelineToggle {
+    align-self: flex-start;
+    padding: 8px 12px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.06);
+    cursor: pointer;
+    font-size: 12px;
+    transition: background 160ms ease, border-color 160ms ease;
+}
+
+.timelineToggle:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.timelineContent {
+    overflow: hidden;
+    transition: max-height 200ms ease, opacity 200ms ease;
+}
+
+.timelineOpen {
+    max-height: 1200px;
+    opacity: 1;
+}
+
+.timelineClosed {
+    max-height: 0;
+    opacity: 0;
+}
+
+.detailsEmpty {
+    text-align: center;
+    padding: 48px 20px;
+    color: rgba(230, 234, 240, 0.75);
+}
+
+.detailsEmpty h3 {
+    margin: 0 0 8px;
+    font-size: 16px;
+}
+
+.detailsSkeleton {
+    height: 260px;
+    border-radius: var(--r20);
+    background: linear-gradient(
+        90deg,
+        rgba(255, 255, 255, 0.04) 0%,
+        rgba(255, 255, 255, 0.12) 45%,
+        rgba(255, 255, 255, 0.04) 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.4s ease infinite;
+}
+
+.skeletonList {
+    display: grid;
+    gap: 10px;
+}
+
+.skeletonRow {
+    height: 56px;
+    border-radius: var(--r16);
+    background: linear-gradient(
+        90deg,
+        rgba(255, 255, 255, 0.04) 0%,
+        rgba(255, 255, 255, 0.1) 50%,
+        rgba(255, 255, 255, 0.04) 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.4s ease infinite;
+}
+
+@keyframes shimmer {
+    0% {
+        background-position: 0% 0%;
+    }
+    100% {
+        background-position: -200% 0%;
+    }
+}
+
+@keyframes viewFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.deltaPositive {
+    color: var(--result-win);
+}
+
+.deltaNegative {
+    color: var(--result-loss);
+}
+
+.deltaNeutral {
+    color: var(--result-neutral);
+}
+
+.tables {
+    display: grid;
+    gap: 16px;
+}
+
+.teamBox {
+    background: var(--table-bg);
+    padding: 18px;
+    border-radius: var(--r20);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: var(--shadow2);
+    display: grid;
+    gap: 12px;
+}
+
+.teamTitle {
+    text-align: center;
+    font-size: 15px;
+    font-weight: 800;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+
+.tableWrap {
+    overflow-x: auto;
+}
+
+.table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    min-width: 900px;
+    font-size: 12px;
+    color: rgba(230, 234, 240, 0.92);
+}
+
+.table thead th {
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(18, 24, 33, 0.92);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.table tbody td {
+    padding: 10px 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.tableRow {
+    transition: background 160ms ease;
+}
+
+.table tbody tr {
+    background: var(--table-row);
+}
+
+.table tbody tr:nth-child(even) {
+    background: var(--table-row-alt);
+}
+
+.table tbody tr:hover {
+    background: var(--table-row-hover);
+}
+
+.tableRowClickable {
+    cursor: pointer;
+}
+
+.tableRowClickable:focus-visible {
+    outline: 2px solid rgba(124, 242, 194, 0.55);
+    outline-offset: -2px;
+}
+
+.playerCell {
+    font-weight: 600;
+}
+
+.owner {
+    font-weight: 700;
+}
+
+.deltaCell {
+    font-weight: 650;
+}
+
+.mssBox {
+    background: var(--table-bg);
+    padding: 18px;
+    border-radius: var(--r20);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: var(--shadow2);
+    display: grid;
+    gap: 12px;
+}
+
+@media (max-width: 900px) {
+    .filtersBar {
+        align-items: flex-start;
+    }
+
+    .filtersLeft {
+        grid-template-columns: 1fr;
+    }
+
+    .filterInput,
+    .filterSelect {
+        min-width: 180px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .historyRow,
+    .ghostButton,
+    .timelineToggle,
+    .timelineContent,
+    .tableRow {
+        transition: none;
+    }
+
+    .skeletonRow,
+    .detailsSkeleton {
+        animation: none;
+    }
+
+    .viewPanel {
+        animation: none;
+    }
+}

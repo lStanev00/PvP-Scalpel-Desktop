@@ -1,0 +1,105 @@
+import useUserContext from "../../Hooks/useUserContext";
+import { openUrl } from "../../Helpers/open";
+import { getClassColor } from "../../Domain/CombatDomainContext";
+import type { MatchPlayer } from "./types";
+import styles from "./DataActivity.module.css";
+
+interface TeamTableProps {
+    title: string;
+    players: MatchPlayer[];
+}
+
+export default function TeamTable({ title, players }: TeamTableProps) {
+    const { webUrl } = useUserContext();
+
+    const formatClass = (c?: string) => (c ? c[0].toUpperCase() + c.slice(1).toLowerCase() : "-");
+
+    const handleRowAction = (realm?: string, name?: string) => {
+        if (!realm || !name) return;
+        openUrl(`${webUrl}/check/eu/${realm}/${name}`);
+    };
+
+    return (
+        <div className={styles.teamBox}>
+            <h3 className={styles.teamTitle}>{title}</h3>
+            <div className={styles.tableWrap}>
+                <table className={styles.table}>
+                    <thead>
+                        <tr>
+                            <th>Player</th>
+                            <th>Spec(Class)</th>
+                            <th>Kills</th>
+                            <th>Deaths</th>
+                            <th>Damage</th>
+                            <th>Healing</th>
+                            <th>Pre-MMR</th>
+                            <th>Post-MMR</th>
+                            <th>MMR</th>
+                            <th>Rating</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {players.map((p, i) => {
+                            const delta = (p.postmatchMMR ?? 0) - (p.prematchMMR ?? 0);
+                            const deltaStyle =
+                                delta > 0
+                                    ? styles.deltaPositive
+                                    : delta < 0
+                                      ? styles.deltaNegative
+                                      : styles.deltaNeutral;
+                            const classColor = getClassColor(p.class);
+                            const rating = p.rating ?? null;
+                            const ratingChange = p.ratingChange ?? null;
+                            const ratingText = rating === null ? "-" : String(rating);
+                            const changeText =
+                                ratingChange === null
+                                    ? ""
+                                    : ` (${ratingChange > 0 ? `+${ratingChange}` : ratingChange})`;
+
+                            return (
+                                <tr
+                                    key={i}
+                                    className={`${styles.tableRow} ${styles.tableRowClickable}`}
+                                    tabIndex={0}
+                                    role="link"
+                                    onClick={() => handleRowAction(p.realm, p.name)}
+                                    onKeyDown={(event) => {
+                                        if (event.key === "Enter" || event.key === " ") {
+                                            event.preventDefault();
+                                            handleRowAction(p.realm, p.name);
+                                        }
+                                    }}
+                                >
+                                    <td
+                                        className={`${styles.playerCell} ${
+                                            p.isOwner ? styles.owner : ""
+                                        }`}
+                                        style={classColor ? { color: classColor } : undefined}
+                                    >
+                                        {p.name ?? "-"}
+                                    </td>
+                                    <td>
+                                        {p.spec ?? "-"} ({formatClass(p.class)})
+                                    </td>
+                                    <td>{p.kills ?? "-"}</td>
+                                    <td>{p.deaths ?? "-"}</td>
+                                    <td>{p.damage?.toLocaleString?.() ?? "-"}</td>
+                                    <td>{p.healing?.toLocaleString?.() ?? "-"}</td>
+                                    <td>{p.prematchMMR ?? "-"}</td>
+                                    <td>{p.postmatchMMR ?? "-"}</td>
+                                    <td className={`${styles.deltaCell} ${deltaStyle}`}>
+                                        {delta > 0 ? `+${delta}` : delta}
+                                    </td>
+                                    <td>
+                                        {ratingText}
+                                        {changeText}
+                                    </td>
+                                </tr>
+                            );
+                        })}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
+}

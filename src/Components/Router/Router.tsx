@@ -1,7 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { GuestRoute, UserRoute } from "./Guards";
 import AppShell from "../AppShell/AppShell";
-import DemoContent from "../Demo-content/Demo-Content";
+import DataActivity from "../Data-Activity/DataActivity";
 import Login from "../Login/Login";
 import Dashboard from "../../Pages/Dashboard/Dashboard";
 import Logs from "../../Pages/Logs/Logs";
@@ -17,7 +17,7 @@ export default function AppRoutes() {
                     <Route element={<AppShell />}>
                         <Route index element={<Navigate to="/dashboard" replace />} />
                         <Route path="dashboard" element={<Dashboard />} />
-                        <Route path="data" element={<DemoContent />} />
+                        <Route path="data" element={<DataActivity />} />
                         <Route path="logs" element={<Logs />} />
                         <Route path="settings" element={<Settings />} />
                         <Route path="about" element={<About />} />

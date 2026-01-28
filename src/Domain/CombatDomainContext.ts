@@ -1,0 +1,212 @@
+import type { SpellDataBucket, SpellDataEntry, SpellDataType } from "../Interfaces/spell-data";
+
+export type ClassId =
+    | "WARRIOR"
+    | "PALADIN"
+    | "HUNTER"
+    | "ROGUE"
+    | "PRIEST"
+    | "DEATHKNIGHT"
+    | "SHAMAN"
+    | "MAGE"
+    | "WARLOCK"
+    | "MONK"
+    | "DRUID"
+    | "DEMONHUNTER"
+    | "EVOKER";
+
+export type CombatRole = "tank" | "healer" | "dps" | "unknown";
+
+export type SpellRelevance = "damage" | "healing" | "mitigation" | "utility" | "unknown";
+
+export type DamageType = "MELEE_PHYSICAL" | "RANGED_PHYSICAL" | "RANGED_MAGIC" | "HYBRID" | "UNKNOWN";
+
+export interface ClassMetadata {
+    id: ClassId;
+    name: string;
+    color: string;
+}
+
+export interface SpellContext {
+    spellId: number;
+    name?: string;
+    description?: string;
+    subtext?: string;
+    type?: SpellDataType;
+    classId?: ClassId;
+    spec?: string;
+    role?: CombatRole;
+    relevance: SpellRelevance;
+    damageType?: DamageType;
+}
+
+export const classMetadataMap: Record<ClassId, ClassMetadata> = {
+    WARRIOR: { id: "WARRIOR", name: "Warrior", color: "#C79C6E" },
+    PALADIN: { id: "PALADIN", name: "Paladin", color: "#F58CBA" },
+    HUNTER: { id: "HUNTER", name: "Hunter", color: "#ABD473" },
+    ROGUE: { id: "ROGUE", name: "Rogue", color: "#FFF569" },
+    PRIEST: { id: "PRIEST", name: "Priest", color: "#FFFFFF" },
+    DEATHKNIGHT: { id: "DEATHKNIGHT", name: "Death Knight", color: "#C41F3B" },
+    SHAMAN: { id: "SHAMAN", name: "Shaman", color: "#0070DE" },
+    MAGE: { id: "MAGE", name: "Mage", color: "#69CCF0" },
+    WARLOCK: { id: "WARLOCK", name: "Warlock", color: "#9482C9" },
+    MONK: { id: "MONK", name: "Monk", color: "#00FF96" },
+    DRUID: { id: "DRUID", name: "Druid", color: "#FF7D0A" },
+    DEMONHUNTER: { id: "DEMONHUNTER", name: "Demon Hunter", color: "#A330C9" },
+    EVOKER: { id: "EVOKER", name: "Evoker", color: "#33937F" },
+};
+
+export const specToRoleMap: Record<string, CombatRole> = {
+    protection: "tank",
+    blood: "tank",
+    guardian: "tank",
+    brewmaster: "tank",
+    vengeance: "tank",
+    holy: "healer",
+    discipline: "healer",
+    restoration: "healer",
+    mistweaver: "healer",
+    preservation: "healer",
+    arms: "dps",
+    fury: "dps",
+    frost: "dps",
+    unholy: "dps",
+    havoc: "dps",
+    enhancement: "dps",
+    elemental: "dps",
+    shadow: "dps",
+    windwalker: "dps",
+    balance: "dps",
+    feral: "dps",
+    retribution: "dps",
+    devastation: "dps",
+    augmentation: "dps",
+    beastmastery: "dps",
+    marksman: "dps",
+    marksmanship: "dps",
+    survival: "dps",
+    arcane: "dps",
+    fire: "dps",
+    frostfire: "dps",
+    assassination: "dps",
+    outlaw: "dps",
+    subtlety: "dps",
+    affliction: "dps",
+    demonology: "dps",
+    destruction: "dps",
+};
+
+export const specToDamageTypeMap: Record<string, DamageType> = {};
+
+export const ROLE_ICON_PATHS: Record<CombatRole, { label: string; path: string }> = {
+    tank: {
+        label: "Tank",
+        path: "M12 2l8 4v6c0 5-4 9-8 10-4-1-8-5-8-10V6l8-4z",
+    },
+    healer: {
+        label: "Healer",
+        path: "M11 4h2v4h4v2h-4v4h-2v-4H7V8h4z",
+    },
+    dps: {
+        label: "DPS",
+        path: "M12 3l3 6 6 3-6 3-3 6-3-6-6-3 6-3 3-6z",
+    },
+    unknown: {
+        label: "Unknown",
+        path: "M12 6a4 4 0 0 0-4 4h2a2 2 0 1 1 4 0c0 2-3 2-3 5h2c0-2 3-2 3-5a4 4 0 0 0-4-4zm-1 11h2v2h-2z",
+    },
+};
+
+const normalizeSpec = (spec?: string) => {
+    if (!spec) return "";
+    return spec.toLowerCase().replace(/[\s-]/g, "");
+};
+
+const normalizeClassId = (classId?: string) => {
+    if (!classId) return "";
+    return classId.toUpperCase().replace(/[\s_]/g, "");
+};
+
+export const getClassColor = (classId?: string) => {
+    if (!classId) return undefined;
+    const key = normalizeClassId(classId) as ClassId;
+    return classMetadataMap[key]?.color;
+};
+
+export const getRoleBySpec = (spec?: string): CombatRole => {
+    if (!spec) return "unknown";
+    const key = normalizeSpec(spec);
+    return specToRoleMap[key] ?? "unknown";
+};
+
+export const getRoleByClassAndSpec = (classId?: string, spec?: string): CombatRole => {
+    const role = getRoleBySpec(spec);
+    if (role !== "unknown") return role;
+    if (!classId) return "unknown";
+    return "unknown";
+};
+
+export const getDamageTypeBySpec = (spec?: string): DamageType => {
+    const key = normalizeSpec(spec);
+    return specToDamageTypeMap[key] ?? "UNKNOWN";
+};
+
+export const spellClassMap: Record<
+    number,
+    { classId: ClassId; spec?: string; relevance?: SpellRelevance }
+> = {};
+
+const inferRelevance = (type?: SpellDataType): SpellRelevance => {
+    if (type === "harmfull") return "damage";
+    if (type === "helpful") return "healing";
+    if (type === "passive") return "utility";
+    return "unknown";
+};
+
+const resolveSpellEntry = (
+    spellId: number,
+    spellData?: SpellDataBucket
+): SpellDataEntry | undefined => {
+    if (!spellData) return undefined;
+    const key = String(spellId);
+    const bucket = spellData[key];
+    if (!bucket) return undefined;
+    return bucket[key] ?? Object.values(bucket)[0];
+};
+
+export const getSpellContext = (
+    spellId: number,
+    spellData?: SpellDataBucket
+): SpellContext => {
+    const entry = resolveSpellEntry(spellId, spellData);
+    const mapped = spellClassMap[spellId];
+    const relevance = mapped?.relevance ?? inferRelevance(entry?.type);
+    const role = mapped?.spec ? getRoleBySpec(mapped.spec) : "unknown";
+    const damageType = mapped?.spec ? getDamageTypeBySpec(mapped.spec) : undefined;
+
+    return {
+        spellId,
+        name: entry?.name,
+        description: entry?.description,
+        subtext: entry?.subtext,
+        type: entry?.type,
+        classId: mapped?.classId,
+        spec: mapped?.spec,
+        role,
+        relevance,
+        damageType,
+    };
+};
+
+export const CombatDomainContext = {
+    classMetadataMap,
+    specToRoleMap,
+    specToDamageTypeMap,
+    spellClassMap,
+    ROLE_ICON_PATHS,
+    getClassColor,
+    getRoleBySpec,
+    getRoleByClassAndSpec,
+    getDamageTypeBySpec,
+    getSpellContext,
+};
