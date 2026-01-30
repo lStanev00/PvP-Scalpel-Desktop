@@ -70,90 +70,92 @@ export default function SpellCastGraph({ timeline }: SpellCastGraphProps) {
     };
 
     return (
-        <div className={styles.spellGraph}>
-            {rows.map((row) => {
-                const barWidth = `${(row.total / maxTotal) * 100}%`;
-                const total = row.total || 1;
-                const successWidth = `${(row.succeeded / total) * 100}%`;
-                const failWidth = `${(row.failed / total) * 100}%`;
-                const interruptWidth = `${(row.interrupted / total) * 100}%`;
-                const iconUrl = resolveIconUrl(row.icon);
+        <div className={styles.spellGraphShell}>
+            <div className={styles.spellGraph}>
+                {rows.map((row) => {
+                    const barWidth = `${(row.total / maxTotal) * 100}%`;
+                    const total = row.total || 1;
+                    const successWidth = `${(row.succeeded / total) * 100}%`;
+                    const failWidth = `${(row.failed / total) * 100}%`;
+                    const interruptWidth = `${(row.interrupted / total) * 100}%`;
+                    const iconUrl = resolveIconUrl(row.icon);
 
-                return (
-                    <div key={row.spellId} className={styles.spellRow} tabIndex={0}>
-                        <div className={styles.spellInfo}>
-                            {iconUrl ? (
-                                <img
-                                    className={styles.spellIcon}
-                                    src={iconUrl}
-                                    alt=""
-                                    loading="lazy"
-                                />
-                            ) : (
-                                <div className={styles.spellIconFallback}>
-                                    {row.name.slice(0, 1).toUpperCase()}
-                                </div>
-                            )}
-                            <span className={styles.spellName}>{row.name}</span>
-                        </div>
-
-                        <div className={styles.spellBarTrack}>
-                            <div className={styles.spellBarFill} style={{ width: barWidth }}>
-                                {row.succeeded > 0 ? (
-                                    <span
-                                        className={`${styles.spellSeg} ${styles.spellSegSuccess}`}
-                                        style={{ width: successWidth }}
-                                    />
-                                ) : null}
-                                {row.failed > 0 ? (
-                                    <span
-                                        className={`${styles.spellSeg} ${styles.spellSegFail}`}
-                                        style={{ width: failWidth }}
-                                    />
-                                ) : null}
-                                {row.interrupted > 0 ? (
-                                    <span
-                                        className={`${styles.spellSeg} ${styles.spellSegInterrupt}`}
-                                        style={{ width: interruptWidth }}
-                                    />
-                                ) : null}
-                            </div>
-                        </div>
-
-                        <span className={styles.spellCount}>{row.total}</span>
-
-                        <div className={styles.spellTooltip} role="tooltip">
-                            <div className={styles.spellTooltipTitle}>
+                    return (
+                        <div key={row.spellId} className={styles.spellRow} tabIndex={0}>
+                            <div className={styles.spellInfo}>
                                 {iconUrl ? (
                                     <img
-                                        className={styles.spellTooltipIcon}
+                                        className={styles.spellIcon}
                                         src={iconUrl}
                                         alt=""
                                         loading="lazy"
                                     />
-                                ) : null}
-                                <span>{row.name}</span>
+                                ) : (
+                                    <div className={styles.spellIconFallback}>
+                                        {row.name.slice(0, 1).toUpperCase()}
+                                    </div>
+                                )}
+                                <span className={styles.spellName}>{row.name}</span>
                             </div>
-                            <div className={styles.spellTooltipRow}>
-                                <span>Succeeded</span>
-                                <span>{row.succeeded}</span>
+
+                            <div className={styles.spellBarTrack}>
+                                <div className={styles.spellBarFill} style={{ width: barWidth }}>
+                                    {row.succeeded > 0 ? (
+                                        <span
+                                            className={`${styles.spellSeg} ${styles.spellSegSuccess}`}
+                                            style={{ width: successWidth }}
+                                        />
+                                    ) : null}
+                                    {row.failed > 0 ? (
+                                        <span
+                                            className={`${styles.spellSeg} ${styles.spellSegFail}`}
+                                            style={{ width: failWidth }}
+                                        />
+                                    ) : null}
+                                    {row.interrupted > 0 ? (
+                                        <span
+                                            className={`${styles.spellSeg} ${styles.spellSegInterrupt}`}
+                                            style={{ width: interruptWidth }}
+                                        />
+                                    ) : null}
+                                </div>
                             </div>
-                            <div className={styles.spellTooltipRow}>
-                                <span>Failed</span>
-                                <span>{row.failed}</span>
-                            </div>
-                            <div className={styles.spellTooltipRow}>
-                                <span>Interrupted</span>
-                                <span>{row.interrupted}</span>
-                            </div>
-                            <div className={styles.spellTooltipRow}>
-                                <span>Total</span>
-                                <span>{row.total}</span>
+
+                            <span className={styles.spellCount}>{row.total}</span>
+
+                            <div className={styles.spellTooltip} role="tooltip">
+                                <div className={styles.spellTooltipTitle}>
+                                    {iconUrl ? (
+                                        <img
+                                            className={styles.spellTooltipIcon}
+                                            src={iconUrl}
+                                            alt=""
+                                            loading="lazy"
+                                        />
+                                    ) : null}
+                                    <span>{row.name}</span>
+                                </div>
+                                <div className={styles.spellTooltipRow}>
+                                    <span>Succeeded</span>
+                                    <span>{row.succeeded}</span>
+                                </div>
+                                <div className={styles.spellTooltipRow}>
+                                    <span>Failed</span>
+                                    <span>{row.failed}</span>
+                                </div>
+                                <div className={styles.spellTooltipRow}>
+                                    <span>Interrupted</span>
+                                    <span>{row.interrupted}</span>
+                                </div>
+                                <div className={styles.spellTooltipRow}>
+                                    <span>Total</span>
+                                    <span>{row.total}</span>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                );
-            })}
+                    );
+                })}
+            </div>
         </div>
     );
 }

@@ -1,4 +1,5 @@
 ﻿import { useMemo } from "react";
+import { LuArrowLeft, LuInfo } from "react-icons/lu";
 import TeamTable from "./TeamTable";
 import MSSStatsSection from "./MSSStatsSection";
 import SpellCastGraph from "./SpellCastGraph";
@@ -13,11 +14,7 @@ interface MatchDetailsPanelProps {
     onBack?: () => void;
 }
 
-export default function MatchDetailsPanel({
-    match,
-    isLoading,
-    onBack,
-}: MatchDetailsPanelProps) {
+export default function MatchDetailsPanel({ match, isLoading, onBack }: MatchDetailsPanelProps) {
     const content = useMemo(() => {
         if (!match) return null;
         const players = (match.raw.players ?? []) as MatchPlayer[];
@@ -60,45 +57,16 @@ export default function MatchDetailsPanel({
         );
     }
 
-    const deltaClass =
-        match.delta === null
-            ? styles.deltaNeutral
-            : match.delta > 0
-              ? styles.deltaPositive
-              : match.delta < 0
-                ? styles.deltaNegative
-                : styles.deltaNeutral;
-
     const showDebug = import.meta.env.DEV;
 
     return (
         <section className={styles.detailsCard}>
             {onBack ? (
                 <button type="button" className={styles.backButton} onClick={onBack}>
-                    Back to history
+                    <LuArrowLeft aria-hidden="true" className={styles.backIcon} />
+                    Match History
                 </button>
             ) : null}
-            <div className={styles.detailsHeader}>
-                <div>
-                    <h3 className={styles.detailsTitle}>{match.mapName}</h3>
-                    <p className={styles.detailsMeta}>
-                        {match.timestampLabel} - {match.durationLabel}
-                    </p>
-                </div>
-                <div className={styles.detailsStats}>
-                    <div className={styles.detailStat}>
-                        <span className={styles.detailLabel}>MMR Delta</span>
-                        <span className={`${styles.detailValue} ${deltaClass}`}>
-                            {match.deltaLabel}
-                        </span>
-                    </div>
-                    <div className={styles.detailStat}>
-                        <span className={styles.detailLabel}>Match ID</span>
-                        <span className={styles.detailMono}>{match.id}</span>
-                    </div>
-                </div>
-            </div>
-
             <div className={styles.detailsBody}>
                 {content.showFactions ? (
                     <div className={styles.teamGrid}>
@@ -110,7 +78,21 @@ export default function MatchDetailsPanel({
                 )}
 
                 <MSSStatsSection players={content.players} />
+                <div className={styles.spellNote}>
+                    <LuInfo className={styles.spellNoteIcon} aria-hidden="true" />
+                    <span>
+                        Spell activity overview. This section shows how abilities were used during
+                        the match. Advanced insights and guidance are still evolving in this module.
+                    </span>
+                </div>
                 <SpellCastGraph timeline={content.timeline} />
+                <div className={styles.spellNote}>
+                    <LuInfo className={styles.spellNoteIcon} aria-hidden="true" />
+                    <span>
+                        Temporary development tool used to validate spell-cast logic. This module
+                        will be replaced with user-facing insights in future updates.
+                    </span>
+                </div>
                 {showDebug ? <DebugSpellInspector timeline={content.timeline} /> : null}
             </div>
         </section>

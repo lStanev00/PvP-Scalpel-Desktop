@@ -125,10 +125,35 @@ export default function DataActivity() {
         }
     }, [selectedMatch?.owner.name, rpcUpdate]);
 
-    const headerActions = useMemo(
-        () => <div className={styles.headerMeta}>Total matches: {matches.length}</div>,
-        [matches.length]
-    );
+    const headerActions = useMemo(() => {
+        if (view === "details") {
+            if (!selectedMatch) return null;
+            const deltaClass =
+                selectedMatch.delta === null
+                    ? styles.deltaNeutral
+                    : selectedMatch.delta > 0
+                      ? styles.deltaPositive
+                      : selectedMatch.delta < 0
+                        ? styles.deltaNegative
+                        : styles.deltaNeutral;
+            return (
+                <div className={styles.headerMetaStack}>
+                    <div className={`${styles.headerMeta} ${deltaClass}`}>
+                        MMR Delta: {selectedMatch.deltaLabel}
+                    </div>
+                    <div className={styles.headerMeta}>Match ID: {selectedMatch.id}</div>
+                </div>
+            );
+        }
+        return <div className={styles.headerMeta}>Total matches: {matches.length}</div>;
+    }, [matches.length, view, selectedMatch]);
+
+    const headerTitle =
+        view === "details" ? selectedMatch?.mapName ?? "Match Details" : "Match History";
+    const headerDescription =
+        view === "details" && selectedMatch
+            ? `${selectedMatch.timestampLabel} · ${selectedMatch.durationLabel}`
+            : "";
 
     const onSelectMatch = useCallback((match: MatchSummary) => {
         listScrollTop.current = window.scrollY;
@@ -155,8 +180,24 @@ export default function DataActivity() {
         return () => window.removeEventListener("keydown", handler);
     }, [view, onBackToList]);
 
+    useEffect(() => {
+        const handler = () => {
+            setView("list");
+            requestAnimationFrame(() => {
+                window.scrollTo(0, 0);
+            });
+        };
+        window.addEventListener("match-history-reset", handler as EventListener);
+        return () => window.removeEventListener("match-history-reset", handler as EventListener);
+    }, []);
+
     return (
-        <RouteLayout title="Match History" description="" actions={headerActions}>
+        <RouteLayout
+            title={headerTitle}
+            description={headerDescription}
+            actions={headerActions ?? undefined}
+            showHeader={true}
+        >
             <div className={styles.page}>
                 {view === "list" ? (
                     <div className={`${styles.viewPanel} ${styles.viewList}`}>
