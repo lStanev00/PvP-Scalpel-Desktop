@@ -1,4 +1,6 @@
 ﻿import { useMemo, useState } from "react";
+import useSpellData from "../../Hooks/useSpellData";
+import { getSpellContext } from "../../Domain/CombatDomainContext";
 import type { MatchTimelineEntry } from "./types";
 import { resolveIntentAttempts, type AttemptRecord, type NormalizedEvent } from "./spellCastResolver";
 import styles from "./DataActivity.module.css";
@@ -47,7 +49,8 @@ const getEventStatus = (event: NormalizedEvent, attempt?: AttemptRecord): EventS
 };
 
 export default function DebugSpellInspector({ timeline }: DebugSpellInspectorProps) {
-    const { rawEvents, attempts, resolvedAttempts, eventToAttemptId } = useMemo(
+    const spellData = useSpellData();
+    const { rawEvents, attempts, eventToAttemptId } = useMemo(
         () => resolveIntentAttempts(timeline),
         [timeline]
     );
@@ -61,6 +64,12 @@ export default function DebugSpellInspector({ timeline }: DebugSpellInspectorPro
     const [hoveredAttempt, setHoveredAttempt] = useState<string | null>(null);
     const [hoveredEvent, setHoveredEvent] = useState<number | null>(null);
 
+    const selectedSpellName = useMemo(() => {
+        if (selectedSpell === null) return null;
+        const context = getSpellContext(selectedSpell, spellData);
+        return context.name ?? null;
+    }, [selectedSpell, spellData]);
+
     const filteredEvents = useMemo(() => {
         if (selectedSpell === null) return [];
         return rawEvents.filter((event) => event.spellId === selectedSpell);
@@ -70,12 +79,6 @@ export default function DebugSpellInspector({ timeline }: DebugSpellInspectorPro
         if (selectedSpell === null) return [];
         return attempts.filter((attempt) => attempt.spellId === selectedSpell);
     }, [attempts, selectedSpell]);
-
-    const resolvedAttemptsById = useMemo(() => {
-        const map = new Map<string, AttemptRecord>();
-        resolvedAttempts.forEach((attempt) => map.set(attempt.id, attempt));
-        return map;
-    }, [resolvedAttempts]);
 
     if (!spellOptions.length) {
         return null;
@@ -106,6 +109,9 @@ export default function DebugSpellInspector({ timeline }: DebugSpellInspectorPro
                             </option>
                         ))}
                     </select>
+                    {selectedSpellName ? (
+                        <div className={styles.debugSpellName}>{selectedSpellName}</div>
+                    ) : null}
                 </div>
             </div>
 
