@@ -14,6 +14,20 @@ export default function TeamTable({ title, players }: TeamTableProps) {
 
     const formatClass = (c?: string) => (c ? c[0].toUpperCase() + c.slice(1).toLowerCase() : "-");
 
+    const hasNonZero = (key: keyof MatchPlayer) =>
+        players.some((p) => {
+            const raw = p[key] as number | null | undefined;
+            return typeof raw === "number" && !Number.isNaN(raw) && raw !== 0;
+        });
+
+    const showPreMMR = hasNonZero("prematchMMR");
+    const showPostMMR = hasNonZero("postmatchMMR");
+    const showMMRDelta = hasNonZero("ratingChange") || players.some((p) => {
+        const pre = p.prematchMMR ?? 0;
+        const post = p.postmatchMMR ?? 0;
+        return typeof pre === "number" && typeof post === "number" && post - pre !== 0;
+    });
+
     const handleRowAction = (realm?: string, name?: string) => {
         if (!realm || !name) return;
         openUrl(`${webUrl}/check/eu/${realm}/${name}`);
@@ -32,9 +46,9 @@ export default function TeamTable({ title, players }: TeamTableProps) {
                             <th>Deaths</th>
                             <th>Damage</th>
                             <th>Healing</th>
-                            <th>Pre-MMR</th>
-                            <th>Post-MMR</th>
-                            <th>MMR</th>
+                            {showPreMMR ? <th>Pre-MMR</th> : null}
+                            {showPostMMR ? <th>Post-MMR</th> : null}
+                            {showMMRDelta ? <th>MMR</th> : null}
                             <th>Rating</th>
                         </tr>
                     </thead>
@@ -85,11 +99,13 @@ export default function TeamTable({ title, players }: TeamTableProps) {
                                     <td>{p.deaths ?? "-"}</td>
                                     <td>{p.damage?.toLocaleString?.() ?? "-"}</td>
                                     <td>{p.healing?.toLocaleString?.() ?? "-"}</td>
-                                    <td>{p.prematchMMR ?? "-"}</td>
-                                    <td>{p.postmatchMMR ?? "-"}</td>
-                                    <td className={`${styles.deltaCell} ${deltaStyle}`}>
-                                        {delta > 0 ? `+${delta}` : delta}
-                                    </td>
+                                    {showPreMMR ? <td>{p.prematchMMR ?? "-"}</td> : null}
+                                    {showPostMMR ? <td>{p.postmatchMMR ?? "-"}</td> : null}
+                                    {showMMRDelta ? (
+                                        <td className={`${styles.deltaCell} ${deltaStyle}`}>
+                                            {delta > 0 ? `+${delta}` : delta}
+                                        </td>
+                                    ) : null}
                                     <td>
                                         {ratingText}
                                         {changeText}

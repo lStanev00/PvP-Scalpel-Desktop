@@ -1,4 +1,4 @@
-.page {
+﻿.page {
     --result-win: rgba(58, 210, 159, 0.95);
     --result-loss: rgba(255, 77, 79, 0.95);
     --result-neutral: rgba(138, 148, 166, 0.95);
@@ -153,11 +153,11 @@
 }
 
 .detailsCard {
-    background: var(--panel);
-    border: 1px solid var(--stroke);
-    border-radius: var(--r24);
-    box-shadow: var(--shadow2);
-    padding: 16px;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    padding: 0;
     display: grid;
     gap: 16px;
     min-height: 200px;
@@ -369,12 +369,6 @@
     flex-wrap: wrap;
 }
 
-.detailsBadges {
-    display: flex;
-    gap: 8px;
-    align-items: center;
-}
-
 .detailsTitle {
     margin: 10px 0 4px;
     font-size: 20px;
@@ -421,17 +415,17 @@
 
 .backButton {
     justify-self: flex-start;
-    padding: 8px 12px;
-    border-radius: 10px;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    background: rgba(255, 255, 255, 0.06);
+    padding: 0;
+    border: 0;
+    background: transparent;
     cursor: pointer;
     font-size: 12px;
-    transition: background 160ms ease, border-color 160ms ease;
+    color: rgba(230, 234, 240, 0.8);
+    transition: color 160ms ease;
 }
 
 .backButton:hover {
-    background: rgba(255, 255, 255, 0.1);
+    color: rgba(230, 234, 240, 0.95);
 }
 
 .inlineError {
@@ -446,45 +440,305 @@
 .teamGrid {
     display: grid;
     gap: 16px;
+    grid-template-columns: repeat(auto-fit, minmax(520px, 1fr));
 }
 
-.timelinePanel {
-    background: rgba(18, 24, 33, 0.4);
-    border-radius: var(--r20);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    padding: 12px;
+.spellGraph {
+    display: grid;
+    gap: 8px;
+}
+
+.spellRow {
+    display: grid;
+    grid-template-columns: minmax(220px, 1.2fr) minmax(180px, 2fr) 48px;
+    gap: 16px;
+    align-items: center;
+    position: relative;
+    padding: 6px 0;
+}
+
+.spellRow:hover .spellBarFill {
+    opacity: 0.9;
+}
+
+.spellRow:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 4px;
+}
+
+.spellInfo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+}
+
+.spellIcon,
+.spellIconFallback {
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    display: grid;
+    place-items: center;
+    font-size: 12px;
+    font-weight: 700;
+    color: rgba(230, 234, 240, 0.85);
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.spellIcon {
+    object-fit: cover;
+}
+
+.spellName {
+    font-size: 13px;
+    font-weight: 600;
+    color: rgba(230, 234, 240, 0.9);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.spellBarTrack {
+    width: 100%;
+    height: 8px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+.spellBarFill {
+    height: 100%;
+    display: flex;
+    border-radius: inherit;
+    overflow: hidden;
+    opacity: 0.75;
+}
+
+.spellSeg {
+    height: 100%;
+}
+
+.spellSegSuccess {
+    background: var(--good);
+}
+
+.spellSegFail {
+    background: var(--bad);
+}
+
+.spellSegInterrupt {
+    background: var(--warn);
+}
+
+.spellCount {
+    font-size: 12px;
+    color: rgba(230, 234, 240, 0.7);
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.spellTooltip {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 6px);
+    background: rgba(18, 24, 33, 0.95);
+    color: rgba(230, 234, 240, 0.9);
+    padding: 10px 12px;
+    border-radius: 12px;
+    font-size: 12px;
+    display: grid;
+    gap: 6px;
+    opacity: 0;
+    transform: translateY(-4px);
+    transition: opacity 140ms ease, transform 140ms ease;
+    pointer-events: none;
+    min-width: 200px;
+    z-index: 10;
+}
+
+.spellRow:hover .spellTooltip,
+.spellRow:focus-within .spellTooltip {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.spellTooltipTitle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+}
+
+.spellTooltipIcon {
+    width: 18px;
+    height: 18px;
+    border-radius: 4px;
+    object-fit: cover;
+}
+
+.spellTooltipRow {
+    display: flex;
+    justify-content: space-between;
+    color: rgba(230, 234, 240, 0.7);
+}
+
+.debugInspector {
+    margin-top: 12px;
+    border: 1px dashed rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
+    padding: 16px;
+    display: grid;
+    gap: 16px;
+    background: rgba(10, 12, 16, 0.4);
+}
+
+.debugHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.debugTitle {
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.debugSubtitle {
+    font-size: 12px;
+    color: var(--muted);
+}
+
+.debugSelector {
+    display: grid;
+    gap: 6px;
+}
+
+.debugLabel {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--muted);
+}
+
+.debugSelect {
+    height: 34px;
+    border-radius: var(--r10);
+    border: 1px solid var(--stroke2);
+    background: rgba(12, 16, 24, 0.85);
+    color: var(--text);
+    padding: 4px 8px;
+    font-size: 12px;
+}
+
+.debugGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 16px;
+}
+
+.debugPane {
     display: grid;
     gap: 10px;
 }
 
-.timelineToggle {
-    align-self: flex-start;
-    padding: 8px 12px;
-    border-radius: 10px;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    background: rgba(255, 255, 255, 0.06);
-    cursor: pointer;
+.debugPaneTitle {
     font-size: 12px;
-    transition: background 160ms ease, border-color 160ms ease;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--muted);
 }
 
-.timelineToggle:hover {
-    background: rgba(255, 255, 255, 0.1);
+.debugList {
+    display: grid;
+    gap: 8px;
 }
 
-.timelineContent {
-    overflow: hidden;
-    transition: max-height 200ms ease, opacity 200ms ease;
+.debugRow {
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    padding: 8px 10px;
+    display: grid;
+    gap: 4px;
+    background: rgba(12, 16, 24, 0.6);
+    font-size: 12px;
 }
 
-.timelineOpen {
-    max-height: 1200px;
-    opacity: 1;
+.debugRowActive {
+    border-color: rgba(124, 242, 194, 0.5);
+    background: rgba(124, 242, 194, 0.08);
 }
 
-.timelineClosed {
-    max-height: 0;
-    opacity: 0;
+.debugRow_succeeded {
+    border-left: 3px solid var(--result-win);
+}
+
+.debugRow_failed,
+.debugRow_failed_quiet {
+    border-left: 3px solid var(--result-loss);
+}
+
+.debugRow_interrupted {
+    border-left: 3px solid #f5a85b;
+}
+
+.debugRow_unresolved {
+    border-left: 3px solid rgba(230, 234, 240, 0.3);
+}
+
+.debugRow_collapsed {
+    border-left: 3px solid rgba(230, 234, 240, 0.45);
+}
+
+.debugRow_ignored {
+    border-left: 3px solid rgba(230, 234, 240, 0.25);
+    color: rgba(230, 234, 240, 0.55);
+}
+
+.debugTime {
+    font-variant-numeric: tabular-nums;
+    color: rgba(230, 234, 240, 0.7);
+}
+
+.debugEvent {
+    font-weight: 600;
+}
+
+.debugGuid {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: rgba(230, 234, 240, 0.6);
+    word-break: break-all;
+}
+
+.debugTag {
+    font-size: 11px;
+    color: rgba(230, 234, 240, 0.6);
+}
+
+.debugAttemptHeader {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.debugOutcome {
+    font-weight: 700;
+}
+
+.debugMeta {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    color: rgba(230, 234, 240, 0.65);
+    font-size: 11px;
+}
+
+.debugExplanation {
+    font-size: 11px;
+    color: rgba(230, 234, 240, 0.7);
 }
 
 .detailsEmpty {
@@ -672,14 +926,17 @@
     .filterSelect {
         min-width: 180px;
     }
+
+    .teamGrid {
+        grid-template-columns: 1fr;
+    }
 }
 
 @media (prefers-reduced-motion: reduce) {
     .historyRow,
     .ghostButton,
-    .timelineToggle,
-    .timelineContent,
-    .tableRow {
+    .tableRow,
+    .spellTooltip {
         transition: none;
     }
 

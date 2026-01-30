@@ -5,6 +5,14 @@ export interface SpellDataEntry {
     description?: string;
     subtext?: string;
     type?: SpellDataType;
+    icon?: string;
+    texture?: string;
+    iconId?: number;
+    textureId?: number;
 }
 
-export type SpellDataBucket = Record<string, Record<string, SpellDataEntry>>;
+export type SpellDataVersionBucket = Record<string, SpellDataEntry>;
+export type SpellDataBucket = Record<
+    string,
+    SpellDataEntry | SpellDataVersionBucket | Record<string, SpellDataVersionBucket>
+>;

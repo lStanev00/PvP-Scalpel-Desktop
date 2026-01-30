@@ -76,6 +76,20 @@ const logSchemaMismatch = (message: string, details?: unknown) => {
 const isPlainObject = (value: unknown): value is Record<string, unknown> =>
     typeof value === "object" && value !== null && !Array.isArray(value);
 
+const isSpellEntry = (value: unknown): value is Record<string, unknown> => {
+    if (!isPlainObject(value)) return false;
+    return (
+        "name" in value ||
+        "description" in value ||
+        "subtext" in value ||
+        "type" in value ||
+        "icon" in value ||
+        "texture" in value ||
+        "iconId" in value ||
+        "textureId" in value
+    );
+};
+
 const validateSpellDataSchema = (value: unknown) => {
     if (!isPlainObject(value)) {
         logSchemaMismatch("Root is not an object");
@@ -83,25 +97,64 @@ const validateSpellDataSchema = (value: unknown) => {
     }
 
     for (const [bucketKey, bucketValue] of Object.entries(value)) {
-        if (!isPlainObject(bucketValue)) {
-            logSchemaMismatch(`Bucket '${bucketKey}' is not an object`, bucketValue);
-            continue;
-        }
-
-        for (const [spellKey, entry] of Object.entries(bucketValue)) {
-            if (!isPlainObject(entry)) {
-                logSchemaMismatch(`Entry '${bucketKey}.${spellKey}' is not an object`, entry);
-                continue;
-            }
-
-            const type = entry.type;
+        if (isSpellEntry(bucketValue)) {
+            const type = (bucketValue as { type?: unknown }).type;
             if (
                 type !== undefined &&
                 type !== "harmfull" &&
                 type !== "helpful" &&
                 type !== "passive"
             ) {
-                logSchemaMismatch(`Entry '${bucketKey}.${spellKey}' has invalid type`, type);
+                logSchemaMismatch(`Entry '${bucketKey}' has invalid type`, type);
+            }
+            continue;
+        }
+
+        if (!isPlainObject(bucketValue)) {
+            logSchemaMismatch(`Bucket '${bucketKey}' is not an object`, bucketValue);
+            continue;
+        }
+
+        for (const [spellKey, entry] of Object.entries(bucketValue)) {
+            if (isSpellEntry(entry)) {
+                const type = (entry as { type?: unknown }).type;
+                if (
+                    type !== undefined &&
+                    type !== "harmfull" &&
+                    type !== "helpful" &&
+                    type !== "passive"
+                ) {
+                    logSchemaMismatch(`Entry '${bucketKey}.${spellKey}' has invalid type`, type);
+                }
+                continue;
+            }
+
+            if (!isPlainObject(entry)) {
+                logSchemaMismatch(`Entry '${bucketKey}.${spellKey}' is not an object`, entry);
+                continue;
+            }
+
+            for (const [versionKey, versionEntry] of Object.entries(entry)) {
+                if (!isPlainObject(versionEntry)) {
+                    logSchemaMismatch(
+                        `Entry '${bucketKey}.${spellKey}.${versionKey}' is not an object`,
+                        versionEntry
+                    );
+                    continue;
+                }
+
+                const type = (versionEntry as { type?: unknown }).type;
+                if (
+                    type !== undefined &&
+                    type !== "harmfull" &&
+                    type !== "helpful" &&
+                    type !== "passive"
+                ) {
+                    logSchemaMismatch(
+                        `Entry '${bucketKey}.${spellKey}.${versionKey}' has invalid type`,
+                        type
+                    );
+                }
             }
         }
     }

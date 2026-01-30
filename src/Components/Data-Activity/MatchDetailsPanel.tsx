@@ -1,9 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
-import ResultBadge from "./ResultBadge";
-import ModeBadge from "./ModeBadge";
+﻿import { useMemo } from "react";
 import TeamTable from "./TeamTable";
 import MSSStatsSection from "./MSSStatsSection";
-import TimelineSection from "./TimelineSection";
+import SpellCastGraph from "./SpellCastGraph";
+import DebugSpellInspector from "./DebugSpellInspector";
 import type { MatchSummary } from "./utils";
 import type { MatchPlayer, MatchTimelineEntry } from "./types";
 import styles from "./DataActivity.module.css";
@@ -19,12 +18,6 @@ export default function MatchDetailsPanel({
     isLoading,
     onBack,
 }: MatchDetailsPanelProps) {
-    const [timelineOpen, setTimelineOpen] = useState(false);
-
-    useEffect(() => {
-        setTimelineOpen(false);
-    }, [match?.id]);
-
     const content = useMemo(() => {
         if (!match) return null;
         const players = (match.raw.players ?? []) as MatchPlayer[];
@@ -76,22 +69,20 @@ export default function MatchDetailsPanel({
                 ? styles.deltaNegative
                 : styles.deltaNeutral;
 
+    const showDebug = import.meta.env.DEV;
+
     return (
         <section className={styles.detailsCard}>
             {onBack ? (
                 <button type="button" className={styles.backButton} onClick={onBack}>
-                    ← Back to history
+                    Back to history
                 </button>
             ) : null}
             <div className={styles.detailsHeader}>
                 <div>
-                    <div className={styles.detailsBadges}>
-                        <ResultBadge result={match.result} />
-                        <ModeBadge label={match.modeLabel} />
-                    </div>
                     <h3 className={styles.detailsTitle}>{match.mapName}</h3>
                     <p className={styles.detailsMeta}>
-                        {match.timestampLabel} · {match.durationLabel}
+                        {match.timestampLabel} - {match.durationLabel}
                     </p>
                 </div>
                 <div className={styles.detailsStats}>
@@ -119,26 +110,8 @@ export default function MatchDetailsPanel({
                 )}
 
                 <MSSStatsSection players={content.players} />
-
-                {content.timeline.length > 0 ? (
-                    <div className={styles.timelinePanel}>
-                        <button
-                            type="button"
-                            className={styles.timelineToggle}
-                            onClick={() => setTimelineOpen((prev) => !prev)}
-                            aria-expanded={timelineOpen}
-                        >
-                            {timelineOpen ? "Hide timeline" : "Show timeline"}
-                        </button>
-                        <div
-                            className={`${styles.timelineContent} ${
-                                timelineOpen ? styles.timelineOpen : styles.timelineClosed
-                            }`}
-                        >
-                            <TimelineSection timeline={content.timeline} />
-                        </div>
-                    </div>
-                ) : null}
+                <SpellCastGraph timeline={content.timeline} />
+                {showDebug ? <DebugSpellInspector timeline={content.timeline} /> : null}
             </div>
         </section>
     );

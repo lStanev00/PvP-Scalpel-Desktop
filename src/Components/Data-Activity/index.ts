@@ -7,7 +7,7 @@ export { default as MatchDetailsPanel } from "./MatchDetailsPanel";
 export { default as ResultBadge } from "./ResultBadge";
 export { default as ModeBadge } from "./ModeBadge";
 export { default as RoleIcon } from "./RoleIcon";
-export { default as TimelineSection } from "./TimelineSection";
+export { default as SpellCastGraph } from "./SpellCastGraph";
 export { default as TeamTable } from "./TeamTable";
 export { default as MSSStatsSection } from "./MSSStatsSection";
 export type { MatchPlayer, MatchTimelineEntry } from "./types";

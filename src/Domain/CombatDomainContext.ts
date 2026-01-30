@@ -30,6 +30,7 @@ export interface ClassMetadata {
 export interface SpellContext {
     spellId: number;
     name?: string;
+    icon?: string;
     description?: string;
     subtext?: string;
     type?: SpellDataType;
@@ -163,6 +164,41 @@ const inferRelevance = (type?: SpellDataType): SpellRelevance => {
     return "unknown";
 };
 
+const isSpellEntry = (value: unknown): value is SpellDataEntry => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+    const entry = value as SpellDataEntry;
+    return (
+        "name" in entry ||
+        "description" in entry ||
+        "subtext" in entry ||
+        "type" in entry ||
+        "icon" in entry ||
+        "texture" in entry ||
+        "iconId" in entry ||
+        "textureId" in entry
+    );
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+    !!value && typeof value === "object" && !Array.isArray(value);
+
+const parseVersionKey = (value: string) => {
+    const parts = value.split(/[^0-9]+/).filter(Boolean).map(Number);
+    return parts.length ? parts : [0];
+};
+
+const compareVersions = (a: string, b: string) => {
+    const pa = parseVersionKey(a);
+    const pb = parseVersionKey(b);
+    const max = Math.max(pa.length, pb.length);
+    for (let i = 0; i < max; i += 1) {
+        const av = pa[i] ?? 0;
+        const bv = pb[i] ?? 0;
+        if (av !== bv) return bv - av;
+    }
+    return 0;
+};
+
 const resolveSpellEntry = (
     spellId: number,
     spellData?: SpellDataBucket
@@ -170,8 +206,47 @@ const resolveSpellEntry = (
     if (!spellData) return undefined;
     const key = String(spellId);
     const bucket = spellData[key];
-    if (!bucket) return undefined;
-    return bucket[key] ?? Object.values(bucket)[0];
+    if (!bucket) {
+        const rootVersionKeys = Object.keys(spellData).sort(compareVersions);
+        for (const versionKey of rootVersionKeys) {
+            const versionBucket = spellData[versionKey];
+            if (!isRecord(versionBucket)) continue;
+            if (isSpellEntry(versionBucket[key])) {
+                return versionBucket[key] as SpellDataEntry;
+            }
+        }
+        return undefined;
+    }
+
+    if (isSpellEntry(bucket)) return bucket;
+    if (isRecord(bucket) && isSpellEntry(bucket[key])) return bucket[key] as SpellDataEntry;
+
+    if (!isRecord(bucket)) return undefined;
+
+    const versionKeys = Object.keys(bucket).sort(compareVersions);
+    for (const versionKey of versionKeys) {
+        const versionBucket = bucket[versionKey];
+        if (!isRecord(versionBucket)) {
+            continue;
+        }
+        if (isSpellEntry(versionBucket[key])) {
+            return versionBucket[key] as SpellDataEntry;
+        }
+        const first = Object.values(versionBucket)[0];
+        if (isSpellEntry(first)) return first as SpellDataEntry;
+    }
+
+    const first = Object.values(bucket)[0];
+    return isSpellEntry(first) ? (first as SpellDataEntry) : undefined;
+};
+
+const resolveIcon = (entry?: SpellDataEntry) => {
+    if (!entry) return undefined;
+    if (entry.icon) return entry.icon;
+    if (entry.texture) return entry.texture;
+    if (entry.iconId) return String(entry.iconId);
+    if (entry.textureId) return String(entry.textureId);
+    return undefined;
 };
 
 export const getSpellContext = (
@@ -183,10 +258,12 @@ export const getSpellContext = (
     const relevance = mapped?.relevance ?? inferRelevance(entry?.type);
     const role = mapped?.spec ? getRoleBySpec(mapped.spec) : "unknown";
     const damageType = mapped?.spec ? getDamageTypeBySpec(mapped.spec) : undefined;
+    const icon = resolveIcon(entry);
 
     return {
         spellId,
         name: entry?.name,
+        icon,
         description: entry?.description,
         subtext: entry?.subtext,
         type: entry?.type,
