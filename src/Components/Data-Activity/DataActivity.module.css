@@ -1,0 +1,1011 @@
+﻿.page {
+    --result-win: rgba(58, 210, 159, 0.95);
+    --result-loss: rgba(255, 77, 79, 0.95);
+    --result-neutral: rgba(138, 148, 166, 0.95);
+    --result-win-soft: rgba(58, 210, 159, 0.16);
+    --result-loss-soft: rgba(255, 77, 79, 0.16);
+    --result-neutral-soft: rgba(138, 148, 166, 0.16);
+    --row-hover: rgba(58, 167, 255, 0.12);
+    --row-selected: rgba(58, 167, 255, 0.22);
+    --focus-ring: rgba(124, 242, 194, 0.55);
+    display: grid;
+    gap: 18px;
+}
+
+.headerActions {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.ghostButton {
+    border-radius: 14px;
+    padding: 10px 12px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.05);
+    cursor: pointer;
+    font-size: 12px;
+    transition: background 160ms ease, border-color 160ms ease;
+}
+
+.ghostButton:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+.ghostButton:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+.filtersBar {
+    display: grid;
+    grid-template-columns: 1fr;
+    align-items: center;
+    gap: 16px;
+    padding: 14px 16px;
+    border-radius: var(--r20);
+    background: var(--panel);
+    border: 1px solid var(--stroke);
+    box-shadow: var(--shadow2);
+    overflow: visible;
+}
+
+.filtersLeft {
+    display: grid;
+    grid-template-columns: 180px 200px minmax(240px, 1fr);
+    gap: 14px;
+    align-items: center;
+    min-width: 0;
+}
+
+.filterGroup {
+    display: grid;
+    gap: 6px;
+    min-width: 0;
+}
+
+.filterLabel {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--muted);
+}
+
+.filterSelect,
+.filterInput {
+    height: 38px;
+    min-height: 38px;
+    border-radius: var(--r12);
+    border: 1px solid var(--stroke2);
+    background: rgba(12, 16, 24, 0.85);
+    padding: 6px 12px;
+    font-size: 13px;
+    color: var(--text);
+    min-width: 160px;
+    transition: border-color 160ms ease, background 160ms ease;
+    box-sizing: border-box;
+    width: 100%;
+}
+
+.filterSelect:focus-visible,
+.filterInput:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+}
+
+.selectControl {
+    position: relative;
+    display: grid;
+    align-items: center;
+}
+
+.selectControl::after {
+    content: "";
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    width: 0;
+    height: 0;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 6px solid var(--muted);
+    transform: translateY(-50%);
+    pointer-events: none;
+}
+
+.filterSelect {
+    appearance: none;
+    padding-right: 28px;
+    background-image: none;
+}
+
+.filterInput {
+    min-width: 220px;
+    flex: 1 1 240px;
+}
+
+.filterMeta {
+    font-size: 12px;
+    color: rgba(230, 234, 240, 0.8);
+    pointer-events: none;
+    line-height: 1;
+}
+
+.headerMeta {
+    font-size: 12px;
+    color: var(--muted);
+    pointer-events: none;
+}
+
+.headerMetaStack {
+    display: grid;
+    gap: 4px;
+    text-align: right;
+}
+
+.viewPanel {
+    display: grid;
+    gap: 16px;
+    animation: viewFadeIn 200ms ease;
+}
+
+.viewList {
+    grid-template-rows: auto 1fr;
+}
+
+.viewDetails {
+    grid-template-rows: 1fr;
+}
+
+.detailsCard {
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    padding: 0;
+    display: grid;
+    gap: 12px;
+    min-height: 200px;
+}
+
+.historyList {
+    display: grid;
+    gap: 0;
+    overflow: visible;
+}
+
+.historyRow {
+    border: none;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 0;
+    background: transparent;
+    display: grid;
+    grid-template-columns: 6px 130px 1.6fr 110px 1.4fr 70px 70px;
+    gap: 12px;
+    padding: 10px 12px;
+    text-align: left;
+    color: inherit;
+    cursor: pointer;
+    transition: background 140ms ease, border-color 140ms ease;
+    align-items: center;
+    min-height: 58px;
+    min-width: 820px;
+}
+
+.historyRow:hover {
+    background: var(--row-hover);
+}
+
+.historyRowSelected {
+    border-color: rgba(124, 242, 194, 0.4);
+    background: var(--row-selected);
+}
+
+.historyRowSelected .resultIndicator {
+    box-shadow: 0 0 6px rgba(124, 242, 194, 0.35);
+}
+
+.historyRow:hover .roleIcon {
+    color: rgba(230, 234, 240, 0.85);
+}
+
+.historyRowSelected .roleIcon {
+    color: rgba(230, 234, 240, 0.9);
+}
+
+.historyRow:last-child {
+    border-bottom: none;
+}
+
+.historyRow:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+}
+
+.resultIndicator {
+    width: 3px;
+    border-radius: 999px;
+    background: var(--result-neutral);
+    align-self: stretch;
+}
+
+.historyRow[data-result="win"] .resultIndicator {
+    color: var(--result-win);
+}
+
+.historyRow[data-result="loss"] .resultIndicator {
+    color: var(--result-loss);
+}
+
+.historyRow[data-result="neutral"] .resultIndicator {
+    color: var(--result-neutral);
+}
+
+.historyRow[data-result="win"] .resultIndicator {
+    background: var(--result-win);
+}
+
+.historyRow[data-result="loss"] .resultIndicator {
+    background: var(--result-loss);
+}
+
+.historyRow[data-result="neutral"] .resultIndicator {
+    background: var(--result-neutral);
+}
+
+.rowTime {
+    font-size: 12px;
+    color: rgba(230, 234, 240, 0.6);
+    white-space: nowrap;
+}
+
+.ownerBlock {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+}
+
+.ownerName {
+    font-weight: 700;
+    color: rgba(244, 247, 255, 0.96);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+}
+
+.modeText {
+    font-size: 12px;
+    color: rgba(230, 234, 240, 0.7);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.roleIcon {
+    width: 20px;
+    height: 20px;
+    display: grid;
+    place-items: center;
+    color: #bfc7d5;
+}
+
+.roleIcon svg {
+    width: 18px;
+    height: 18px;
+    stroke: currentColor;
+    fill: currentColor;
+}
+
+.mapName {
+    font-weight: 500;
+    color: rgba(230, 234, 240, 0.75);
+    font-size: 12px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.duration {
+    font-variant-numeric: tabular-nums;
+    font-size: 12px;
+    color: rgba(230, 234, 240, 0.55);
+}
+
+.modeBadge {
+    padding: 3px 8px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 600;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    background: rgba(15, 20, 28, 0.7);
+    color: rgba(230, 234, 240, 0.8);
+}
+
+.resultBadge {
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    border: 1px solid transparent;
+}
+
+.resultBadgeCompact {
+    padding: 3px 8px;
+    font-size: 10px;
+}
+
+.resultBadge_win {
+    color: var(--result-win);
+    background: var(--result-win-soft);
+    border-color: rgba(58, 210, 159, 0.45);
+}
+
+.resultBadge_loss {
+    color: var(--result-loss);
+    background: var(--result-loss-soft);
+    border-color: rgba(255, 77, 79, 0.45);
+}
+
+.resultBadge_neutral {
+    color: var(--result-neutral);
+    background: var(--result-neutral-soft);
+    border-color: rgba(138, 148, 166, 0.45);
+}
+
+.deltaValue {
+    font-weight: 700;
+    font-size: 14px;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    justify-self: end;
+}
+
+
+.detailsBody {
+    display: grid;
+    gap: 16px;
+}
+
+.backButton {
+    justify-self: flex-start;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    border-radius: var(--r12);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    background: rgba(12, 16, 24, 0.55);
+    cursor: pointer;
+    font-size: 12px;
+    color: rgba(230, 234, 240, 0.9);
+    transition: color 160ms ease, background 160ms ease, border-color 160ms ease;
+}
+
+.backButton:hover {
+    color: rgba(230, 234, 240, 1);
+    background: rgba(20, 28, 38, 0.8);
+    border-color: rgba(255, 255, 255, 0.28);
+}
+
+.backButton:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+}
+
+.backIcon {
+    width: 14px;
+    height: 14px;
+}
+
+.inlineError {
+    padding: 10px 12px;
+    border-radius: var(--r12);
+    background: rgba(255, 77, 79, 0.12);
+    border: 1px solid rgba(255, 77, 79, 0.35);
+    color: rgba(255, 212, 213, 0.9);
+    font-size: 12px;
+}
+
+.teamGrid {
+    display: grid;
+    gap: 16px;
+    grid-template-columns: 1fr;
+    align-items: start;
+}
+
+.spellGraph {
+    display: grid;
+    gap: var(--spell-row-gap, 6px);
+    min-width: 0;
+}
+
+.spellGraphShell {
+    max-height: var(--spell-list-max-height, 52vh);
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-right: 6px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+}
+
+.spellNote {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 12px;
+    color: rgba(230, 234, 240, 0.65);
+    background: rgba(12, 16, 24, 0.4);
+    border-radius: var(--r12);
+    padding: 8px 10px;
+    border-left: 2px solid rgba(124, 242, 194, 0.6);
+}
+
+.spellNoteIcon {
+    width: 14px;
+    height: 14px;
+    flex: 0 0 auto;
+    color: rgba(230, 234, 240, 0.6);
+    margin-top: 1px;
+}
+
+.spellGraphShell::-webkit-scrollbar {
+    width: var(--spell-scrollbar-size, 6px);
+}
+
+.spellGraphShell::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.06);
+    border-radius: 999px;
+}
+
+.spellGraphShell::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.16);
+    border-radius: 999px;
+}
+
+.spellGraphShell::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.28);
+}
+
+.spellRow {
+    display: grid;
+    grid-template-columns: minmax(220px, 1.2fr) minmax(180px, 2fr) 48px;
+    gap: 16px;
+    align-items: center;
+    position: relative;
+    padding: var(--spell-row-padding, 4px 0);
+    border-radius: 10px;
+    transition: background 140ms ease;
+}
+
+.spellRow:hover {
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.spellRow:hover .spellBarFill {
+    opacity: 0.72;
+}
+
+.spellRow:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 4px;
+}
+
+.spellInfo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+}
+
+.spellIcon,
+.spellIconFallback {
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    display: grid;
+    place-items: center;
+    font-size: 12px;
+    font-weight: 700;
+    color: rgba(230, 234, 240, 0.85);
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.spellIcon {
+    object-fit: cover;
+}
+
+.spellName {
+    font-size: 13px;
+    font-weight: 600;
+    color: rgba(230, 234, 240, 0.9);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.spellBarTrack {
+    width: 100%;
+    height: var(--spell-bar-height, 5px);
+    background: rgba(255, 255, 255, 0.06);
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+.spellBarFill {
+    height: 100%;
+    display: flex;
+    border-radius: inherit;
+    overflow: hidden;
+    opacity: 0.6;
+    transform-origin: left;
+    animation: spellBarFill 320ms ease;
+}
+
+.spellSeg {
+    height: 100%;
+}
+
+.spellSegSuccess {
+    background: var(--good);
+}
+
+.spellSegFail {
+    background: var(--bad);
+}
+
+.spellSegInterrupt {
+    background: var(--warn);
+}
+
+.spellCount {
+    font-size: 12px;
+    color: rgba(230, 234, 240, 0.7);
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.spellTooltip {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 6px);
+    background: rgba(18, 24, 33, 0.95);
+    color: rgba(230, 234, 240, 0.9);
+    padding: 10px 12px;
+    border-radius: 12px;
+    font-size: 12px;
+    display: grid;
+    gap: 6px;
+    opacity: 0;
+    transform: translateY(-4px);
+    transition: opacity 140ms ease, transform 140ms ease;
+    pointer-events: none;
+    min-width: 200px;
+    z-index: 10;
+}
+
+.spellRow:hover .spellTooltip,
+.spellRow:focus-within .spellTooltip {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.spellTooltipTitle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+}
+
+.spellTooltipIcon {
+    width: 18px;
+    height: 18px;
+    border-radius: 4px;
+    object-fit: cover;
+}
+
+.spellTooltipRow {
+    display: flex;
+    justify-content: space-between;
+    color: rgba(230, 234, 240, 0.7);
+}
+
+.debugInspector {
+    margin-top: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: var(--r12);
+    padding: 12px;
+    display: grid;
+    gap: 12px;
+    background: rgba(12, 16, 24, 0.4);
+}
+
+.debugHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.debugTitle {
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.debugSubtitle {
+    font-size: 12px;
+    color: var(--muted);
+}
+
+.debugSelector {
+    display: grid;
+    gap: 6px;
+}
+
+.debugNotice {
+    font-size: 11px;
+    color: rgba(230, 234, 240, 0.75);
+    max-width: 320px;
+    background: rgba(12, 16, 24, 0.4);
+    border-radius: var(--r12);
+    padding: 8px 10px;
+    border-left: 2px solid rgba(124, 242, 194, 0.6);
+}
+
+.debugLabel {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--muted);
+}
+
+.debugSelect {
+    height: 34px;
+    border-radius: var(--r10);
+    border: 1px solid var(--stroke2);
+    background: rgba(12, 16, 24, 0.85);
+    color: var(--text);
+    padding: 4px 8px;
+    font-size: 12px;
+}
+
+.debugSpellName {
+    font-size: 12px;
+    color: rgba(230, 234, 240, 0.8);
+}
+
+.debugGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 16px;
+}
+
+.debugPane {
+    display: grid;
+    gap: 10px;
+}
+
+.debugPaneTitle {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--muted);
+}
+
+.debugList {
+    display: grid;
+    gap: 8px;
+}
+
+.debugRow {
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    padding: 8px 10px;
+    display: grid;
+    gap: 4px;
+    background: rgba(12, 16, 24, 0.6);
+    font-size: 12px;
+}
+
+.debugRowActive {
+    border-color: rgba(124, 242, 194, 0.5);
+    background: rgba(124, 242, 194, 0.08);
+}
+
+.debugRow_succeeded {
+    border-left: 3px solid var(--result-win);
+}
+
+.debugRow_failed,
+.debugRow_failed_quiet {
+    border-left: 3px solid var(--result-loss);
+}
+
+.debugRow_interrupted {
+    border-left: 3px solid #f5a85b;
+}
+
+.debugRow_unresolved {
+    border-left: 3px solid rgba(230, 234, 240, 0.3);
+}
+
+.debugRow_collapsed {
+    border-left: 3px solid rgba(230, 234, 240, 0.45);
+}
+
+.debugRow_ignored {
+    border-left: 3px solid rgba(230, 234, 240, 0.25);
+    color: rgba(230, 234, 240, 0.55);
+}
+
+.debugTime {
+    font-variant-numeric: tabular-nums;
+    color: rgba(230, 234, 240, 0.7);
+}
+
+.debugEvent {
+    font-weight: 600;
+}
+
+.debugGuid {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: rgba(230, 234, 240, 0.6);
+    word-break: break-all;
+}
+
+.debugTag {
+    font-size: 11px;
+    color: rgba(230, 234, 240, 0.6);
+}
+
+.debugAttemptHeader {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.debugOutcome {
+    font-weight: 700;
+}
+
+.debugMeta {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    color: rgba(230, 234, 240, 0.65);
+    font-size: 11px;
+}
+
+.debugExplanation {
+    font-size: 11px;
+    color: rgba(230, 234, 240, 0.7);
+}
+
+.detailsEmpty {
+    text-align: center;
+    padding: 48px 20px;
+    color: rgba(230, 234, 240, 0.75);
+}
+
+.detailsEmpty h3 {
+    margin: 0 0 8px;
+    font-size: 16px;
+}
+
+.detailsSkeleton {
+    height: 260px;
+    border-radius: var(--r20);
+    background: linear-gradient(
+        90deg,
+        rgba(255, 255, 255, 0.04) 0%,
+        rgba(255, 255, 255, 0.12) 45%,
+        rgba(255, 255, 255, 0.04) 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.4s ease infinite;
+}
+
+.skeletonList {
+    display: grid;
+    gap: 10px;
+}
+
+.skeletonRow {
+    height: 56px;
+    border-radius: var(--r16);
+    background: linear-gradient(
+        90deg,
+        rgba(255, 255, 255, 0.04) 0%,
+        rgba(255, 255, 255, 0.1) 50%,
+        rgba(255, 255, 255, 0.04) 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.4s ease infinite;
+}
+
+@keyframes shimmer {
+    0% {
+        background-position: 0% 0%;
+    }
+    100% {
+        background-position: -200% 0%;
+    }
+}
+
+@keyframes viewFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes spellBarFill {
+    from {
+        transform: scaleX(0.2);
+        opacity: 0.35;
+    }
+    to {
+        transform: scaleX(1);
+        opacity: 0.6;
+    }
+}
+
+.deltaPositive {
+    color: var(--result-win);
+}
+
+.deltaNegative {
+    color: var(--result-loss);
+}
+
+.deltaNeutral {
+    color: var(--result-neutral);
+}
+
+.tables {
+    display: grid;
+    gap: 16px;
+}
+
+.teamBox {
+    background: var(--table-bg);
+    padding: 18px;
+    border-radius: var(--r20);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: var(--shadow2);
+    display: grid;
+    gap: 12px;
+    width: 100%;
+}
+
+.teamTitle {
+    text-align: center;
+    font-size: 15px;
+    font-weight: 800;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+
+.tableWrap {
+    overflow-x: auto;
+}
+
+.table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    min-width: 900px;
+    font-size: 12px;
+    color: rgba(230, 234, 240, 0.92);
+}
+
+.table thead th {
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(18, 24, 33, 0.92);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.table tbody td {
+    padding: 10px 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.tableRow {
+    transition: background 160ms ease;
+}
+
+.table tbody tr {
+    background: var(--table-row);
+}
+
+.table tbody tr:nth-child(even) {
+    background: var(--table-row-alt);
+}
+
+.table tbody tr:hover {
+    background: var(--table-row-hover);
+}
+
+.tableRowClickable {
+    cursor: pointer;
+}
+
+.tableRowClickable:focus-visible {
+    outline: 2px solid rgba(124, 242, 194, 0.55);
+    outline-offset: -2px;
+}
+
+.playerCell {
+    font-weight: 600;
+}
+
+.owner {
+    font-weight: 700;
+}
+
+.deltaCell {
+    font-weight: 650;
+}
+
+.mssBox {
+    background: var(--table-bg);
+    padding: 18px;
+    border-radius: var(--r20);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: var(--shadow2);
+    display: grid;
+    gap: 12px;
+}
+
+@media (max-width: 900px) {
+    .filtersBar {
+        align-items: flex-start;
+    }
+
+    .filtersLeft {
+        grid-template-columns: 1fr;
+    }
+
+    .filterInput,
+    .filterSelect {
+        min-width: 180px;
+    }
+
+    .teamGrid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .historyRow,
+    .ghostButton,
+    .tableRow,
+    .spellTooltip {
+        transition: none;
+    }
+
+    .skeletonRow,
+    .detailsSkeleton {
+        animation: none;
+    }
+
+    .viewPanel {
+        animation: none;
+    }
+}

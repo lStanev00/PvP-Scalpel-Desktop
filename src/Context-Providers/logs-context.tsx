@@ -15,16 +15,21 @@ export const LogsProvider = ({ children }: { children: ReactNode }) => {
     useEffect(() => {
         let active = true;
         let unlisten: (() => void) | null = null;
+        let poll: number | null = null;
 
-        invoke<string[]>("get_logs")
-            .then((stored) => {
-                if (active && Array.isArray(stored)) {
-                    setLogs(stored.slice(-MAX_LOGS));
-                }
-            })
-            .catch(() => {
-                // Ignore log fetch failures.
-            });
+        const refreshLogs = () => {
+            invoke<string[]>("get_logs")
+                .then((stored) => {
+                    if (active && Array.isArray(stored)) {
+                        setLogs(stored.slice(-MAX_LOGS));
+                    }
+                })
+                .catch(() => {
+                    // Ignore log fetch failures.
+                });
+        };
+
+        refreshLogs();
 
         listen<string>("app-log", ({ payload }) => {
             if (!active) return;
@@ -44,9 +49,14 @@ export const LogsProvider = ({ children }: { children: ReactNode }) => {
                 // Ignore log listener failures.
             });
 
+        poll = window.setInterval(refreshLogs, 5000);
+
         return () => {
             active = false;
             if (unlisten) unlisten();
+            if (poll !== null) {
+                window.clearInterval(poll);
+            }
         };
     }, []);
 

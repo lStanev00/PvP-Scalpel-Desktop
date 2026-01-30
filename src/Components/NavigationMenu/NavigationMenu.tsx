@@ -12,7 +12,7 @@ import styles from "./NavigationMenu.module.css";
 
 const navItems = [
     { label: "Dashboard", to: "/dashboard", icon: <LuLayoutGrid /> },
-    { label: "Data & Activity", to: "/data", icon: <LuDatabase /> },
+    { label: "Match History", to: "/data", icon: <LuDatabase /> },
     { label: "Logs", to: "/logs", icon: <LuFileText /> },
     { label: "Settings", to: "/settings", icon: <LuSettings /> },
     { label: "About", to: "/about", icon: <LuInfo /> },
@@ -53,6 +53,11 @@ export default function NavigationMenu({ collapsed, onToggle }: NavigationMenuPr
                             `${styles.link} ${isActive ? styles.active : ""}`
                         }
                         aria-label={collapsed ? item.label : undefined}
+                        onClick={() => {
+                            if (item.to === "/data") {
+                                window.dispatchEvent(new CustomEvent("match-history-reset"));
+                            }
+                        }}
                     >
                         <span className={styles.icon}>{item.icon}</span>
                         <span className={styles.label}>{item.label}</span>

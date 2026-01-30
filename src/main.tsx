@@ -5,6 +5,8 @@ import { MatchesProvider } from "./Context-Providers/matches-context";
 import { PreferencesProvider } from "./Context-Providers/preferences-context";
 import { AppInfoProvider } from "./Context-Providers/app-info-context";
 import { LogsProvider } from "./Context-Providers/logs-context";
+import { SpellDataProvider } from "./Context-Providers/spell-data-context";
+import CombatSpecsProvider from "./Context-Providers/combat-specs-context";
 import "./main.css";
 
 const root = document.getElementById("root");
@@ -16,7 +18,11 @@ if (root) {
                 <AppInfoProvider>
                     <LogsProvider>
                         <MatchesProvider>
-                            <App />
+                            <SpellDataProvider>
+                                <CombatSpecsProvider>
+                                    <App />
+                                </CombatSpecsProvider>
+                            </SpellDataProvider>
                         </MatchesProvider>
                     </LogsProvider>
                 </AppInfoProvider>
