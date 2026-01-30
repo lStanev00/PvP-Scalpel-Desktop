@@ -1,19 +1,6 @@
 import type { SpellDataBucket, SpellDataEntry, SpellDataType } from "../Interfaces/spell-data";
 
-export type ClassId =
-    | "WARRIOR"
-    | "PALADIN"
-    | "HUNTER"
-    | "ROGUE"
-    | "PRIEST"
-    | "DEATHKNIGHT"
-    | "SHAMAN"
-    | "MAGE"
-    | "WARLOCK"
-    | "MONK"
-    | "DRUID"
-    | "DEMONHUNTER"
-    | "EVOKER";
+export type ClassId = string;
 
 export type CombatRole = "tank" | "healer" | "dps" | "unknown";
 
@@ -24,7 +11,7 @@ export type DamageType = "MELEE_PHYSICAL" | "RANGED_PHYSICAL" | "RANGED_MAGIC" |
 export interface ClassMetadata {
     id: ClassId;
     name: string;
-    color: string;
+    color?: string;
 }
 
 export interface SpellContext {
@@ -41,61 +28,27 @@ export interface SpellContext {
     damageType?: DamageType;
 }
 
-export const classMetadataMap: Record<ClassId, ClassMetadata> = {
-    WARRIOR: { id: "WARRIOR", name: "Warrior", color: "#C79C6E" },
-    PALADIN: { id: "PALADIN", name: "Paladin", color: "#F58CBA" },
-    HUNTER: { id: "HUNTER", name: "Hunter", color: "#ABD473" },
-    ROGUE: { id: "ROGUE", name: "Rogue", color: "#FFF569" },
-    PRIEST: { id: "PRIEST", name: "Priest", color: "#FFFFFF" },
-    DEATHKNIGHT: { id: "DEATHKNIGHT", name: "Death Knight", color: "#C41F3B" },
-    SHAMAN: { id: "SHAMAN", name: "Shaman", color: "#0070DE" },
-    MAGE: { id: "MAGE", name: "Mage", color: "#69CCF0" },
-    WARLOCK: { id: "WARLOCK", name: "Warlock", color: "#9482C9" },
-    MONK: { id: "MONK", name: "Monk", color: "#00FF96" },
-    DRUID: { id: "DRUID", name: "Druid", color: "#FF7D0A" },
-    DEMONHUNTER: { id: "DEMONHUNTER", name: "Demon Hunter", color: "#A330C9" },
-    EVOKER: { id: "EVOKER", name: "Evoker", color: "#33937F" },
+export let classMetadataMap: Record<ClassId, ClassMetadata> = {};
+
+const fallbackClassColors: Record<string, string> = {
+    WARRIOR: "#C79C6E",
+    PALADIN: "#F58CBA",
+    HUNTER: "#ABD473",
+    ROGUE: "#FFF569",
+    PRIEST: "#FFFFFF",
+    DEATHKNIGHT: "#C41F3B",
+    SHAMAN: "#0070DE",
+    MAGE: "#69CCF0",
+    WARLOCK: "#9482C9",
+    MONK: "#00FF96",
+    DRUID: "#FF7D0A",
+    DEMONHUNTER: "#A330C9",
+    EVOKER: "#33937F",
 };
 
-export const specToRoleMap: Record<string, CombatRole> = {
-    protection: "tank",
-    blood: "tank",
-    guardian: "tank",
-    brewmaster: "tank",
-    vengeance: "tank",
-    holy: "healer",
-    discipline: "healer",
-    restoration: "healer",
-    mistweaver: "healer",
-    preservation: "healer",
-    arms: "dps",
-    fury: "dps",
-    frost: "dps",
-    unholy: "dps",
-    havoc: "dps",
-    enhancement: "dps",
-    elemental: "dps",
-    shadow: "dps",
-    windwalker: "dps",
-    balance: "dps",
-    feral: "dps",
-    retribution: "dps",
-    devastation: "dps",
-    augmentation: "dps",
-    beastmastery: "dps",
-    marksman: "dps",
-    marksmanship: "dps",
-    survival: "dps",
-    arcane: "dps",
-    fire: "dps",
-    frostfire: "dps",
-    assassination: "dps",
-    outlaw: "dps",
-    subtlety: "dps",
-    affliction: "dps",
-    demonology: "dps",
-    destruction: "dps",
-};
+export const specToRoleMap: Record<string, CombatRole> = {};
+
+let dynamicSpecRoleMap: Record<string, CombatRole> = {};
 
 export const specToDamageTypeMap: Record<string, DamageType> = {};
 
@@ -130,14 +83,14 @@ const normalizeClassId = (classId?: string) => {
 
 export const getClassColor = (classId?: string) => {
     if (!classId) return undefined;
-    const key = normalizeClassId(classId) as ClassId;
+    const key = normalizeClassId(classId);
     return classMetadataMap[key]?.color;
 };
 
 export const getRoleBySpec = (spec?: string): CombatRole => {
     if (!spec) return "unknown";
     const key = normalizeSpec(spec);
-    return specToRoleMap[key] ?? "unknown";
+    return dynamicSpecRoleMap[key] ?? "unknown";
 };
 
 export const getRoleByClassAndSpec = (classId?: string, spec?: string): CombatRole => {
@@ -145,6 +98,28 @@ export const getRoleByClassAndSpec = (classId?: string, spec?: string): CombatRo
     if (role !== "unknown") return role;
     if (!classId) return "unknown";
     return "unknown";
+};
+
+export const setSpecRoleMappings = (entries: Array<{ name: string; role: CombatRole }>) => {
+    dynamicSpecRoleMap = {};
+    entries.forEach((entry) => {
+        const key = normalizeSpec(entry.name);
+        if (!key) return;
+        dynamicSpecRoleMap[key] = entry.role;
+    });
+};
+
+export const setClassMappings = (entries: Array<{ name: string; color?: string }>) => {
+    classMetadataMap = {};
+    entries.forEach((entry) => {
+        const key = normalizeClassId(entry.name);
+        if (!key) return;
+        classMetadataMap[key] = {
+            id: key,
+            name: entry.name,
+            color: entry.color ?? fallbackClassColors[key],
+        };
+    });
 };
 
 export const getDamageTypeBySpec = (spec?: string): DamageType => {
