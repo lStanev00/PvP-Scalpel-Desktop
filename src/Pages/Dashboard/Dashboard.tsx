@@ -13,9 +13,11 @@ export default function Dashboard() {
     const totalMatches = matches.length;
     const latestMatch = totalMatches > 0 ? matches[totalMatches - 1] : null;
     const owner = latestMatch?.players.find((player) => player.isOwner);
+    const prematch = owner?.prematchMMR ?? null;
+    const postmatch = owner?.postmatchMMR ?? null;
     const ratingDelta =
-        owner && owner.postmatchMMR !== null && owner.prematchMMR !== null
-            ? owner.postmatchMMR - owner.prematchMMR
+        typeof prematch === "number" && typeof postmatch === "number"
+            ? postmatch - prematch
             : null;
     const ratingTone =
         ratingDelta === null ? "info" : ratingDelta < 0 ? "bad" : "good";

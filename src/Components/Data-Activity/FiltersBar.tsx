@@ -5,7 +5,6 @@ import type { MatchFilters, MatchMode } from "./utils";
 interface FiltersBarProps {
     filters: MatchFilters;
     onChange: (next: MatchFilters) => void;
-    total: number;
     modeOptions: Array<{ label: string; value: MatchMode | "all" }>;
     characterOptions: Array<{ label: string; value: string | "all" }>;
 }
