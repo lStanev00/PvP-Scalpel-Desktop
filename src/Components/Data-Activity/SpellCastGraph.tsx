@@ -70,7 +70,9 @@ export default function SpellCastGraph({ timeline }: SpellCastGraphProps) {
     const spellData = useSpellData();
     const { httpFetch } = useUserContext();
     const [spellCache, setSpellCache] = useState<SpellCacheMap>(() => loadSpellCache());
+    const [isFetching, setIsFetching] = useState(false);
     const inFlight = useRef<Set<number>>(new Set());
+    const pendingFetches = useRef(0);
 
     const { resolvedAttempts } = useMemo(() => resolveIntentAttempts(timeline), [timeline]);
 
@@ -87,37 +89,45 @@ export default function SpellCastGraph({ timeline }: SpellCastGraphProps) {
         if (!missing.length) return;
 
         missing.forEach((id) => inFlight.current.add(id));
+        pendingFetches.current += 1;
+        setIsFetching(true);
         let cancelled = false;
 
         const fetchSpells = async () => {
-            const res = await httpFetch("/game/spells", {
-                method: "POST",
-                body: JSON.stringify({ ids: missing }),
-            });
-            if (!res.ok || !res.data || cancelled) {
-                missing.forEach((id) => inFlight.current.delete(id));
-                return;
-            }
-            const payload = extractSpellPayload(res.data);
-            setSpellCache((prev) => {
-                const next: SpellCacheMap = { ...prev };
-                const returned = new Set<number>();
-                if (payload) {
-                    payload.forEach((entry) => {
-                        if (typeof entry?._id !== "number") return;
-                        next[String(entry._id)] = entry;
-                        returned.add(entry._id);
-                    });
-                }
-                missing.forEach((id) => {
-                    if (!returned.has(id)) {
-                        next[String(id)] = null;
-                    }
+            try {
+                const res = await httpFetch("/game/spells", {
+                    method: "POST",
+                    body: JSON.stringify({ ids: missing }),
                 });
-                saveSpellCache(next);
-                return next;
-            });
-            missing.forEach((id) => inFlight.current.delete(id));
+                if (!res.ok || !res.data || cancelled) {
+                    return;
+                }
+                const payload = extractSpellPayload(res.data);
+                setSpellCache((prev) => {
+                    const next: SpellCacheMap = { ...prev };
+                    const returned = new Set<number>();
+                    if (payload) {
+                        payload.forEach((entry) => {
+                            if (typeof entry?._id !== "number") return;
+                            next[String(entry._id)] = entry;
+                            returned.add(entry._id);
+                        });
+                    }
+                    missing.forEach((id) => {
+                        if (!returned.has(id)) {
+                            next[String(id)] = null;
+                        }
+                    });
+                    saveSpellCache(next);
+                    return next;
+                });
+            } finally {
+                missing.forEach((id) => inFlight.current.delete(id));
+                pendingFetches.current = Math.max(0, pendingFetches.current - 1);
+                if (pendingFetches.current === 0 && !cancelled) {
+                    setIsFetching(false);
+                }
+            }
         };
 
         void fetchSpells();
@@ -165,7 +175,16 @@ export default function SpellCastGraph({ timeline }: SpellCastGraphProps) {
         return items;
     }, [resolvedAttempts, spellCache, spellData]);
 
-    if (rows.length === 0) return null;
+    if (rows.length === 0) {
+        return isFetching ? (
+            <div className={styles.spellGraphShell}>
+                <div className={styles.spellFetchNotice}>
+                    <div className={styles.spellFetchTitle}>Retrieving spell data</div>
+                    <div className={styles.spellFetchSpinner} aria-hidden="true" />
+                </div>
+            </div>
+        ) : null;
+    }
 
     const maxTotal = rows[0]?.total ?? 1;
 
@@ -182,6 +201,12 @@ export default function SpellCastGraph({ timeline }: SpellCastGraphProps) {
 
     return (
         <div className={styles.spellGraphShell}>
+            {isFetching ? (
+                <div className={styles.spellFetchNotice}>
+                    <div className={styles.spellFetchTitle}>Retrieving spell data</div>
+                    <div className={styles.spellFetchSpinner} aria-hidden="true" />
+                </div>
+            ) : null}
             <div className={styles.spellGraph}>
                 {rows.map((row) => {
                     const barWidth = `${(row.total / maxTotal) * 100}%`;
