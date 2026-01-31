@@ -86,13 +86,16 @@ export default function MatchDetailsPanel({ match, isLoading, onBack }: MatchDet
                     </span>
                 </div>
                 <SpellCastGraph timeline={content.timeline} />
-                <div className={styles.spellNote}>
-                    <LuInfo className={styles.spellNoteIcon} aria-hidden="true" />
-                    <span>
-                        Temporary development tool used to validate spell-cast logic. This module
-                        will be replaced with user-facing insights in future updates.
-                    </span>
-                </div>
+
+                {showDebug ? (
+                    <div className={styles.spellNote}>
+                        <LuInfo className={styles.spellNoteIcon} aria-hidden="true" />
+                        <span>
+                            Temporary development tool used to validate spell-cast logic. This
+                            module will be replaced with user-facing insights in future updates.
+                        </span>
+                    </div>
+                ) : null}
                 {showDebug ? <DebugSpellInspector timeline={content.timeline} /> : null}
             </div>
         </section>
