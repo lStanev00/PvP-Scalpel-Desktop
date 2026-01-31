@@ -435,6 +435,33 @@
     scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
 }
 
+.spellFetchNotice {
+    font-size: 13px;
+    font-weight: 600;
+    color: rgba(230, 234, 240, 0.8);
+    padding: 12px 12px 14px;
+    margin-bottom: 10px;
+    background: rgba(12, 16, 24, 0.45);
+    border-radius: var(--r12);
+    display: grid;
+    justify-items: center;
+    gap: 10px;
+    text-align: center;
+}
+
+.spellFetchTitle {
+    letter-spacing: 0.3px;
+}
+
+.spellFetchSpinner {
+    width: 28px;
+    height: 28px;
+    border-radius: 999px;
+    border: 3px solid rgba(230, 234, 240, 0.25);
+    border-top-color: rgba(230, 234, 240, 0.85);
+    animation: spin 900ms linear infinite;
+}
+
 .spellNote {
     display: flex;
     align-items: flex-start;
@@ -851,6 +878,12 @@
     }
 }
 
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
 @keyframes spellBarFill {
     from {
         transform: scaleX(0.2);
@@ -907,6 +940,7 @@
     border-collapse: separate;
     border-spacing: 0;
     min-width: 900px;
+    table-layout: fixed;
     font-size: 12px;
     color: rgba(230, 234, 240, 0.92);
 }

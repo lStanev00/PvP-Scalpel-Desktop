@@ -1,4 +1,4 @@
-﻿import { useMemo } from "react";
+import { useMemo } from "react";
 import { LuArrowLeft, LuInfo } from "react-icons/lu";
 import TeamTable from "./TeamTable";
 import MSSStatsSection from "./MSSStatsSection";
@@ -22,6 +22,11 @@ export default function MatchDetailsPanel({ match, isLoading, onBack }: MatchDet
         const isSoloShuffle = (match.raw.matchDetails?.format ?? "")
             .toLowerCase()
             .includes("solo shuffle");
+        const showRating =
+            match.mode === "solo" ||
+            match.mode === "rated2" ||
+            match.mode === "rated3" ||
+            match.mode === "rbg";
         const alliance = players.filter((p) => p.faction === 0);
         const horde = players.filter((p) => p.faction === 1);
         const showFactions = !isSoloShuffle && alliance.length > 0 && horde.length > 0;
@@ -35,6 +40,7 @@ export default function MatchDetailsPanel({ match, isLoading, onBack }: MatchDet
             horde,
             showFactions,
             playersTitle,
+            showRating,
         };
     }, [match]);
 
@@ -70,11 +76,11 @@ export default function MatchDetailsPanel({ match, isLoading, onBack }: MatchDet
             <div className={styles.detailsBody}>
                 {content.showFactions ? (
                     <div className={styles.teamGrid}>
-                        <TeamTable title="Alliance" players={content.alliance} />
-                        <TeamTable title="Horde" players={content.horde} />
+                        <TeamTable title="Alliance" players={content.alliance} showRating={content.showRating} />
+                        <TeamTable title="Horde" players={content.horde} showRating={content.showRating} />
                     </div>
                 ) : (
-                    <TeamTable title={content.playersTitle} players={content.players} />
+                    <TeamTable title={content.playersTitle} players={content.players} showRating={content.showRating} />
                 )}
 
                 <MSSStatsSection players={content.players} />
@@ -86,15 +92,19 @@ export default function MatchDetailsPanel({ match, isLoading, onBack }: MatchDet
                     </span>
                 </div>
                 <SpellCastGraph timeline={content.timeline} />
-                <div className={styles.spellNote}>
-                    <LuInfo className={styles.spellNoteIcon} aria-hidden="true" />
-                    <span>
-                        Temporary development tool used to validate spell-cast logic. This module
-                        will be replaced with user-facing insights in future updates.
-                    </span>
-                </div>
+
+                {showDebug ? (
+                    <div className={styles.spellNote}>
+                        <LuInfo className={styles.spellNoteIcon} aria-hidden="true" />
+                        <span>
+                            Temporary development tool used to validate spell-cast logic. This
+                            module will be replaced with user-facing insights in future updates.
+                        </span>
+                    </div>
+                ) : null}
                 {showDebug ? <DebugSpellInspector timeline={content.timeline} /> : null}
             </div>
         </section>
     );
 }
+

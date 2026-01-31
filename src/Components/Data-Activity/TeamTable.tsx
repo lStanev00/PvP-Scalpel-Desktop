@@ -7,9 +7,10 @@ import styles from "./DataActivity.module.css";
 interface TeamTableProps {
     title: string;
     players: MatchPlayer[];
+    showRating?: boolean;
 }
 
-export default function TeamTable({ title, players }: TeamTableProps) {
+export default function TeamTable({ title, players, showRating = true }: TeamTableProps) {
     const { webUrl } = useUserContext();
 
     const formatClass = (c?: string) => (c ? c[0].toUpperCase() + c.slice(1).toLowerCase() : "-");
@@ -28,6 +29,19 @@ export default function TeamTable({ title, players }: TeamTableProps) {
         return typeof pre === "number" && typeof post === "number" && post - pre !== 0;
     });
 
+    const columns: Array<{ label: string; width: string }> = [
+        { label: "Player", width: "160px" },
+        { label: "Spec(Class)", width: "200px" },
+        { label: "Kills", width: "80px" },
+        { label: "Deaths", width: "80px" },
+        { label: "Damage", width: "120px" },
+        { label: "Healing", width: "120px" },
+    ];
+    if (showPreMMR) columns.push({ label: "Pre-MMR", width: "90px" });
+    if (showPostMMR) columns.push({ label: "Post-MMR", width: "90px" });
+    if (showMMRDelta) columns.push({ label: "MMR", width: "80px" });
+    if (showRating) columns.push({ label: "Rating", width: "90px" });
+
     const handleRowAction = (realm?: string, name?: string) => {
         if (!realm || !name) return;
         openUrl(`${webUrl}/check/eu/${realm}/${name}`);
@@ -38,18 +52,16 @@ export default function TeamTable({ title, players }: TeamTableProps) {
             <h3 className={styles.teamTitle}>{title}</h3>
             <div className={styles.tableWrap}>
                 <table className={styles.table}>
+                    <colgroup>
+                        {columns.map((column) => (
+                            <col key={column.label} style={{ width: column.width }} />
+                        ))}
+                    </colgroup>
                     <thead>
                         <tr>
-                            <th>Player</th>
-                            <th>Spec(Class)</th>
-                            <th>Kills</th>
-                            <th>Deaths</th>
-                            <th>Damage</th>
-                            <th>Healing</th>
-                            {showPreMMR ? <th>Pre-MMR</th> : null}
-                            {showPostMMR ? <th>Post-MMR</th> : null}
-                            {showMMRDelta ? <th>MMR</th> : null}
-                            <th>Rating</th>
+                            {columns.map((column) => (
+                                <th key={column.label}>{column.label}</th>
+                            ))}
                         </tr>
                     </thead>
                     <tbody>
@@ -106,10 +118,12 @@ export default function TeamTable({ title, players }: TeamTableProps) {
                                             {delta > 0 ? `+${delta}` : delta}
                                         </td>
                                     ) : null}
-                                    <td>
-                                        {ratingText}
-                                        {changeText}
-                                    </td>
+                                    {showRating ? (
+                                        <td>
+                                            {ratingText}
+                                            {changeText}
+                                        </td>
+                                    ) : null}
                                 </tr>
                             );
                         })}
@@ -119,3 +133,4 @@ export default function TeamTable({ title, players }: TeamTableProps) {
         </div>
     );
 }
+
