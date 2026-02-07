@@ -420,12 +420,6 @@
     align-items: start;
 }
 
-@media (min-width: 1120px) {
-    .teamGrid {
-        grid-template-columns: 1fr 1fr;
-    }
-}
-
 /* Spell analytics panel (analytics surface, not a themed widget). */
 .spells-panel {
     background: rgba(12, 18, 28, 0.75);
