@@ -13,7 +13,10 @@ interface TopBarProps {
 
 export default function TopBar({ onMinimize, onMaximize, onClose }: TopBarProps) {
     const { user } = useUserContext();
-    const identity = user?.email ?? "Session active";
+    const identity =
+        user?.username ??
+        (user?.email ? user.email.split("@")[0] : null) ??
+        "Session active";
 
     const handleHeaderDrag = async (event: MouseEvent<HTMLElement>) => {
         if (event.button !== 0) return;

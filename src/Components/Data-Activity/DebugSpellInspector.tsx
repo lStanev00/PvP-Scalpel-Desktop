@@ -1,12 +1,22 @@
-﻿import { useMemo, useState } from "react";
-import useSpellData from "../../Hooks/useSpellData";
-import { getSpellContext } from "../../Domain/CombatDomainContext";
+import { useEffect, useMemo, useRef, useState } from "react";
+import useUserContext from "../../Hooks/useUserContext";
+import {
+    extractSpellPayload,
+    getGameSpellMap,
+    isRenderableSpellMeta,
+    loadSpellMetaCache,
+    normalizeGameVersionKey,
+    saveSpellMetaCache,
+    upsertGameSpells,
+    type SpellMetaCache,
+} from "../../Domain/spellMetaCache";
 import type { MatchTimelineEntry } from "./types";
 import { resolveIntentAttempts, type AttemptRecord, type NormalizedEvent } from "./spellCastResolver";
 import styles from "./DataActivity.module.css";
 
 interface DebugSpellInspectorProps {
     timeline: MatchTimelineEntry[];
+    gameVersion?: string | null;
 }
 
 type EventStatus = "outcome" | "collapsed" | "ignored" | "unresolved";
@@ -20,7 +30,9 @@ const getAttemptExplanation = (attempt: AttemptRecord) => {
     }
     const outcome = attempt.resolvedOutcome.toUpperCase();
     if (outcomes.length === 1) {
-        const count = attempt.events.filter((event) => event.event === attempt.resolvedOutcome?.toUpperCase()).length;
+        const count = attempt.events.filter(
+            (event) => event.event === attempt.resolvedOutcome?.toUpperCase()
+        ).length;
         if (count > 1) {
             return `${count} ${outcome} events collapsed -> 1 ${outcome} attempt`;
         }
@@ -42,14 +54,24 @@ const getEventStatus = (event: NormalizedEvent, attempt?: AttemptRecord): EventS
     if (!attempt || !attempt.resolvedOutcome) return "unresolved";
     const outcome = event.event.toLowerCase();
     if (outcome === attempt.resolvedOutcome) return "outcome";
-    if (outcome === "succeeded" || outcome === "failed" || outcome === "failed_quiet" || outcome === "interrupted") {
+    if (
+        outcome === "succeeded" ||
+        outcome === "failed" ||
+        outcome === "failed_quiet" ||
+        outcome === "interrupted"
+    ) {
         return "collapsed";
     }
     return "ignored";
 };
 
-export default function DebugSpellInspector({ timeline }: DebugSpellInspectorProps) {
-    const spellData = useSpellData();
+export default function DebugSpellInspector({ timeline, gameVersion }: DebugSpellInspectorProps) {
+    const { httpFetch } = useUserContext();
+    const gameKey = useMemo(() => normalizeGameVersionKey(gameVersion), [gameVersion]);
+    const [spellCache, setSpellCache] = useState<SpellMetaCache>(() => loadSpellMetaCache());
+    const [isFetching, setIsFetching] = useState(false);
+    const inFlight = useRef<Set<string>>(new Set());
+
     const { rawEvents, attempts, eventToAttemptId } = useMemo(
         () => resolveIntentAttempts(timeline),
         [timeline]
@@ -64,11 +86,57 @@ export default function DebugSpellInspector({ timeline }: DebugSpellInspectorPro
     const [hoveredAttempt, setHoveredAttempt] = useState<string | null>(null);
     const [hoveredEvent, setHoveredEvent] = useState<number | null>(null);
 
+    useEffect(() => {
+        if (selectedSpell === null) return;
+        const gameMap = getGameSpellMap(spellCache, gameKey);
+        const key = `${gameKey}:${selectedSpell}`;
+        if (String(selectedSpell) in gameMap || inFlight.current.has(key)) return;
+
+        inFlight.current.add(key);
+        setIsFetching(true);
+        let cancelled = false;
+
+        const fetchSelectedSpell = async () => {
+            try {
+                const res = await httpFetch("/game/spells", {
+                    method: "POST",
+                    body: JSON.stringify({ ids: [selectedSpell] }),
+                });
+
+                if (!res.ok || !res.data || cancelled) return;
+
+                const payload = extractSpellPayload(res.data);
+                setSpellCache((prev) => {
+                    const next = upsertGameSpells(prev, gameKey, payload, [selectedSpell]);
+                    saveSpellMetaCache(next);
+                    return next;
+                });
+            } finally {
+                inFlight.current.delete(key);
+                if (!cancelled) setIsFetching(false);
+            }
+        };
+
+        void fetchSelectedSpell();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [selectedSpell, spellCache, gameKey, httpFetch]);
+
+    const selectedSpellMeta = useMemo(() => {
+        if (selectedSpell === null) return null;
+        const gameMap = getGameSpellMap(spellCache, gameKey);
+        return gameMap[String(selectedSpell)] ?? null;
+    }, [selectedSpell, spellCache, gameKey]);
+
     const selectedSpellName = useMemo(() => {
         if (selectedSpell === null) return null;
-        const context = getSpellContext(selectedSpell, spellData);
-        return context.name ?? null;
-    }, [selectedSpell, spellData]);
+        if (selectedSpellMeta && isRenderableSpellMeta(selectedSpellMeta)) {
+            return selectedSpellMeta.name ?? null;
+        }
+        return null;
+    }, [selectedSpell, selectedSpellMeta]);
 
     const filteredEvents = useMemo(() => {
         if (selectedSpell === null) return [];
@@ -111,6 +179,10 @@ export default function DebugSpellInspector({ timeline }: DebugSpellInspectorPro
                     </select>
                     {selectedSpellName ? (
                         <div className={styles.debugSpellName}>{selectedSpellName}</div>
+                    ) : isFetching ? (
+                        <div className={styles.debugSpellName}>Retrieving spell data...</div>
+                    ) : selectedSpell !== null ? (
+                        <div className={styles.debugSpellName}>{`Spell ${selectedSpell}`}</div>
                     ) : null}
                 </div>
             </div>
@@ -137,7 +209,11 @@ export default function DebugSpellInspector({ timeline }: DebugSpellInspectorPro
                                     <span className={styles.debugEvent}>{event.event}</span>
                                     <span className={styles.debugGuid}>{event.castGUID ?? "-"}</span>
                                     <span className={styles.debugTag}>
-                                        {status === "unresolved" ? "Unresolved" : status === "ignored" ? "Ignored" : ""}
+                                        {status === "unresolved"
+                                            ? "Unresolved"
+                                            : status === "ignored"
+                                              ? "Ignored"
+                                              : ""}
                                     </span>
                                 </div>
                             );
@@ -150,7 +226,8 @@ export default function DebugSpellInspector({ timeline }: DebugSpellInspectorPro
                     <div className={styles.debugList}>
                         {filteredAttempts.map((attempt) => {
                             const resolved = attempt.resolvedOutcome ?? "unresolved";
-                            const isHovered = hoveredEvent !== null && eventToAttemptId.get(hoveredEvent) === attempt.id;
+                            const isHovered =
+                                hoveredEvent !== null && eventToAttemptId.get(hoveredEvent) === attempt.id;
                             return (
                                 <div
                                     key={attempt.id}
@@ -162,9 +239,7 @@ export default function DebugSpellInspector({ timeline }: DebugSpellInspectorPro
                                 >
                                     <div className={styles.debugAttemptHeader}>
                                         <span className={styles.debugOutcome}>
-                                            {resolved === "unresolved"
-                                                ? "Unresolved"
-                                                : resolved.toUpperCase()}
+                                            {resolved === "unresolved" ? "Unresolved" : resolved.toUpperCase()}
                                         </span>
                                         <span className={styles.debugTime}>
                                             {formatTime(attempt.startTime)} - {formatTime(attempt.endTime)}
@@ -178,9 +253,7 @@ export default function DebugSpellInspector({ timeline }: DebugSpellInspectorPro
                                         </span>
                                         <span>{attempt.events.length} events</span>
                                     </div>
-                                    <div className={styles.debugExplanation}>
-                                        {getAttemptExplanation(attempt)}
-                                    </div>
+                                    <div className={styles.debugExplanation}>{getAttemptExplanation(attempt)}</div>
                                 </div>
                             );
                         })}
