@@ -14,6 +14,20 @@ interface MatchDetailsPanelProps {
     onBack?: () => void;
 }
 
+type SpellTotalEntry = {
+    damage: number;
+    healing: number;
+    overheal?: number;
+    absorbed?: number;
+    hits?: number;
+    crits?: number;
+    targets?: Record<string, number>;
+    interrupts?: number;
+    dispels?: number;
+};
+
+type SpellTotalsMap = Record<string, SpellTotalEntry> | Record<number, SpellTotalEntry>;
+
 export default function MatchDetailsPanel({ match, isLoading, onBack }: MatchDetailsPanelProps) {
     const content = useMemo(() => {
         if (!match) return null;
@@ -32,6 +46,19 @@ export default function MatchDetailsPanel({ match, isLoading, onBack }: MatchDet
         const showFactions = !isSoloShuffle && alliance.length > 0 && horde.length > 0;
         const playersTitle = isSoloShuffle ? "Solo Shuffle Lobby" : "Players";
 
+        const anyMatch = match.raw as unknown as {
+            matchDetails?: { build?: { versionString?: unknown; version?: unknown } };
+        };
+        const build = anyMatch.matchDetails?.build;
+        const gameVersion =
+            typeof build?.versionString === "string"
+                ? build.versionString
+                : typeof build?.version === "string"
+                  ? build.version
+                  : null;
+
+        const spellTotals = (match.raw as unknown as { spellTotals?: unknown }).spellTotals;
+
         return {
             players,
             timeline,
@@ -41,6 +68,8 @@ export default function MatchDetailsPanel({ match, isLoading, onBack }: MatchDet
             showFactions,
             playersTitle,
             showRating,
+            gameVersion,
+            spellTotals: (spellTotals ?? null) as SpellTotalsMap | null,
         };
     }, [match]);
 
@@ -87,24 +116,29 @@ export default function MatchDetailsPanel({ match, isLoading, onBack }: MatchDet
                 <div className={styles.spellNote}>
                     <LuInfo className={styles.spellNoteIcon} aria-hidden="true" />
                     <span>
-                        Spell activity overview. This section shows how abilities were used during
-                        the match. Advanced insights and guidance are still evolving in this module.
+                        Spell activity overview. This section shows how abilities were used during the match. Advanced
+                        insights and guidance are still evolving in this module.
                     </span>
                 </div>
-                <SpellCastGraph timeline={content.timeline} />
+                <SpellCastGraph
+                    timeline={content.timeline}
+                    gameVersion={content.gameVersion}
+                    spellTotals={content.spellTotals}
+                />
 
                 {showDebug ? (
                     <div className={styles.spellNote}>
                         <LuInfo className={styles.spellNoteIcon} aria-hidden="true" />
                         <span>
-                            Temporary development tool used to validate spell-cast logic. This
-                            module will be replaced with user-facing insights in future updates.
+                            Temporary development tool used to validate spell-cast logic. This module will be replaced
+                            with user-facing insights in future updates.
                         </span>
                     </div>
                 ) : null}
-                {showDebug ? <DebugSpellInspector timeline={content.timeline} /> : null}
+                {showDebug ? (
+                    <DebugSpellInspector timeline={content.timeline} gameVersion={content.gameVersion} />
+                ) : null}
             </div>
         </section>
     );
 }
-
