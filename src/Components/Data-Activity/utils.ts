@@ -2,7 +2,14 @@ import type { MatchWithId } from "../../Interfaces/matches";
 import type { MatchPlayer, MatchTimelineEntry } from "./types";
 
 export type MatchResult = "win" | "loss" | "neutral";
-export type MatchMode = "solo" | "skirmish" | "rated2" | "rated3" | "rbg" | "unknown";
+export type MatchMode =
+    | "solo"
+    | "skirmish"
+    | "rated2"
+    | "rated3"
+    | "randombg"
+    | "rbg"
+    | "unknown";
 
 export interface MatchFilters {
     mode: MatchMode | "all";
@@ -66,6 +73,7 @@ const getMode = (format?: string): { key: MatchMode; label: string } => {
     const raw = (format ?? "").toLowerCase();
     if (raw.includes("solo shuffle")) return { key: "solo", label: "Solo Shuffle" };
     if (raw.includes("skirmish")) return { key: "skirmish", label: "Skirmish" };
+    if (raw.includes("random battleground")) return { key: "randombg", label: "Random BG" };
     if (raw.includes("rbg") || raw.includes("rated battleground")) {
         return { key: "rbg", label: "RBG" };
     }
