@@ -41,8 +41,9 @@ export default function MatchDetailsPanel({ match, isLoading, onBack }: MatchDet
             match.mode === "rated2" ||
             match.mode === "rated3" ||
             match.mode === "rbg";
-        const alliance = players.filter((p) => p.faction === 0);
-        const horde = players.filter((p) => p.faction === 1);
+        // Blizzard faction index in PvP scoreboards: 0 = Horde, 1 = Alliance.
+        const horde = players.filter((p) => p.faction === 0);
+        const alliance = players.filter((p) => p.faction === 1);
         const showFactions = !isSoloShuffle && alliance.length > 0 && horde.length > 0;
         const playersTitle = isSoloShuffle ? "Solo Shuffle Lobby" : "Players";
 
