@@ -49,7 +49,15 @@ export default function DataActivity() {
             .sort((a, b) => b.timestampMs - a.timestampMs);
     }, [matches]);
     const modeOptions = useMemo(() => {
-        const order: MatchMode[] = ["skirmish", "solo", "rated2", "rated3", "rbg", "unknown"];
+        const order: MatchMode[] = [
+            "skirmish",
+            "solo",
+            "rated2",
+            "rated3",
+            "randombg",
+            "rbg",
+            "unknown",
+        ];
         const present = new Set(summaries.map((summary) => summary.mode));
         const options = order
             .filter((mode) => present.has(mode))
@@ -63,6 +71,8 @@ export default function DataActivity() {
                             ? "Rated 2v2"
                             : mode === "rated3"
                               ? "Rated 3v3"
+                              : mode === "randombg"
+                                ? "Random BG"
                               : mode === "rbg"
                                 ? "RBG"
                                 : "Unknown";
