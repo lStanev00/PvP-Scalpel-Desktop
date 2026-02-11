@@ -29,7 +29,7 @@ export default function NavigationMenu({ collapsed, onToggle }: NavigationMenuPr
     return (
         <nav className={`${styles.nav} ${collapsed ? styles.collapsed : ""}`} aria-label="Primary">
             <div className={styles.sectionHeader}>
-                <div className={styles.sectionLabel}>Navigation</div>
+                {/* <div className={styles.sectionLabel}>Navigation</div> */}
                 <button
                     className={styles.toggle}
                     type="button"
