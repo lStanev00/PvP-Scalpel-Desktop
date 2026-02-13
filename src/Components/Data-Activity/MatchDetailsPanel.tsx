@@ -59,6 +59,16 @@ export default function MatchDetailsPanel({ match, isLoading, onBack }: MatchDet
                   : null;
 
         const spellTotals = (match.raw as unknown as { spellTotals?: unknown }).spellTotals;
+        const spellTotalsBySource = (
+            match.raw as unknown as {
+                spellTotalsBySource?: unknown;
+                perSourceSpellTotals?: unknown;
+                playerSpellTotals?: unknown;
+            }
+        ).spellTotalsBySource;
+        const interruptSpellsBySource = (
+            match.raw as unknown as { interruptSpellsBySource?: unknown }
+        ).interruptSpellsBySource;
 
         return {
             players,
@@ -71,6 +81,13 @@ export default function MatchDetailsPanel({ match, isLoading, onBack }: MatchDet
             showRating,
             gameVersion,
             spellTotals: (spellTotals ?? null) as SpellTotalsMap | null,
+            spellTotalsBySource: (
+                spellTotalsBySource ??
+                (match.raw as unknown as { perSourceSpellTotals?: unknown }).perSourceSpellTotals ??
+                (match.raw as unknown as { playerSpellTotals?: unknown }).playerSpellTotals ??
+                null
+            ) as Record<string, unknown> | null,
+            interruptSpellsBySource: (interruptSpellsBySource ?? null) as Record<string, unknown> | null,
         };
     }, [match]);
 
@@ -123,8 +140,11 @@ export default function MatchDetailsPanel({ match, isLoading, onBack }: MatchDet
                 </div>
                 <SpellCastGraph
                     timeline={content.timeline}
+                    players={content.players}
                     gameVersion={content.gameVersion}
                     spellTotals={content.spellTotals}
+                    spellTotalsBySource={content.spellTotalsBySource}
+                    interruptSpellsBySource={content.interruptSpellsBySource}
                 />
 
                 {showDebug ? (

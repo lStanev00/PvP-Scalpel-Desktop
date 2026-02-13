@@ -1,155 +1,91 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import useUserContext from "../../Hooks/useUserContext";
+import { getClassColor } from "../../Domain/CombatDomainContext";
 import {
     extractSpellPayload,
     getGameSpellMap,
-    isRenderableSpellMeta,
     loadSpellMetaCache,
     normalizeGameVersionKey,
     saveSpellMetaCache,
     upsertGameSpells,
     type SpellMetaCache,
 } from "../../Domain/spellMetaCache";
-import type { MatchTimelineEntry } from "./types";
+import type { MatchPlayer, MatchTimelineEntry } from "./types";
 import { resolveIntentAttempts } from "./spellCastResolver";
+import SpellMetricsTooltip, {
+    toPlayerTooltipRows,
+    type SpellMetricsTooltipPayload,
+} from "./SpellMetricsTooltip";
+import {
+    buildCompareModel,
+    buildPersonalModel,
+    collectSpellIdsForFetch,
+    findOwnerPlayer,
+    getPlayerGuid,
+    parseInterruptSpellsBySource,
+    parseSpellTotals,
+    parseSpellTotalsBySource,
+    toImpactLabel,
+    toMetricLabel,
+    type AttemptCounts,
+    type SpellMetricType,
+    type SpellViewMode,
+} from "./spellMetrics.utils";
 import styles from "./DataActivity.module.css";
 
 interface SpellCastGraphProps {
     timeline: MatchTimelineEntry[];
+    players: MatchPlayer[];
     gameVersion?: string | null;
     spellTotals?: Record<string, unknown> | Record<number, unknown> | null;
+    spellTotalsBySource?: Record<string, unknown> | null;
+    interruptSpellsBySource?: Record<string, unknown> | null;
 }
 
-type CastCounts = {
-    spellId: number;
-    succeeded: number;
-    failed: number;
-    interrupted: number;
+type ActiveTooltipState =
+    | { kind: "personal"; spellId: number }
+    | { kind: "compare"; playerKey: string }
+    | null;
+
+const normalizeGuid = (value?: string | null) => {
+    if (!value || typeof value !== "string") return null;
+    const trimmed = value.trim().toLowerCase();
+    return trimmed ? trimmed : null;
 };
 
-type SpellRow = CastCounts & {
-    totalAttempts: number;
-    metricTotal: number;
-    sharePct: number;
-    avgPerCast: number | null;
-    name: string;
-    icon?: string;
-    description?: string | null;
-};
-
-type MetricMode = "damage" | "healing";
-
-type SpellTotalEntry = {
-    damage: number;
-    healing: number;
-    overheal?: number;
-    absorbed?: number;
-    hits?: number;
-    crits?: number;
-    targets?: Record<string, number>;
-    interrupts?: number;
-    dispels?: number;
-};
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-    !!value && typeof value === "object" && !Array.isArray(value);
-
-const isSpellTotalEntry = (value: unknown): value is SpellTotalEntry => {
-    if (!isRecord(value)) return false;
-    const damage = value.damage;
-    const healing = value.healing;
-    return typeof damage === "number" && typeof healing === "number";
-};
-
-export default function SpellCastGraph({ timeline, gameVersion, spellTotals }: SpellCastGraphProps) {
+export default function SpellCastGraph({
+    timeline,
+    players,
+    gameVersion,
+    spellTotals,
+    spellTotalsBySource,
+    interruptSpellsBySource,
+}: SpellCastGraphProps) {
     const { httpFetch } = useUserContext();
     const gameKey = useMemo(() => normalizeGameVersionKey(gameVersion), [gameVersion]);
     const [spellCache, setSpellCache] = useState<SpellMetaCache>(() => loadSpellMetaCache());
     const [isFetching, setIsFetching] = useState(false);
+    const [viewMode, setViewMode] = useState<SpellViewMode>("personal");
+    const [metric, setMetric] = useState<SpellMetricType>("damage");
+    const [activeTooltip, setActiveTooltip] = useState<ActiveTooltipState>(null);
+    const [tooltipPos, setTooltipPos] = useState<{ top: number; left: number } | null>(null);
     const shellRef = useRef<HTMLDivElement | null>(null);
     const inFlight = useRef<Set<string>>(new Set());
     const pendingFetches = useRef(0);
-    const [metric, setMetric] = useState<MetricMode>("damage");
-    const rowRefs = useRef<Map<number, HTMLElement>>(new Map());
+    const rowRefs = useRef<Map<string, HTMLElement>>(new Map());
     const tooltipRef = useRef<HTMLDivElement | null>(null);
-    const [activeSpellId, setActiveSpellId] = useState<number | null>(null);
-    const [tooltipPos, setTooltipPos] = useState<{ top: number; left: number } | null>(null);
+
+    const gameMap = useMemo(() => getGameSpellMap(spellCache, gameKey), [spellCache, gameKey]);
+    const owner = useMemo(() => findOwnerPlayer(players), [players]);
+    const ownerGuid = useMemo(
+        () => normalizeGuid(owner ? getPlayerGuid(owner) : null),
+        [owner]
+    );
 
     const { resolvedAttempts } = useMemo(() => resolveIntentAttempts(timeline), [timeline]);
 
-    const usedSpellIds = useMemo(() => {
-        const ids = new Set<number>();
-        resolvedAttempts.forEach((attempt) => ids.add(attempt.spellId));
-        if (spellTotals && isRecord(spellTotals)) {
-            Object.entries(spellTotals).forEach(([key, val]) => {
-                const id = Number(key);
-                if (!Number.isFinite(id) || id <= 0) return;
-                if (!isSpellTotalEntry(val)) return;
-                ids.add(id);
-            });
-        }
-        return Array.from(ids);
-    }, [resolvedAttempts, spellTotals]);
-
-    useEffect(() => {
-        const gameMap = getGameSpellMap(spellCache, gameKey);
-        const missing = usedSpellIds.filter((id) => {
-            const key = `${gameKey}:${id}`;
-            return !(String(id) in gameMap) && !inFlight.current.has(key);
-        });
-        if (!missing.length) return;
-
-        missing.forEach((id) => inFlight.current.add(`${gameKey}:${id}`));
-        pendingFetches.current += 1;
-        setIsFetching(true);
-        let cancelled = false;
-
-        const fetchSpells = async () => {
-            try {
-                const res = await httpFetch("/game/spells", {
-                    method: "POST",
-                    body: JSON.stringify({ ids: missing }),
-                });
-
-                if (!res.ok || !res.data || cancelled) return;
-
-                const payload = extractSpellPayload(res.data);
-                setSpellCache((prev) => {
-                    const next = upsertGameSpells(prev, gameKey, payload, missing);
-                    saveSpellMetaCache(next);
-                    return next;
-                });
-            } finally {
-                missing.forEach((id) => inFlight.current.delete(`${gameKey}:${id}`));
-                pendingFetches.current = Math.max(0, pendingFetches.current - 1);
-                if (pendingFetches.current === 0 && !cancelled) {
-                    setIsFetching(false);
-                }
-            }
-        };
-
-        void fetchSpells();
-
-        return () => {
-            cancelled = true;
-        };
-    }, [usedSpellIds, spellCache, httpFetch, gameKey]);
-
-    const totals = useMemo(() => {
-        const out = new Map<number, SpellTotalEntry>();
-        if (!spellTotals || !isRecord(spellTotals)) return out;
-        Object.entries(spellTotals).forEach(([key, val]) => {
-            const id = Number(key);
-            if (!Number.isFinite(id) || id <= 0) return;
-            if (!isSpellTotalEntry(val)) return;
-            out.set(id, val);
-        });
-        return out;
-    }, [spellTotals]);
-
     const attemptCounts = useMemo(() => {
-        const map = new Map<number, CastCounts>();
+        const map = new Map<number, AttemptCounts>();
         resolvedAttempts.forEach((attempt) => {
             const outcome = attempt.resolvedOutcome;
             if (!outcome) return;
@@ -167,76 +103,163 @@ export default function SpellCastGraph({ timeline, gameVersion, spellTotals }: S
         return map;
     }, [resolvedAttempts]);
 
-    const rows = useMemo(() => {
-        const gameMap = getGameSpellMap(spellCache, gameKey);
-        const hasTotals = totals.size > 0;
-        const items = usedSpellIds
-            .map((spellId): SpellRow | null => {
-                const meta = gameMap[String(spellId)];
-                if (meta === undefined || meta === null) return null;
-                if (!isRenderableSpellMeta(meta)) return null;
+    const parsedSpellTotals = useMemo(() => parseSpellTotals(spellTotals), [spellTotals]);
+    const parsedSpellTotalsBySource = useMemo(
+        () => parseSpellTotalsBySource(spellTotalsBySource),
+        [spellTotalsBySource]
+    );
+    const parsedInterruptsBySource = useMemo(
+        () => parseInterruptSpellsBySource(interruptSpellsBySource),
+        [interruptSpellsBySource]
+    );
 
-                const attempts = attemptCounts.get(spellId) ?? {
-                    spellId,
-                    succeeded: 0,
-                    failed: 0,
-                    interrupted: 0,
-                };
-                const totalAttempts = attempts.succeeded + attempts.failed + attempts.interrupted;
-                if (!hasTotals && totalAttempts <= 0) return null;
+    const usedSpellIds = useMemo(() => {
+        return collectSpellIdsForFetch(
+            attemptCounts,
+            parsedSpellTotals,
+            parsedSpellTotalsBySource,
+            parsedInterruptsBySource
+        );
+    }, [attemptCounts, parsedSpellTotals, parsedSpellTotalsBySource, parsedInterruptsBySource]);
 
-                const totalsEntry = totals.get(spellId) ?? null;
-                const metricTotal = hasTotals
-                    ? metric === "healing"
-                        ? totalsEntry?.healing ?? 0
-                        : totalsEntry?.damage ?? 0
-                    : totalAttempts;
+    useEffect(() => {
+        const missing = usedSpellIds.filter((spellId) => {
+            const requestKey = `${gameKey}:${spellId}`;
+            return !(String(spellId) in gameMap) && !inFlight.current.has(requestKey);
+        });
+        if (!missing.length) return;
 
-                if (metricTotal <= 0) return null;
+        missing.forEach((spellId) => inFlight.current.add(`${gameKey}:${spellId}`));
+        pendingFetches.current += 1;
+        setIsFetching(true);
+        let cancelled = false;
 
-                return {
-                    ...attempts,
-                    totalAttempts,
-                    metricTotal,
-                    sharePct: 0,
-                    avgPerCast: hasTotals && totalAttempts > 0 ? metricTotal / totalAttempts : null,
-                    name: meta.name ?? `Spell ${spellId}`,
-                    icon: meta.media ?? undefined,
-                    description: meta.description ?? null,
-                };
-            })
-            .filter((row): row is SpellRow => row !== null)
-            .sort((a, b) => b.metricTotal - a.metricTotal);
+        const run = async () => {
+            try {
+                const res = await httpFetch("/game/spells", {
+                    method: "POST",
+                    body: JSON.stringify({ ids: missing }),
+                });
 
-        const totalMetric = items.reduce((acc, row) => acc + row.metricTotal, 0);
-        if (totalMetric <= 0) return items;
-        return items.map((row) => ({
-            ...row,
-            sharePct: (row.metricTotal / totalMetric) * 100,
-        }));
-    }, [spellCache, gameKey, usedSpellIds, totals, metric, attemptCounts]);
+                if (!res.ok || !res.data || cancelled) return;
+                const payload = extractSpellPayload(res.data);
+                setSpellCache((prev) => {
+                    const next = upsertGameSpells(prev, gameKey, payload, missing);
+                    saveSpellMetaCache(next);
+                    return next;
+                });
+            } finally {
+                missing.forEach((spellId) => inFlight.current.delete(`${gameKey}:${spellId}`));
+                pendingFetches.current = Math.max(0, pendingFetches.current - 1);
+                if (pendingFetches.current === 0 && !cancelled) {
+                    setIsFetching(false);
+                }
+            }
+        };
 
-    const hasTotals = totals.size > 0;
-    const maxMetric = rows[0]?.metricTotal ?? 1;
+        void run();
+        return () => {
+            cancelled = true;
+        };
+    }, [gameMap, gameKey, httpFetch, usedSpellIds]);
+
+    const personalModel = useMemo(
+        () =>
+            buildPersonalModel({
+                metric,
+                ownerGuid,
+                attemptCounts,
+                spellMetaById: gameMap,
+                spellTotals: parsedSpellTotals,
+                spellTotalsBySource: parsedSpellTotalsBySource,
+                interruptsBySource: parsedInterruptsBySource,
+            }),
+        [
+            metric,
+            ownerGuid,
+            attemptCounts,
+            gameMap,
+            parsedSpellTotals,
+            parsedSpellTotalsBySource,
+            parsedInterruptsBySource,
+        ]
+    );
+
+    const compareModel = useMemo(
+        () =>
+            buildCompareModel({
+                metric,
+                players,
+                attemptCounts,
+                spellMetaById: gameMap,
+                spellTotalsBySource: parsedSpellTotalsBySource,
+                interruptsBySource: parsedInterruptsBySource,
+            }),
+        [metric, players, attemptCounts, gameMap, parsedSpellTotalsBySource, parsedInterruptsBySource]
+    );
 
     const resolveIconUrl = (icon?: string) => {
         if (!icon) return null;
-        if (icon.startsWith("http") || icon.startsWith("/") || icon.includes(".")) {
-            return icon;
-        }
-        if (/^\\d+$/.test(icon)) {
-            return `https://render.worldofwarcraft.com/us/icons/56/${icon}.jpg`;
-        }
+        if (icon.startsWith("http") || icon.startsWith("/") || icon.includes(".")) return icon;
+        if (/^\d+$/.test(icon)) return `https://render.worldofwarcraft.com/us/icons/56/${icon}.jpg`;
         return `https://render.worldofwarcraft.com/us/icons/56/${icon}.jpg`;
     };
 
-    const activeRow = useMemo(() => {
-        if (activeSpellId === null) return null;
-        return rows.find((row) => row.spellId === activeSpellId) ?? null;
-    }, [activeSpellId, rows]);
+    const personalTooltipMap = useMemo(() => {
+        const map = new Map<number, SpellMetricsTooltipPayload>();
+        personalModel.rows.forEach((row) => {
+            map.set(row.spellId, {
+                kind: "spell",
+                title: row.name,
+                iconUrl: resolveIconUrl(row.icon),
+                impactValue: row.value.toLocaleString(),
+                impactLabel: toImpactLabel(metric),
+                castsValue: String(row.totalAttempts),
+                avgValue: row.avgPerCast === null ? "--" : Math.round(row.avgPerCast).toLocaleString(),
+                shareValue: `${row.sharePct.toFixed(1)}%`,
+                successful: row.succeeded,
+                interrupted: row.interrupted,
+                failed: row.failed,
+                description: row.description,
+            });
+        });
+        return map;
+    }, [metric, personalModel.rows]);
+
+    const compareTooltipMap = useMemo(() => {
+        const map = new Map<string, SpellMetricsTooltipPayload>();
+        compareModel.rows.forEach((row) => {
+            map.set(row.key, {
+                kind: "player",
+                title: row.name,
+                subtitle: `${toMetricLabel(metric)} Breakdown`,
+                totalValue: row.value.toLocaleString(),
+                rows: toPlayerTooltipRows(row.spells, resolveIconUrl),
+                emptyLabel:
+                    metric === "interrupts"
+                        ? "No interrupted enemy spells captured for this player."
+                        : "Per-player spell breakdown is not available in this telemetry payload.",
+            });
+        });
+        return map;
+    }, [compareModel.rows, metric]);
+
+    const activeAnchorKey = useMemo(() => {
+        if (!activeTooltip) return null;
+        if (activeTooltip.kind === "personal") return `spell:${activeTooltip.spellId}`;
+        return `player:${activeTooltip.playerKey}`;
+    }, [activeTooltip]);
+
+    const tooltipPayload = useMemo(() => {
+        if (!activeTooltip) return null;
+        if (activeTooltip.kind === "personal") {
+            return personalTooltipMap.get(activeTooltip.spellId) ?? null;
+        }
+        return compareTooltipMap.get(activeTooltip.playerKey) ?? null;
+    }, [activeTooltip, personalTooltipMap, compareTooltipMap]);
 
     useEffect(() => {
-        if (activeSpellId === null) {
+        if (!activeAnchorKey || !tooltipPayload) {
             setTooltipPos(null);
             return;
         }
@@ -244,23 +267,23 @@ export default function SpellCastGraph({ timeline, gameVersion, spellTotals }: S
         let raf = 0;
         const compute = () => {
             raf = 0;
-            const anchor = rowRefs.current.get(activeSpellId) ?? null;
+            const anchor = rowRefs.current.get(activeAnchorKey);
             const tooltip = tooltipRef.current;
             if (!anchor || !tooltip) return;
 
-            const a = anchor.getBoundingClientRect();
-            const t = tooltip.getBoundingClientRect();
+            const anchorRect = anchor.getBoundingClientRect();
+            const tooltipRect = tooltip.getBoundingClientRect();
             const margin = 12;
 
-            let left = a.right - t.width;
-            left = Math.min(left, window.innerWidth - t.width - margin);
+            let left = anchorRect.right - tooltipRect.width;
+            left = Math.min(left, window.innerWidth - tooltipRect.width - margin);
             left = Math.max(margin, left);
 
-            let top = a.bottom + 8;
-            if (top + t.height + margin > window.innerHeight) {
-                top = a.top - t.height - 8;
+            let top = anchorRect.bottom + 8;
+            if (top + tooltipRect.height + margin > window.innerHeight) {
+                top = anchorRect.top - tooltipRect.height - 8;
             }
-            top = Math.max(margin, Math.min(top, window.innerHeight - t.height - margin));
+            top = Math.max(margin, Math.min(top, window.innerHeight - tooltipRect.height - margin));
 
             setTooltipPos({ top, left });
         };
@@ -283,115 +306,90 @@ export default function SpellCastGraph({ timeline, gameVersion, spellTotals }: S
             window.removeEventListener("scroll", schedule, true);
             shell?.removeEventListener("scroll", schedule);
         };
-    }, [activeSpellId, metric]);
+    }, [activeAnchorKey, tooltipPayload]);
 
-    const tooltipIconUrl = activeRow ? resolveIconUrl(activeRow.icon) : null;
-    const tooltip = activeRow ? (
-        <div
-            ref={tooltipRef}
-            className={`${styles["spell-tooltip"]} ${styles.spellTooltipPortal}`}
-            role="tooltip"
-            style={{
-                top: tooltipPos?.top ?? 0,
-                left: tooltipPos?.left ?? 0,
-                visibility: tooltipPos ? "visible" : "hidden",
-            }}
-        >
-            <header className={styles["spell-tooltip__header"]}>
-                {tooltipIconUrl ? (
-                    <img
-                        className={styles["spell-tooltip__icon"]}
-                        src={tooltipIconUrl}
-                        alt=""
-                        loading="lazy"
-                    />
-                ) : null}
-                <h3 className={styles["spell-tooltip__title"]}>{activeRow.name}</h3>
-            </header>
+    useEffect(() => {
+        setActiveTooltip(null);
+        setTooltipPos(null);
+    }, [metric, viewMode]);
 
-            <section className={styles["spell-tooltip__impact"]}>
-                <span className={styles["spell-tooltip__impact-value"]}>
-                    {hasTotals
-                        ? activeRow.metricTotal.toLocaleString?.() ?? activeRow.metricTotal
-                        : activeRow.totalAttempts}
-                </span>
-                <span className={styles["spell-tooltip__impact-label"]}>
-                    {hasTotals
-                        ? metric === "damage"
-                            ? "Total Damage"
-                            : "Total Healing"
-                        : "Casts"}
-                </span>
-            </section>
+    const title = viewMode === "personal" ? `Personal ${toMetricLabel(metric)}` : `Compare ${toMetricLabel(metric)}`;
 
-            <section className={styles["spell-tooltip__context"]}>
-                <div className={styles.metric}>
-                    <span className={styles["metric__value"]}>{activeRow.totalAttempts}</span>
-                    <span className={styles["metric__label"]}>Casts</span>
-                </div>
-                <div className={styles.metric}>
-                    <span className={styles["metric__value"]}>
-                        {hasTotals && activeRow.avgPerCast !== null
-                            ? Math.round(activeRow.avgPerCast).toLocaleString()
-                            : "--"}
-                    </span>
-                    <span className={styles["metric__label"]}>Avg</span>
-                </div>
-                <div className={styles.metric}>
-                    <span className={styles["metric__value"]}>{`${activeRow.sharePct.toFixed(1)}%`}</span>
-                    <span className={styles["metric__label"]}>Share</span>
-                </div>
-            </section>
+    const activeRows = viewMode === "personal" ? personalModel.rows : compareModel.rows;
+    const maxValue = viewMode === "personal" ? personalModel.maxValue : compareModel.maxValue;
 
-            <section className={styles["spell-tooltip__execution"]}>
-                <h4 className={styles["section-title"]}>Execution</h4>
-                <ul className={styles["spell-tooltip__list"]}>
-                    <li>Successful: {activeRow.succeeded}</li>
-                    <li>Interrupted: {activeRow.interrupted}</li>
-                    <li>Failed: {activeRow.failed}</li>
-                </ul>
-            </section>
+    const emptyLabel = useMemo(() => {
+        if (viewMode === "personal") {
+            if (metric === "interrupts") return "No interrupts captured for the current player.";
+            return "No spell totals captured for the current player.";
+        }
+        if (metric === "interrupts") return "No interrupt activity captured for this match.";
+        return "No player totals captured for this metric.";
+    }, [metric, viewMode]);
 
-            {activeRow.description ? (
-                <section className={styles["spell-tooltip__ability"]}>
-                    <h4 className={styles["section-title"]}>Ability</h4>
-                    <p className={styles["spell-tooltip__desc"]}>{activeRow.description}</p>
-                </section>
-            ) : null}
-        </div>
-    ) : null;
+    const showFallbackNotice =
+        viewMode === "personal" &&
+        (metric === "damage" || metric === "healing") &&
+        personalModel.isFallbackToMatchTotals;
 
     return (
         <section className={styles["spells-panel"]}>
             <header className={styles["spells-panel__header"]}>
-                <h2 className={styles["spells-panel__title"]}>
-                    {!hasTotals
-                        ? "Spell Casts"
-                        : metric === "damage"
-                          ? "Spell Damage"
-                          : "Spell Healing"}
-                </h2>
+                <div className={styles.spellsPanelTitleArea}>
+                    <h2 className={styles["spells-panel__title"]}>{title}</h2>
+                    <div className={styles.spellViewToggle} role="tablist" aria-label="Metric scope">
+                        <button
+                            type="button"
+                            className={`${styles.spellViewButton} ${
+                                viewMode === "personal" ? styles.spellViewButtonActive : ""
+                            }`}
+                            onClick={() => setViewMode("personal")}
+                            role="tab"
+                            aria-selected={viewMode === "personal"}
+                        >
+                            Personal
+                        </button>
+                        <button
+                            type="button"
+                            className={`${styles.spellViewButton} ${
+                                viewMode === "compare" ? styles.spellViewButtonActive : ""
+                            }`}
+                            onClick={() => setViewMode("compare")}
+                            role="tab"
+                            aria-selected={viewMode === "compare"}
+                        >
+                            Compare
+                        </button>
+                    </div>
+                </div>
+
                 <div className={styles["spells-panel__controls"]}>
-                    {hasTotals ? (
-                        <div className={styles.spellsPanelControlGroup}>
-                            <label className={styles["spells-panel__label"]} htmlFor="spell-metric">
-                                Graph
-                            </label>
-                            <div className={styles.selectControl}>
-                                <select
-                                    id="spell-metric"
-                                    className={styles.filterSelect}
-                                    value={metric}
-                                    onChange={(event) => setMetric(event.target.value as MetricMode)}
-                                >
-                                    <option value="damage">Damage</option>
-                                    <option value="healing">Healing</option>
-                                </select>
-                            </div>
+                    <div className={styles.spellsPanelControlGroup}>
+                        <label className={styles["spells-panel__label"]} htmlFor="spell-metric">
+                            Graph
+                        </label>
+                        <div className={styles.selectControl}>
+                            <select
+                                id="spell-metric"
+                                className={styles.filterSelect}
+                                value={metric}
+                                onChange={(event) => setMetric(event.target.value as SpellMetricType)}
+                            >
+                                <option value="damage">Damage</option>
+                                <option value="healing">Healing</option>
+                                <option value="interrupts">Interrupts</option>
+                            </select>
                         </div>
-                    ) : null}
+                    </div>
                 </div>
             </header>
+
+            {showFallbackNotice ? (
+                <div className={styles.spellMetricHint}>
+                    Per-player spell totals are not present in this payload. Showing match-level spell totals.
+                </div>
+            ) : null}
+
             <div className={styles["spells-panel__body"]} ref={shellRef}>
                 {isFetching ? (
                     <div className={styles.spellFetchNotice}>
@@ -399,50 +397,40 @@ export default function SpellCastGraph({ timeline, gameVersion, spellTotals }: S
                         <div className={styles.spellFetchSpinner} aria-hidden="true" />
                     </div>
                 ) : null}
-                {rows.length === 0 ? (
-                    <div className={styles.spellEmpty}>
-                        {hasTotals
-                            ? metric === "damage"
-                                ? "No damage totals recorded for this match."
-                                : "No healing totals recorded for this match."
-                            : "No spell activity captured for this match."}
-                    </div>
-                ) : (
-                    <ol className={styles["spell-list"]}>
-                        {rows.map((row, idx) => {
-                            const barWidth = `${(row.metricTotal / maxMetric) * 100}%`;
-                            const iconUrl = resolveIconUrl(row.icon);
-                            const fillClass = !hasTotals
-                                ? styles.spellBarFillCasts
-                                : metric === "damage"
-                                  ? styles.spellBarFillDamage
-                                  : styles.spellBarFillHealing;
-                            const attemptsTotal = row.totalAttempts || 1;
-                            const successWidth = `${(row.succeeded / attemptsTotal) * 100}%`;
-                            const failWidth = `${(row.failed / attemptsTotal) * 100}%`;
-                            const interruptWidth = `${(row.interrupted / attemptsTotal) * 100}%`;
 
+                {activeRows.length === 0 ? (
+                    <div className={styles.spellEmpty}>{emptyLabel}</div>
+                ) : viewMode === "personal" ? (
+                    <ol className={styles["spell-list"]}>
+                        {personalModel.rows.map((row, index) => {
+                            const barWidth = `${(row.value / maxValue) * 100}%`;
+                            const iconUrl = resolveIconUrl(row.icon);
+                            const rowKey = `spell:${row.spellId}`;
                             return (
                                 <li
                                     key={row.spellId}
                                     ref={(el) => {
-                                        if (el) rowRefs.current.set(row.spellId, el);
-                                        else rowRefs.current.delete(row.spellId);
+                                        if (el) rowRefs.current.set(rowKey, el);
+                                        else rowRefs.current.delete(rowKey);
                                     }}
-                                    className={styles["spell-row"]}
+                                    className={`${styles["spell-row"]} ${
+                                        metric === "interrupts" && index === 0
+                                            ? styles.spellRowPrimaryImpact
+                                            : ""
+                                    }`}
                                     tabIndex={0}
                                     onMouseEnter={() => {
-                                        setActiveSpellId(row.spellId);
+                                        setActiveTooltip({ kind: "personal", spellId: row.spellId });
                                         setTooltipPos(null);
                                     }}
-                                    onMouseLeave={() => setActiveSpellId(null)}
+                                    onMouseLeave={() => setActiveTooltip(null)}
                                     onFocus={() => {
-                                        setActiveSpellId(row.spellId);
+                                        setActiveTooltip({ kind: "personal", spellId: row.spellId });
                                         setTooltipPos(null);
                                     }}
-                                    onBlur={() => setActiveSpellId(null)}
+                                    onBlur={() => setActiveTooltip(null)}
                                 >
-                                    <span className={styles["spell-row__rank"]}>{idx + 1}</span>
+                                    <span className={styles["spell-row__rank"]}>{index + 1}</span>
                                     {iconUrl ? (
                                         <img
                                             className={styles["spell-row__icon"]}
@@ -456,41 +444,79 @@ export default function SpellCastGraph({ timeline, gameVersion, spellTotals }: S
                                         </div>
                                     )}
                                     <span className={styles["spell-row__name"]}>{row.name}</span>
-
                                     <div className={styles["spell-row__bar-container"]}>
                                         <div
-                                            className={`${styles["spell-row__bar"]} ${fillClass}`}
+                                            className={`${styles["spell-row__bar"]} ${
+                                                metric === "healing"
+                                                    ? styles.spellBarFillHealing
+                                                    : metric === "damage"
+                                                      ? styles.spellBarFillDamage
+                                                      : styles.spellBarFillInterrupt
+                                            }`}
                                             style={{ width: barWidth }}
-                                        >
-                                            {!hasTotals ? (
-                                                <>
-                                                    {row.succeeded > 0 ? (
-                                                        <span
-                                                            className={`${styles.spellSeg} ${styles.spellSegSuccess}`}
-                                                            style={{ width: successWidth }}
-                                                        />
-                                                    ) : null}
-                                                    {row.failed > 0 ? (
-                                                        <span
-                                                            className={`${styles.spellSeg} ${styles.spellSegFail}`}
-                                                            style={{ width: failWidth }}
-                                                        />
-                                                    ) : null}
-                                                    {row.interrupted > 0 ? (
-                                                        <span
-                                                            className={`${styles.spellSeg} ${styles.spellSegInterrupt}`}
-                                                            style={{ width: interruptWidth }}
-                                                        />
-                                                    ) : null}
-                                                </>
-                                            ) : null}
-                                        </div>
+                                        />
                                     </div>
-
                                     <span className={styles["spell-row__value"]}>
-                                        {hasTotals
-                                            ? row.metricTotal.toLocaleString?.() ?? row.metricTotal
-                                            : row.totalAttempts}
+                                        {row.value.toLocaleString()}
+                                    </span>
+                                </li>
+                            );
+                        })}
+                    </ol>
+                ) : (
+                    <ol className={styles["spell-list"]}>
+                        {compareModel.rows.map((row, index) => {
+                            const rowKey = `player:${row.key}`;
+                            const barWidth = `${(row.value / maxValue) * 100}%`;
+                            const classToken = (row.className ?? "?").slice(0, 1).toUpperCase();
+                            const classColor = getClassColor(row.className) ?? "rgba(230, 234, 240, 0.8)";
+                            return (
+                                <li
+                                    key={row.key}
+                                    ref={(el) => {
+                                        if (el) rowRefs.current.set(rowKey, el);
+                                        else rowRefs.current.delete(rowKey);
+                                    }}
+                                    className={`${styles["spell-row"]} ${styles.spellRowCompare}`}
+                                    tabIndex={0}
+                                    onMouseEnter={() => {
+                                        setActiveTooltip({ kind: "compare", playerKey: row.key });
+                                        setTooltipPos(null);
+                                    }}
+                                    onMouseLeave={() => setActiveTooltip(null)}
+                                    onFocus={() => {
+                                        setActiveTooltip({ kind: "compare", playerKey: row.key });
+                                        setTooltipPos(null);
+                                    }}
+                                    onBlur={() => setActiveTooltip(null)}
+                                >
+                                    <span className={styles["spell-row__rank"]}>{index + 1}</span>
+                                    <span
+                                        className={styles.playerClassBadge}
+                                        style={{
+                                            color: classColor,
+                                            borderColor: `${classColor}55`,
+                                            background: `${classColor}1a`,
+                                        }}
+                                        aria-hidden="true"
+                                    >
+                                        {classToken}
+                                    </span>
+                                    <span className={styles["spell-row__name"]}>{row.name}</span>
+                                    <div className={styles["spell-row__bar-container"]}>
+                                        <div
+                                            className={`${styles["spell-row__bar"]} ${
+                                                metric === "healing"
+                                                    ? styles.spellBarFillHealing
+                                                    : metric === "damage"
+                                                      ? styles.spellBarFillDamage
+                                                      : styles.spellBarFillInterrupt
+                                            }`}
+                                            style={{ width: barWidth }}
+                                        />
+                                    </div>
+                                    <span className={styles["spell-row__value"]}>
+                                        {row.value.toLocaleString()}
                                     </span>
                                 </li>
                             );
@@ -498,7 +524,8 @@ export default function SpellCastGraph({ timeline, gameVersion, spellTotals }: S
                     </ol>
                 )}
             </div>
-            {tooltip ? createPortal(tooltip, document.body) : null}
+
+            <SpellMetricsTooltip payload={tooltipPayload} position={tooltipPos} tooltipRef={tooltipRef} />
         </section>
     );
 }
