@@ -59,6 +59,27 @@ export default function MatchDetailsPanel({ match, isLoading, onBack }: MatchDet
                   : null;
 
         const spellTotals = (match.raw as unknown as { spellTotals?: unknown }).spellTotals;
+        const spellTotalsBySource = (
+            match.raw as unknown as {
+                spellTotalsBySource?: unknown;
+                perSourceSpellTotals?: unknown;
+                playerSpellTotals?: unknown;
+            }
+        ).spellTotalsBySource;
+        const interruptSpellsBySource = (
+            match.raw as unknown as { interruptSpellsBySource?: unknown }
+        ).interruptSpellsBySource;
+
+        if (import.meta.env.DEV) {
+            console.log("[SpellMetrics] payload aggregate keys", {
+                matchId: match.id,
+                telemetryVersion: (match.raw as unknown as { telemetryVersion?: unknown }).telemetryVersion,
+                hasSpellTotals: !!spellTotals,
+                hasSpellTotalsBySource: !!spellTotalsBySource,
+                hasInterruptSpellsBySource: !!interruptSpellsBySource,
+                keys: Object.keys(((match.raw ?? {}) as unknown) as Record<string, unknown>),
+            });
+        }
 
         return {
             players,
@@ -71,6 +92,13 @@ export default function MatchDetailsPanel({ match, isLoading, onBack }: MatchDet
             showRating,
             gameVersion,
             spellTotals: (spellTotals ?? null) as SpellTotalsMap | null,
+            spellTotalsBySource: (
+                spellTotalsBySource ??
+                (match.raw as unknown as { perSourceSpellTotals?: unknown }).perSourceSpellTotals ??
+                (match.raw as unknown as { playerSpellTotals?: unknown }).playerSpellTotals ??
+                null
+            ) as Record<string, unknown> | null,
+            interruptSpellsBySource: (interruptSpellsBySource ?? null) as Record<string, unknown> | null,
         };
     }, [match]);
 
@@ -123,8 +151,11 @@ export default function MatchDetailsPanel({ match, isLoading, onBack }: MatchDet
                 </div>
                 <SpellCastGraph
                     timeline={content.timeline}
+                    players={content.players}
                     gameVersion={content.gameVersion}
                     spellTotals={content.spellTotals}
+                    spellTotalsBySource={content.spellTotalsBySource}
+                    interruptSpellsBySource={content.interruptSpellsBySource}
                 />
 
                 {showDebug ? (

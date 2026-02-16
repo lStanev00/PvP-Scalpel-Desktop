@@ -78,6 +78,7 @@ export interface PlayerEntryV2 {
     postmatchMMR?: number;
     damage?: number;
     healing?: number;
+    interrupts?: [number, number];
     kills?: number;
     deaths?: number;
     MSS?: [string, number][];
@@ -161,5 +162,28 @@ export interface MatchV2 {
     players: PlayerEntryV2[];
     timeline?: TimelineEventV2[];
     castRecords?: CastRecord[];
+    spellTotals?: Record<string, {
+        damage: number;
+        healing: number;
+        overheal?: number;
+        absorbed?: number;
+        hits?: number;
+        crits?: number;
+        targets?: Record<string, number>;
+        interrupts?: number;
+        dispels?: number;
+    }>;
+    spellTotalsBySource?: Record<string, Record<string, {
+        damage: number;
+        healing: number;
+        overheal?: number;
+        absorbed?: number;
+        hits?: number;
+        crits?: number;
+        targets?: Record<string, number>;
+        interrupts?: number;
+        dispels?: number;
+    }>>;
+    interruptSpellsBySource?: Record<string, Record<string, number>>;
     soloShuffle?: SoloShuffleDataV2;
 }
