@@ -70,6 +70,17 @@ export default function MatchDetailsPanel({ match, isLoading, onBack }: MatchDet
             match.raw as unknown as { interruptSpellsBySource?: unknown }
         ).interruptSpellsBySource;
 
+        if (import.meta.env.DEV) {
+            console.log("[SpellMetrics] payload aggregate keys", {
+                matchId: match.id,
+                telemetryVersion: (match.raw as unknown as { telemetryVersion?: unknown }).telemetryVersion,
+                hasSpellTotals: !!spellTotals,
+                hasSpellTotalsBySource: !!spellTotalsBySource,
+                hasInterruptSpellsBySource: !!interruptSpellsBySource,
+                keys: Object.keys(((match.raw ?? {}) as unknown) as Record<string, unknown>),
+            });
+        }
+
         return {
             players,
             timeline,

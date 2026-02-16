@@ -13,6 +13,19 @@ const logSchemaMismatch = (message: string, details?: unknown) => {
 const isPlainObject = (value: unknown): value is Record<string, unknown> =>
     typeof value === "object" && value !== null && !Array.isArray(value);
 
+const coerceMatchesArray = (value: unknown): unknown[] => {
+    if (Array.isArray(value)) return value;
+    if (!isPlainObject(value)) return [];
+
+    const numericEntries = Object.entries(value)
+        .filter(([key]) => /^\d+$/.test(key))
+        .map(([key, item]) => ({ idx: Number(key), item }))
+        .filter(({ idx }) => Number.isFinite(idx))
+        .sort((a, b) => a.idx - b.idx);
+
+    return numericEntries.map(({ item }) => item);
+};
+
 const extractLuaTable = (content: string, key: string) => {
     const idx = content.indexOf(key);
     if (idx === -1) return null;
@@ -74,6 +87,141 @@ const extractLuaTable = (content: string, key: string) => {
     return null;
 };
 
+const splitTopLevelLuaEntries = (table: string) => {
+    const trimmed = table.trim();
+    if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) return [];
+    const body = trimmed.slice(1, -1);
+    const entries: string[] = [];
+
+    let start = 0;
+    let depthBrace = 0;
+    let depthBracket = 0;
+    let depthParen = 0;
+    let inString = false;
+    let stringChar = "";
+    let escaped = false;
+    let inLineComment = false;
+
+    for (let i = 0; i < body.length; i += 1) {
+        const ch = body[i];
+        const next = body[i + 1];
+
+        if (inLineComment) {
+            if (ch === "\n") inLineComment = false;
+            continue;
+        }
+
+        if (inString) {
+            if (escaped) {
+                escaped = false;
+                continue;
+            }
+            if (ch === "\\") {
+                escaped = true;
+                continue;
+            }
+            if (ch === stringChar) {
+                inString = false;
+                stringChar = "";
+            }
+            continue;
+        }
+
+        if (ch === "-" && next === "-" && depthBrace === 0 && depthBracket === 0 && depthParen === 0) {
+            inLineComment = true;
+            i += 1;
+            continue;
+        }
+
+        if (ch === "\"" || ch === "'") {
+            inString = true;
+            stringChar = ch;
+            continue;
+        }
+
+        if (ch === "{") depthBrace += 1;
+        else if (ch === "}") depthBrace = Math.max(0, depthBrace - 1);
+        else if (ch === "[") depthBracket += 1;
+        else if (ch === "]") depthBracket = Math.max(0, depthBracket - 1);
+        else if (ch === "(") depthParen += 1;
+        else if (ch === ")") depthParen = Math.max(0, depthParen - 1);
+        else if (ch === "," && depthBrace === 0 && depthBracket === 0 && depthParen === 0) {
+            const entry = body.slice(start, i).trim();
+            if (entry) entries.push(entry);
+            start = i + 1;
+        }
+    }
+
+    const tail = body.slice(start).trim();
+    if (tail) entries.push(tail);
+    return entries;
+};
+
+const findTopLevelAssign = (entry: string) => {
+    let depthBrace = 0;
+    let depthBracket = 0;
+    let depthParen = 0;
+    let inString = false;
+    let stringChar = "";
+    let escaped = false;
+
+    for (let i = 0; i < entry.length; i += 1) {
+        const ch = entry[i];
+
+        if (inString) {
+            if (escaped) {
+                escaped = false;
+                continue;
+            }
+            if (ch === "\\") {
+                escaped = true;
+                continue;
+            }
+            if (ch === stringChar) {
+                inString = false;
+                stringChar = "";
+            }
+            continue;
+        }
+
+        if (ch === "\"" || ch === "'") {
+            inString = true;
+            stringChar = ch;
+            continue;
+        }
+
+        if (ch === "{") depthBrace += 1;
+        else if (ch === "}") depthBrace = Math.max(0, depthBrace - 1);
+        else if (ch === "[") depthBracket += 1;
+        else if (ch === "]") depthBracket = Math.max(0, depthBracket - 1);
+        else if (ch === "(") depthParen += 1;
+        else if (ch === ")") depthParen = Math.max(0, depthParen - 1);
+        else if (ch === "=" && depthBrace === 0 && depthBracket === 0 && depthParen === 0) {
+            return i;
+        }
+    }
+
+    return -1;
+};
+
+const parseMatchesFallback = (table: string) => {
+    const entries = splitTopLevelLuaEntries(table);
+    const recovered: unknown[] = [];
+
+    entries.forEach((entry) => {
+        const assignIdx = findTopLevelAssign(entry);
+        const value = (assignIdx >= 0 ? entry.slice(assignIdx + 1) : entry).trim();
+        if (!value || value === "nil") return;
+        try {
+            recovered.push(luaJson.parse("return " + value));
+        } catch {
+            // ignore malformed single entries
+        }
+    });
+
+    return recovered;
+};
+
 const validateMatchV1 = (value: unknown) => {
     if (!isPlainObject(value)) {
         logSchemaMismatch("Match is not an object", value);
@@ -120,32 +268,80 @@ export const MatchesProvider = ({ children }: { children: ReactNode }) => {
 
                 timeout = setTimeout(async () => {
                     try {
+                        invoke("push_log", {
+                            message: `SavedVariables event received (${payload.account || "unknown"})`,
+                        }).catch(() => undefined);
+
                         const fileContent = await invoke<string>("read_saved_variables", {
                             path: payload.path,
                         });
 
-                        if (!fileContent) return;
+                        if (!fileContent) {
+                            invoke("push_log", {
+                                message: "SavedVariables read returned empty content",
+                            }).catch(() => undefined);
+                            return;
+                        }
 
                         const table = extractLuaTable(fileContent, "PvP_Scalpel_DB");
                         if (!table) {
                             logSchemaMismatch("PvP_Scalpel_DB not found or malformed");
+                            invoke("push_log", {
+                                message: "PvP_Scalpel_DB not found or malformed",
+                            }).catch(() => undefined);
                             return;
                         }
 
                         let parsedArray: unknown;
                         try {
                             parsedArray = luaJson.parse("return " + table);
-                        } catch {
+                        } catch (parseErr) {
+                            const recoveredMatches = parseMatchesFallback(table);
+                            if (recoveredMatches.length > 0) {
+                                parsedArray = recoveredMatches;
+                                if (import.meta.env.DEV) {
+                                    console.warn(
+                                        "[matches] full table parse failed; fallback recovered entries",
+                                        { recovered: recoveredMatches.length, parseErr }
+                                    );
+                                }
+                                invoke("push_log", {
+                                    message: `Match parse fallback recovered ${recoveredMatches.length} entries`,
+                                }).catch(() => undefined);
+                            } else {
+                            if (import.meta.env.DEV) {
+                                console.error("[matches] lua-json parse failed", parseErr);
+                            }
+                            invoke("push_log", {
+                                message: "Match parse failed (lua-json)",
+                            }).catch(() => undefined);
+                            return;
+                            }
+                        }
+
+                        const parsedMatches = coerceMatchesArray(parsedArray);
+                        if (!parsedMatches.length) {
+                            if (import.meta.env.DEV) {
+                                console.warn("[matches] PvP_Scalpel_DB parsed but has no iterable match entries", {
+                                    parsedType: typeof parsedArray,
+                                    isArray: Array.isArray(parsedArray),
+                                    keys: isPlainObject(parsedArray) ? Object.keys(parsedArray).slice(0, 12) : [],
+                                });
+                            }
+                            invoke("push_log", {
+                                message: "Match data found, but entries are empty",
+                            }).catch(() => undefined);
                             return;
                         }
 
-                        if (!Array.isArray(parsedArray)) {
-                            return;
-                        }
+                        invoke("push_log", {
+                            message: `Parsed ${parsedMatches.length} raw match entries`,
+                        }).catch(() => undefined);
 
                         const results: MatchWithId[] = [];
+                        let failedCount = 0;
 
-                        for (const parsedMatch of parsedArray) {
+                        for (const parsedMatch of parsedMatches) {
                             try {
                                 const id = await invoke<string>("identify_match", {
                                     obj: parsedMatch,
@@ -167,16 +363,22 @@ export const MatchesProvider = ({ children }: { children: ReactNode }) => {
                                     id,
                                     ...(isTelemetryV2 ? (parsedMatch as MatchV2) : (parsedMatch as Match)),
                                 });
-                            } catch {
-                                // Skip matches that fail to parse.
+                            } catch (matchErr) {
+                                failedCount += 1;
+                                if (import.meta.env.DEV) {
+                                    console.error("[matches] identify/normalize failed for one match", matchErr);
+                                }
                             }
                         }
 
                         setMatches(results);
-                        if (lastLoggedCount.current !== results.length) {
+                        if (lastLoggedCount.current !== results.length || failedCount > 0) {
                             lastLoggedCount.current = results.length;
                             invoke("push_log", {
-                                message: `Match data updated (${results.length} matches)`,
+                                message:
+                                    failedCount > 0
+                                        ? `Match data updated (${results.length} loaded, ${failedCount} failed)`
+                                        : `Match data updated (${results.length} matches)`,
                             }).catch(() => undefined);
                         }
                         hasParseError.current = false;

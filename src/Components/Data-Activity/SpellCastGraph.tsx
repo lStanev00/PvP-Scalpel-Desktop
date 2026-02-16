@@ -313,7 +313,7 @@ export default function SpellCastGraph({
         setTooltipPos(null);
     }, [metric, viewMode]);
 
-    const title = viewMode === "personal" ? `Personal ${toMetricLabel(metric)}` : `Compare ${toMetricLabel(metric)}`;
+    const title = viewMode === "personal" ? `Personal ${toMetricLabel(metric)}` : `Lobby ${toMetricLabel(metric)}`;
 
     const activeRows = viewMode === "personal" ? personalModel.rows : compareModel.rows;
     const maxValue = viewMode === "personal" ? personalModel.maxValue : compareModel.maxValue;
@@ -331,6 +331,57 @@ export default function SpellCastGraph({
         viewMode === "personal" &&
         (metric === "damage" || metric === "healing") &&
         personalModel.isFallbackToMatchTotals;
+
+    useEffect(() => {
+        if (!import.meta.env.DEV) return;
+        const debugBase = {
+            metric,
+            viewMode,
+            players: players.length,
+            ownerGuid,
+            usedSpellIds: usedSpellIds.length,
+            totals: parsedSpellTotals.size,
+            totalsBySource: parsedSpellTotalsBySource.size,
+            interruptsBySource: parsedInterruptsBySource.size,
+            personalRows: personalModel.rows.length,
+            compareRows: compareModel.rows.length,
+        };
+
+        console.log("[SpellMetrics] state", debugBase);
+
+        if (viewMode === "personal" && personalModel.rows.length === 0) {
+            const sourceKeys = Array.from(parsedSpellTotalsBySource.keys()).slice(0, 6);
+            const interruptKeys = Array.from(parsedInterruptsBySource.keys()).slice(0, 6);
+            console.error("[SpellMetrics] personal view has no rows", {
+                ...debugBase,
+                hasOwnerGuid: !!ownerGuid,
+                fallbackToMatchTotals: personalModel.isFallbackToMatchTotals,
+                sourceKeysSample: sourceKeys,
+                interruptKeysSample: interruptKeys,
+                ownerSourceFound:
+                    !!ownerGuid &&
+                    (parsedSpellTotalsBySource.has(ownerGuid) ||
+                        parsedInterruptsBySource.has(ownerGuid)),
+            });
+            return;
+        }
+
+        if (viewMode === "compare" && compareModel.rows.length === 0) {
+            console.error("[SpellMetrics] compare view has no rows", debugBase);
+        }
+    }, [
+        metric,
+        viewMode,
+        players.length,
+        ownerGuid,
+        usedSpellIds.length,
+        parsedSpellTotals,
+        parsedSpellTotalsBySource,
+        parsedInterruptsBySource,
+        personalModel.rows.length,
+        personalModel.isFallbackToMatchTotals,
+        compareModel.rows.length,
+    ]);
 
     return (
         <section className={styles["spells-panel"]}>
@@ -358,22 +409,20 @@ export default function SpellCastGraph({
                             role="tab"
                             aria-selected={viewMode === "compare"}
                         >
-                            Compare
+                            Lobby
                         </button>
                     </div>
                 </div>
 
                 <div className={styles["spells-panel__controls"]}>
                     <div className={styles.spellsPanelControlGroup}>
-                        <label className={styles["spells-panel__label"]} htmlFor="spell-metric">
-                            Graph
-                        </label>
                         <div className={styles.selectControl}>
                             <select
                                 id="spell-metric"
                                 className={styles.filterSelect}
                                 value={metric}
                                 onChange={(event) => setMetric(event.target.value as SpellMetricType)}
+                                aria-label="Metric type"
                             >
                                 <option value="damage">Damage</option>
                                 <option value="healing">Healing</option>

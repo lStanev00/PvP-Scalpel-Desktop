@@ -78,6 +78,7 @@ export interface PlayerEntryV2 {
     postmatchMMR?: number;
     damage?: number;
     healing?: number;
+    interrupts?: [number, number];
     kills?: number;
     deaths?: number;
     MSS?: [string, number][];

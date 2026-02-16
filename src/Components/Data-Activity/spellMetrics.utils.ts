@@ -90,8 +90,33 @@ export const getPlayerGuid = (player: MatchPlayer) => {
     return typeof maybe.guid === "string" ? maybe.guid : null;
 };
 
+const getPlayerInterruptIssued = (player: MatchPlayer) => {
+    const maybe = player as MatchPlayer & { interrupts?: unknown };
+    const raw = maybe.interrupts;
+
+    if (Array.isArray(raw)) {
+        if (raw.length < 1) return null;
+        const totalIssued = raw[0];
+        if (typeof totalIssued !== "number" || !Number.isFinite(totalIssued)) return null;
+        return Math.max(0, totalIssued);
+    }
+
+    if (raw && typeof raw === "object") {
+        const tuple = raw as Record<string, unknown>;
+        const totalIssued = tuple["1"] ?? tuple["0"];
+        if (typeof totalIssued !== "number" || !Number.isFinite(totalIssued)) return null;
+        return Math.max(0, totalIssued);
+    }
+
+    return null;
+};
+
 const asFiniteNumber = (value: unknown) =>
-    typeof value === "number" && Number.isFinite(value) ? value : null;
+    typeof value === "number" && Number.isFinite(value)
+        ? value
+        : typeof value === "string" && value.trim() !== "" && Number.isFinite(Number(value))
+          ? Number(value)
+          : null;
 
 const zeroAttempts: AttemptCounts = {
     spellId: 0,
@@ -123,8 +148,8 @@ export const parseSpellTotals = (input: unknown): ParsedSpellTotals => {
         if (!Number.isFinite(spellId) || spellId <= 0) return;
         if (!isRecord(entry)) return;
 
-        const damage = asFiniteNumber(entry.damage);
-        const healing = asFiniteNumber(entry.healing);
+        const damage = asFiniteNumber(entry.damage) ?? asFiniteNumber(entry.damageDone);
+        const healing = asFiniteNumber(entry.healing) ?? asFiniteNumber(entry.healingDone);
         if (damage === null || healing === null) return;
 
         out.set(spellId, {
@@ -153,6 +178,12 @@ export const parseSpellTotalsBySource = (input: unknown): ParsedSpellTotalsBySou
     const out: ParsedSpellTotalsBySource = new Map();
     if (!isRecord(input)) return out;
 
+    const rootSpellMap = parseSpellTotals(input);
+    if (rootSpellMap.size > 0) {
+        out.set("unknown", rootSpellMap);
+        return out;
+    }
+
     Object.entries(input).forEach(([sourceGuidRaw, value]) => {
         const sourceGuid = normalizeGuid(sourceGuidRaw);
         if (!sourceGuid) return;
@@ -167,6 +198,18 @@ export const parseSpellTotalsBySource = (input: unknown): ParsedSpellTotalsBySou
 export const parseInterruptSpellsBySource = (input: unknown): ParsedInterruptsBySource => {
     const out: ParsedInterruptsBySource = new Map();
     if (!isRecord(input)) return out;
+
+    const rootInterruptMap = new Map<number, number>();
+    Object.entries(input).forEach(([spellIdRaw, countRaw]) => {
+        const spellId = Number(spellIdRaw);
+        const count = asFiniteNumber(countRaw);
+        if (!Number.isFinite(spellId) || spellId <= 0 || count === null || count <= 0) return;
+        rootInterruptMap.set(spellId, count);
+    });
+    if (rootInterruptMap.size > 0) {
+        out.set("unknown", rootInterruptMap);
+        return out;
+    }
 
     Object.entries(input).forEach(([sourceGuidRaw, value]) => {
         const sourceGuid = normalizeGuid(sourceGuidRaw);
@@ -265,19 +308,26 @@ const getPlayerMetricValue = (
     metric: SpellMetricType,
     interruptsBySource: ParsedInterruptsBySource
 ) => {
+    const anyPlayer = player as MatchPlayer & {
+        damageDone?: unknown;
+        healingDone?: unknown;
+    };
     if (metric === "damage") {
-        const value = asFiniteNumber(player.damage);
+        const value = asFiniteNumber(player.damage) ?? asFiniteNumber(anyPlayer.damageDone);
         return value && value > 0 ? value : 0;
     }
     if (metric === "healing") {
-        const value = asFiniteNumber(player.healing);
+        const value = asFiniteNumber(player.healing) ?? asFiniteNumber(anyPlayer.healingDone);
         return value && value > 0 ? value : 0;
     }
     const guid = normalizeGuid(getPlayerGuid(player));
-    if (!guid) return 0;
-    const map = interruptsBySource.get(guid);
-    if (!map) return 0;
-    return Array.from(map.values()).reduce((sum, count) => sum + count, 0);
+    if (guid) {
+        const map = interruptsBySource.get(guid);
+        if (map && map.size > 0) {
+            return Array.from(map.values()).reduce((sum, count) => sum + count, 0);
+        }
+    }
+    return getPlayerInterruptIssued(player) ?? 0;
 };
 
 const getSourceSpellValues = (

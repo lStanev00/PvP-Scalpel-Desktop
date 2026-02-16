@@ -438,13 +438,15 @@
     align-items: center;
     justify-content: space-between;
     gap: 16px;
-    margin-bottom: 22px;
+    margin-bottom: 14px;
 }
 
 .spellsPanelTitleArea {
-    display: grid;
-    gap: 10px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
     min-width: 0;
+    flex-wrap: wrap;
 }
 
 .spells-panel__title {
@@ -471,6 +473,7 @@
     border-radius: 10px;
     overflow: hidden;
     background: rgba(12, 16, 24, 0.55);
+    flex: 0 0 auto;
 }
 
 .spellViewButton {
@@ -494,9 +497,13 @@
 }
 
 .spellsPanelControlGroup {
-    display: grid;
-    gap: 6px;
-    align-items: end;
+    display: flex;
+    align-items: center;
+    min-width: 140px;
+}
+
+.spells-panel__controls .selectControl {
+    min-width: 140px;
 }
 
 .spells-panel__label {
