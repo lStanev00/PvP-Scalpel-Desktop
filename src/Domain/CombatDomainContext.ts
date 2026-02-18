@@ -80,7 +80,7 @@ const normalizeSpec = (spec?: string) => {
 
 const normalizeClassId = (classId?: string) => {
     if (!classId) return "";
-    return classId.toUpperCase().replace(/[\s_]/g, "");
+    return classId.toUpperCase().replace(/[^A-Z0-9]/g, "");
 };
 
 export const getClassColor = (classId?: string) => {

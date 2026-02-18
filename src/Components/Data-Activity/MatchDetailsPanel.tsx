@@ -1,9 +1,10 @@
 import { useMemo } from "react";
-import { LuArrowLeft, LuInfo } from "react-icons/lu";
+import { LuInfo } from "react-icons/lu";
 import TeamTable from "./TeamTable";
 import MSSStatsSection from "./MSSStatsSection";
 import SpellCastGraph from "./SpellCastGraph";
 import DebugSpellInspector from "./DebugSpellInspector";
+import MatchSummaryHeader from "./MatchSummaryHeader";
 import type { MatchSummary } from "./utils";
 import type { MatchPlayer, MatchTimelineEntry } from "./types";
 import styles from "./DataActivity.module.css";
@@ -153,12 +154,13 @@ export default function MatchDetailsPanel({ match, isLoading, onBack }: MatchDet
 
     return (
         <section className={styles.detailsCard}>
-            {onBack ? (
-                <button type="button" className={styles.backButton} onClick={onBack}>
-                    <LuArrowLeft aria-hidden="true" className={styles.backIcon} />
-                    Match History
-                </button>
-            ) : null}
+            <MatchSummaryHeader
+                match={match}
+                players={content.players}
+                timeline={content.timeline}
+                kickSpellIds={content.interruptSpellIds}
+                onBack={onBack}
+            />
             <div className={styles.detailsBody}>
                 {content.showFactions ? (
                     <div className={styles.teamGrid}>

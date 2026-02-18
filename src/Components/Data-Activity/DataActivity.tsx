@@ -135,35 +135,11 @@ export default function DataActivity() {
         }
     }, [selectedMatch?.owner.name, rpcUpdate]);
 
-    const headerActions = useMemo(() => {
-        if (view === "details") {
-            if (!selectedMatch) return null;
-            const deltaClass =
-                selectedMatch.delta === null
-                    ? styles.deltaNeutral
-                    : selectedMatch.delta > 0
-                      ? styles.deltaPositive
-                      : selectedMatch.delta < 0
-                        ? styles.deltaNegative
-                        : styles.deltaNeutral;
-            return (
-                <div className={styles.headerMetaStack}>
-                    <div className={`${styles.headerMeta} ${deltaClass}`}>
-                        MMR Delta: {selectedMatch.deltaLabel}
-                    </div>
-                    <div className={styles.headerMeta}>Match ID: {selectedMatch.id}</div>
-                </div>
-            );
-        }
-        return <div className={styles.headerMeta}>Total matches: {matches.length}</div>;
-    }, [matches.length, view, selectedMatch]);
-
-    const headerTitle =
-        view === "details" ? selectedMatch?.mapName ?? "Match Details" : "Match History";
-    const headerDescription =
-        view === "details" && selectedMatch
-            ? `${selectedMatch.timestampLabel} · ${selectedMatch.durationLabel}`
-            : "";
+    const showRouteHeader = view === "list";
+    const headerActions = useMemo(
+        () => <div className={styles.headerMeta}>Total matches: {matches.length}</div>,
+        [matches.length]
+    );
 
     const onSelectMatch = useCallback((match: MatchSummary) => {
         listScrollTop.current = window.scrollY;
@@ -203,10 +179,9 @@ export default function DataActivity() {
 
     return (
         <RouteLayout
-            title={headerTitle}
-            description={headerDescription}
-            actions={headerActions ?? undefined}
-            showHeader={true}
+            title="Match History"
+            actions={showRouteHeader ? headerActions : undefined}
+            showHeader={showRouteHeader}
         >
             <div className={styles.page}>
                 {view === "list" ? (
@@ -238,3 +213,4 @@ export default function DataActivity() {
         </RouteLayout>
     );
 }
+
