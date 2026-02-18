@@ -6,4 +6,5 @@ import type { MatchV2 } from "./matches-v2";
 
 export type MatchWithId = (Match | MatchV2) & {
     id: string;
+    interruptSpellIds?: number[];
 };
