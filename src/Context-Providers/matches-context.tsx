@@ -26,6 +26,31 @@ const coerceMatchesArray = (value: unknown): unknown[] => {
     return numericEntries.map(({ item }) => item);
 };
 
+const coerceNumericIdArray = (value: unknown): number[] => {
+    const source = Array.isArray(value) ? value : coerceMatchesArray(value);
+    if (!source.length) return [];
+
+    const deduped = new Set<number>();
+    source.forEach((item) => {
+        const raw =
+            typeof item === "number"
+                ? item
+                : typeof item === "string"
+                  ? Number(item)
+                  : typeof item === "object" &&
+                      item !== null &&
+                      "value" in item &&
+                      typeof (item as { value?: unknown }).value === "number"
+                    ? (item as { value: number }).value
+                    : NaN;
+        if (Number.isFinite(raw) && raw > 0) {
+            deduped.add(Math.trunc(raw));
+        }
+    });
+
+    return Array.from(deduped).sort((a, b) => a - b);
+};
+
 const extractLuaTable = (content: string, key: string) => {
     const idx = content.indexOf(key);
     if (idx === -1) return null;
@@ -292,6 +317,18 @@ export const MatchesProvider = ({ children }: { children: ReactNode }) => {
                             return;
                         }
 
+                        const interruptSpellIds = coerceNumericIdArray(
+                            (() => {
+                                const kickTable = extractLuaTable(fileContent, "PvP_Scalpel_InteruptSpells");
+                                if (!kickTable) return [];
+                                try {
+                                    return luaJson.parse("return " + kickTable);
+                                } catch {
+                                    return [];
+                                }
+                            })()
+                        );
+
                         let parsedArray: unknown;
                         try {
                             parsedArray = luaJson.parse("return " + table);
@@ -362,6 +399,7 @@ export const MatchesProvider = ({ children }: { children: ReactNode }) => {
                                 results.push({
                                     id,
                                     ...(isTelemetryV2 ? (parsedMatch as MatchV2) : (parsedMatch as Match)),
+                                    interruptSpellIds,
                                 });
                             } catch (matchErr) {
                                 failedCount += 1;

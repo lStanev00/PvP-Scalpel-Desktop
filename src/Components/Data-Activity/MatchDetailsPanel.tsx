@@ -69,6 +69,21 @@ export default function MatchDetailsPanel({ match, isLoading, onBack }: MatchDet
         const interruptSpellsBySource = (
             match.raw as unknown as { interruptSpellsBySource?: unknown }
         ).interruptSpellsBySource;
+        const interruptSpellIds = (
+            match.raw as unknown as { interruptSpellIds?: unknown }
+        ).interruptSpellIds;
+        const ownerPlayer = players.find((player) => player.isOwner) ?? null;
+        const ownerInterruptTuple = Array.isArray((ownerPlayer as { interrupts?: unknown } | null)?.interrupts)
+            ? ((ownerPlayer as { interrupts?: unknown }).interrupts as unknown[])
+            : null;
+        const ownerInterruptsIssued =
+            ownerInterruptTuple && ownerInterruptTuple.length > 0
+                ? Number(ownerInterruptTuple[0])
+                : null;
+        const ownerInterruptsSucceeded =
+            ownerInterruptTuple && ownerInterruptTuple.length > 1
+                ? Number(ownerInterruptTuple[1])
+                : null;
 
         if (import.meta.env.DEV) {
             console.log("[SpellMetrics] payload aggregate keys", {
@@ -99,6 +114,19 @@ export default function MatchDetailsPanel({ match, isLoading, onBack }: MatchDet
                 null
             ) as Record<string, unknown> | null,
             interruptSpellsBySource: (interruptSpellsBySource ?? null) as Record<string, unknown> | null,
+            interruptSpellIds: Array.isArray(interruptSpellIds)
+                ? interruptSpellIds
+                      .map((value) => (typeof value === "number" ? value : Number(value)))
+                      .filter((value): value is number => Number.isFinite(value) && value > 0)
+                : [],
+            ownerInterruptsIssued:
+                ownerInterruptsIssued !== null && Number.isFinite(ownerInterruptsIssued)
+                    ? Math.max(0, Math.trunc(ownerInterruptsIssued))
+                    : null,
+            ownerInterruptsSucceeded:
+                ownerInterruptsSucceeded !== null && Number.isFinite(ownerInterruptsSucceeded)
+                    ? Math.max(0, Math.trunc(ownerInterruptsSucceeded))
+                    : null,
         };
     }, [match]);
 
@@ -168,7 +196,13 @@ export default function MatchDetailsPanel({ match, isLoading, onBack }: MatchDet
                     </div>
                 ) : null}
                 {showDebug ? (
-                    <DebugSpellInspector timeline={content.timeline} gameVersion={content.gameVersion} />
+                    <DebugSpellInspector
+                        timeline={content.timeline}
+                        gameVersion={content.gameVersion}
+                        kickSpellIds={content.interruptSpellIds}
+                        ownerInterruptsIssued={content.ownerInterruptsIssued}
+                        ownerInterruptsSucceeded={content.ownerInterruptsSucceeded}
+                    />
                 ) : null}
             </div>
         </section>
