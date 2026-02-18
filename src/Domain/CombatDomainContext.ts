@@ -12,6 +12,7 @@ export interface ClassMetadata {
     id: ClassId;
     name: string;
     color?: string;
+    media?: string;
 }
 
 export interface SpellContext {
@@ -49,6 +50,7 @@ const fallbackClassColors: Record<string, string> = {
 export const specToRoleMap: Record<string, CombatRole> = {};
 
 let dynamicSpecRoleMap: Record<string, CombatRole> = {};
+let dynamicSpecMediaMap: Record<string, string> = {};
 
 export const specToDamageTypeMap: Record<string, DamageType> = {};
 
@@ -87,10 +89,22 @@ export const getClassColor = (classId?: string) => {
     return classMetadataMap[key]?.color;
 };
 
+export const getClassMedia = (classId?: string) => {
+    if (!classId) return undefined;
+    const key = normalizeClassId(classId);
+    return classMetadataMap[key]?.media;
+};
+
 export const getRoleBySpec = (spec?: string): CombatRole => {
     if (!spec) return "unknown";
     const key = normalizeSpec(spec);
     return dynamicSpecRoleMap[key] ?? "unknown";
+};
+
+export const getSpecMedia = (spec?: string) => {
+    if (!spec) return undefined;
+    const key = normalizeSpec(spec);
+    return dynamicSpecMediaMap[key];
 };
 
 export const getRoleByClassAndSpec = (classId?: string, spec?: string): CombatRole => {
@@ -100,16 +114,20 @@ export const getRoleByClassAndSpec = (classId?: string, spec?: string): CombatRo
     return "unknown";
 };
 
-export const setSpecRoleMappings = (entries: Array<{ name: string; role: CombatRole }>) => {
+export const setSpecRoleMappings = (entries: Array<{ name: string; role: CombatRole; media?: string }>) => {
     dynamicSpecRoleMap = {};
+    dynamicSpecMediaMap = {};
     entries.forEach((entry) => {
         const key = normalizeSpec(entry.name);
         if (!key) return;
         dynamicSpecRoleMap[key] = entry.role;
+        if (typeof entry.media === "string" && entry.media.trim()) {
+            dynamicSpecMediaMap[key] = entry.media;
+        }
     });
 };
 
-export const setClassMappings = (entries: Array<{ name: string; color?: string }>) => {
+export const setClassMappings = (entries: Array<{ name: string; color?: string; media?: string }>) => {
     classMetadataMap = {};
     entries.forEach((entry) => {
         const key = normalizeClassId(entry.name);
@@ -118,6 +136,7 @@ export const setClassMappings = (entries: Array<{ name: string; color?: string }
             id: key,
             name: entry.name,
             color: entry.color ?? fallbackClassColors[key],
+            media: entry.media,
         };
     });
 };
@@ -257,6 +276,8 @@ export const CombatDomainContext = {
     spellClassMap,
     ROLE_ICON_PATHS,
     getClassColor,
+    getClassMedia,
+    getSpecMedia,
     getRoleBySpec,
     getRoleByClassAndSpec,
     getDamageTypeBySpec,
