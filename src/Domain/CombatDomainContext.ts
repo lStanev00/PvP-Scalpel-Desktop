@@ -86,7 +86,7 @@ const normalizeClassId = (classId?: string) => {
 export const getClassColor = (classId?: string) => {
     if (!classId) return undefined;
     const key = normalizeClassId(classId);
-    return classMetadataMap[key]?.color;
+    return classMetadataMap[key]?.color ?? fallbackClassColors[key];
 };
 
 export const getClassMedia = (classId?: string) => {
