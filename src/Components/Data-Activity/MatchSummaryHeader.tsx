@@ -6,16 +6,15 @@ import {
     getRoleBySpec,
     getSpecMedia,
 } from "../../Domain/CombatDomainContext";
-import { resolveIntentAttempts, type AttemptRecord } from "./spellCastResolver";
-import type { MatchPlayer, MatchTimelineEntry } from "./types";
+import type { KickTelemetrySnapshot } from "./kickTelemetry";
+import type { MatchPlayer } from "./types";
 import type { MatchSummary } from "./utils";
 import styles from "./DataActivity.module.css";
 
 interface MatchSummaryHeaderProps {
     match: MatchSummary;
     players: MatchPlayer[];
-    timeline: MatchTimelineEntry[];
-    kickSpellIds: number[];
+    kickTelemetrySnapshot: KickTelemetrySnapshot;
     onBack?: () => void;
 }
 
@@ -24,10 +23,17 @@ type MetricTooltipRow = {
     value: string;
 };
 
+type KickHeaderTelemetry = {
+    isAvailable: boolean;
+    message?: string;
+    successful: number;
+    failed: number;
+    total: number;
+};
+
 const CIRCLE_RADIUS = 52;
 const CIRCLE_CENTER = 64;
 const CIRCLE_CIRCUMFERENCE = 2 * Math.PI * CIRCLE_RADIUS;
-const KICK_COLLAPSE_WINDOW_SECONDS = 0.35;
 
 const clampPercent = (value: number) => Math.max(0, Math.min(100, value));
 
@@ -64,93 +70,15 @@ const resolveMediaUrl = (value?: string) => {
     return `https://render.worldofwarcraft.com/us/icons/56/${value}.jpg`;
 };
 
-const parseInterruptTuple = (player: MatchPlayer | null) => {
-    if (!player) return { issued: 0, succeeded: 0 };
-    const raw = (player as MatchPlayer & { interrupts?: unknown }).interrupts;
-
-    if (Array.isArray(raw)) {
-        return {
-            issued: normalizeCount(raw[0]),
-            succeeded: normalizeCount(raw[1]),
-        };
-    }
-
-    if (raw && typeof raw === "object") {
-        const tuple = raw as Record<string, unknown>;
-        return {
-            issued: normalizeCount(tuple["0"] ?? tuple["1"]),
-            succeeded: normalizeCount(tuple["1"] ?? tuple["2"]),
-        };
-    }
-
-    return { issued: 0, succeeded: 0 };
-};
-
-const hasIntentSignal = (attempt: AttemptRecord) =>
-    attempt.events.some((event) => event.event === "SENT" || event.event === "START");
-
-const getCastGuidCollapseKey = (castGUID?: string) => {
-    if (!castGUID) return null;
-    const match = castGUID.match(/^(.*-)([0-9a-fA-F]{10})$/);
-    if (!match) return castGUID;
-    const [, prefix, tail] = match;
-    return `${prefix}${tail.slice(0, 4)}${tail.slice(5)}`;
-};
-
-const collapseKickAttempts = (input: AttemptRecord[]) => {
-    const sorted = [...input].sort((a, b) =>
-        a.startTime === b.startTime ? a.id.localeCompare(b.id) : a.startTime - b.startTime
-    );
-    const collapsed: AttemptRecord[] = [];
-    let active: AttemptRecord | null = null;
-
-    sorted.forEach((attempt) => {
-        if (!active) {
-            active = attempt;
-            return;
-        }
-
-        const sameSpell = active.spellId === attempt.spellId;
-        const delta = Math.abs(attempt.startTime - active.endTime);
-        const activeGuidKey = getCastGuidCollapseKey(active.castGUID);
-        const incomingGuidKey = getCastGuidCollapseKey(attempt.castGUID);
-        const similarGuid =
-            !!activeGuidKey && !!incomingGuidKey && activeGuidKey === incomingGuidKey;
-
-        if (sameSpell && (similarGuid || delta <= KICK_COLLAPSE_WINDOW_SECONDS)) {
-            active = {
-                ...active,
-                startTime: Math.min(active.startTime, attempt.startTime),
-                endTime: Math.max(active.endTime, attempt.endTime),
-                events: [...active.events, ...attempt.events].sort((a, b) =>
-                    a.t === b.t ? a.index - b.index : a.t - b.t
-                ),
-                resolvedOutcome:
-                    active.resolvedOutcome === "succeeded" || attempt.resolvedOutcome === "succeeded"
-                        ? "succeeded"
-                        : active.resolvedOutcome === "interrupted" ||
-                            attempt.resolvedOutcome === "interrupted"
-                          ? "interrupted"
-                          : active.resolvedOutcome ?? attempt.resolvedOutcome,
-            };
-            return;
-        }
-
-        collapsed.push(active);
-        active = attempt;
-    });
-
-    if (active) collapsed.push(active);
-    return collapsed;
-};
-
 function MetricTooltip({
     title,
     rows,
+    note,
     align = "center",
 }: {
     title?: string;
     rows: MetricTooltipRow[];
+    note?: string;
     align?: "center" | "right";
 }) {
     return (
@@ -161,6 +89,7 @@ function MetricTooltip({
             role="tooltip"
         >
             {title ? <div className={styles.summaryMetricTooltipTitle}>{title}</div> : null}
+            {note ? <div className={styles.summaryMetricTooltipNote}>{note}</div> : null}
             {rows.map((row) => (
                 <div key={row.label} className={styles.summaryMetricTooltipRow}>
                     <span>{row.label}</span>
@@ -225,18 +154,18 @@ function ContributionCircle({
 }
 
 function KickEfficiencyCircle({
-    successful,
-    failed,
+    telemetry,
     averageReactionMs,
     tooltipRows,
 }: {
-    successful: number;
-    failed: number;
+    telemetry: KickHeaderTelemetry;
     averageReactionMs: number | null;
     tooltipRows: MetricTooltipRow[];
 }) {
     const [animationFactor, setAnimationFactor] = useState(0);
-    const total = successful + failed;
+    const total = telemetry.total;
+    const successful = telemetry.successful;
+    const failed = telemetry.failed;
     const successPct = total > 0 ? successful / total : 0;
     const failedPct = total > 0 ? failed / total : 0;
     const successRate = total > 0 ? Math.round((successful / total) * 100) : 0;
@@ -244,7 +173,7 @@ function KickEfficiencyCircle({
     useEffect(() => {
         const raf = window.requestAnimationFrame(() => setAnimationFactor(1));
         return () => window.cancelAnimationFrame(raf);
-    }, [successful, failed]);
+    }, [successful, failed, telemetry.isAvailable]);
 
     const animatedSuccessLength = CIRCLE_CIRCUMFERENCE * successPct * animationFactor;
     const animatedFailedLength = CIRCLE_CIRCUMFERENCE * failedPct * animationFactor;
@@ -259,44 +188,63 @@ function KickEfficiencyCircle({
                     cy={CIRCLE_CENTER}
                     r={CIRCLE_RADIUS}
                 />
-                <circle
-                    className={styles.summaryCircleArcSegment}
-                    cx={CIRCLE_CENTER}
-                    cy={CIRCLE_CENTER}
-                    r={CIRCLE_RADIUS}
-                    stroke="var(--good)"
-                    strokeDasharray={`${animatedSuccessLength} ${
-                        CIRCLE_CIRCUMFERENCE - animatedSuccessLength
-                    }`}
-                    strokeDashoffset={startOffset}
-                />
-                <circle
-                    className={styles.summaryCircleArcSegment}
-                    cx={CIRCLE_CENTER}
-                    cy={CIRCLE_CENTER}
-                    r={CIRCLE_RADIUS}
-                    stroke="var(--bad)"
-                    strokeDasharray={`${animatedFailedLength} ${CIRCLE_CIRCUMFERENCE - animatedFailedLength}`}
-                    strokeDashoffset={startOffset - animatedSuccessLength}
-                />
+                {telemetry.isAvailable ? (
+                    <>
+                        <circle
+                            className={styles.summaryCircleArcSegment}
+                            cx={CIRCLE_CENTER}
+                            cy={CIRCLE_CENTER}
+                            r={CIRCLE_RADIUS}
+                            stroke="var(--good)"
+                            strokeDasharray={`${animatedSuccessLength} ${
+                                CIRCLE_CIRCUMFERENCE - animatedSuccessLength
+                            }`}
+                            strokeDashoffset={startOffset}
+                        />
+                        <circle
+                            className={styles.summaryCircleArcSegment}
+                            cx={CIRCLE_CENTER}
+                            cy={CIRCLE_CENTER}
+                            r={CIRCLE_RADIUS}
+                            stroke="var(--bad)"
+                            strokeDasharray={`${animatedFailedLength} ${CIRCLE_CIRCUMFERENCE - animatedFailedLength}`}
+                            strokeDashoffset={startOffset - animatedSuccessLength}
+                        />
+                    </>
+                ) : null}
             </svg>
             <div className={styles.summaryCircleText}>
                 <div className={styles.summaryCircleValue}>
-                    {successful} / {total}
+                    {telemetry.isAvailable ? (total === 0 ? "?" : `${successful} / ${total}`) : "?"}
                 </div>
                 <div className={styles.summaryCircleLabel}>Kick Status</div>
             </div>
             <MetricTooltip
                 title="Kick Status"
                 align="right"
-                rows={[
-                    ...tooltipRows,
-                    {
-                        label: "Avg Reaction",
-                        value: averageReactionMs === null ? "--" : `${averageReactionMs} ms`,
-                    },
-                    { label: "Success Rate", value: `${successRate}%` },
-                ]}
+                note={
+                    telemetry.isAvailable
+                        ? total === 0
+                            ? "No interrupt attempts recorded."
+                            : undefined
+                        : telemetry.message ?? "Interrupt telemetry not available for this match."
+                }
+                rows={
+                    telemetry.isAvailable && total > 0
+                        ? [
+                              ...tooltipRows,
+                              ...(averageReactionMs === null
+                                  ? []
+                                  : [
+                                        {
+                                            label: "Avg Reaction",
+                                            value: `${averageReactionMs} ms`,
+                                        },
+                                    ]),
+                              { label: "Success Rate", value: `${successRate}%` },
+                          ]
+                        : []
+                }
             />
         </div>
     );
@@ -305,8 +253,7 @@ function KickEfficiencyCircle({
 export default function MatchSummaryHeader({
     match,
     players,
-    timeline,
-    kickSpellIds,
+    kickTelemetrySnapshot,
     onBack,
 }: MatchSummaryHeaderProps) {
     const [isExpanded, setIsExpanded] = useState(false);
@@ -361,31 +308,27 @@ export default function MatchSummaryHeader({
     const contributionColor = contributionIsPositive ? "var(--good)" : "var(--bad)";
     const performanceOutcome = contributionIsPositive ? "Above role average" : "Below role average";
 
-    const kickSet = useMemo(
-        () =>
-            new Set(
-                kickSpellIds
-                    .map((value) => normalizeCount(value))
-                    .filter((value) => value > 0)
-            ),
-        [kickSpellIds]
-    );
-    const { attempts } = useMemo(() => resolveIntentAttempts(timeline), [timeline]);
-    const kickAttempts = useMemo(() => {
-        const filtered = attempts.filter((attempt) => kickSet.has(attempt.spellId));
-        return collapseKickAttempts(filtered).filter(hasIntentSignal);
-    }, [attempts, kickSet]);
+    const kickTelemetry = useMemo<KickHeaderTelemetry>(() => {
+        const isAvailable =
+            !kickTelemetrySnapshot.isLegacyMatch && kickTelemetrySnapshot.succeeded !== null;
+        if (!isAvailable) {
+            return {
+                isAvailable: false,
+                message: kickTelemetrySnapshot.isLegacyMatch
+                    ? "Data version is not supported for this analytics."
+                    : "Interrupt telemetry not available for this match.",
+                successful: 0,
+                failed: 0,
+                total: 0,
+            };
+        }
 
-    const { succeeded } = parseInterruptTuple(owner);
-    const intentAttempts = kickAttempts.length;
-    const failedFromAlignment = Math.max(0, intentAttempts - succeeded);
-    const kickTotal = succeeded + failedFromAlignment;
-    const reactionSamplesMs = kickAttempts
-        .map((attempt) => (attempt.endTime - attempt.startTime) * 1000)
-        .filter((value) => Number.isFinite(value) && value > 0);
-    const averageReactionMs = reactionSamplesMs.length
-        ? Math.round(reactionSamplesMs.reduce((sum, value) => sum + value, 0) / reactionSamplesMs.length)
-        : null;
+        const total = Math.max(0, Math.trunc(kickTelemetrySnapshot.intentAttempts));
+        const successful = Math.max(0, Math.trunc(kickTelemetrySnapshot.succeeded ?? 0));
+        const failed = Math.max(0, total - successful);
+
+        return { isAvailable: true, successful, failed, total };
+    }, [kickTelemetrySnapshot]);
 
     const ownerClassColor = getClassColor(owner?.class) ?? "#8a94a6";
     const classMedia = resolveMediaUrl(getClassMedia(owner?.class) ?? getSpecMedia(owner?.spec));
@@ -401,16 +344,28 @@ export default function MatchSummaryHeader({
     ];
 
     const kickTooltipRows: MetricTooltipRow[] = [
-        { label: "Successful", value: String(succeeded) },
-        { label: "Failed", value: String(failedFromAlignment) },
+        { label: "Successful", value: String(kickTelemetry.successful) },
+        { label: "Failed", value: String(kickTelemetry.failed) },
     ];
 
     const expandedMetrics: Array<{ label: string; value: string }> = [
         { label: "Performance", value: performanceOutcome },
-        { label: `${outputLabel} / Team Total`, value: `${formatInteger(outputTotal)} / ${formatInteger(outputTeamTotal)}` },
-        { label: "Successful Kicks", value: formatInteger(succeeded) },
-        { label: "Failed Kicks", value: formatInteger(failedFromAlignment) },
-        { label: "Kick Attempts", value: formatInteger(kickTotal) },
+        {
+            label: `${outputLabel} / Team Total`,
+            value: `${formatInteger(outputTotal)} / ${formatInteger(outputTeamTotal)}`,
+        },
+        {
+            label: "Successful Kicks",
+            value: kickTelemetry.isAvailable ? formatInteger(kickTelemetry.successful) : "N/A",
+        },
+        {
+            label: "Failed Kicks",
+            value: kickTelemetry.isAvailable ? formatInteger(kickTelemetry.failed) : "N/A",
+        },
+        {
+            label: "Kick Attempts",
+            value: kickTelemetry.isAvailable ? formatInteger(kickTelemetry.total) : "N/A",
+        },
     ];
 
     return (
@@ -430,7 +385,7 @@ export default function MatchSummaryHeader({
                     onClick={() => setIsExpanded((value) => !value)}
                     aria-expanded={isExpanded}
                 >
-                    {isExpanded ? "Hide Performance" : `Show Performance · ${performanceOutcome}`}
+                    {isExpanded ? "Hide Performance" : `Show Performance - ${performanceOutcome}`}
                     {isExpanded ? <LuChevronUp aria-hidden="true" /> : <LuChevronDown aria-hidden="true" />}
                 </button>
             </div>
@@ -480,9 +435,8 @@ export default function MatchSummaryHeader({
 
                 <div className={styles.summaryMetricColumn}>
                     <KickEfficiencyCircle
-                        successful={succeeded}
-                        failed={failedFromAlignment}
-                        averageReactionMs={averageReactionMs}
+                        telemetry={kickTelemetry}
+                        averageReactionMs={kickTelemetrySnapshot.averageReactionMs}
                         tooltipRows={kickTooltipRows}
                     />
                 </div>

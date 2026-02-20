@@ -1,4 +1,4 @@
-// Telemetry v2 types (SavedVariables schema).
+// Telemetry v2/v3 types (SavedVariables schema).
 export type TimelineEventType =
     | "SENT"
     | "START"
@@ -8,7 +8,8 @@ export type TimelineEventType =
     | "FAILED_QUIET"
     | "INTERRUPTED"
     | "CHANNEL_START"
-    | "CHANNEL_STOP";
+    | "CHANNEL_STOP"
+    | "ITEM_USE";
 
 export interface BuildInfoSnapshot {
     version: string;
@@ -35,6 +36,7 @@ export interface TimelineEventV2 {
     spellID?: number;
     castGUID?: string;
     targetInfo?: TargetInfoSnapshot;
+    // Legacy v2-only fields (not emitted by current v3 recorder).
     hp?: number;
     power?: number;
     resourceType?: number;
@@ -156,7 +158,7 @@ export interface SoloShuffleDataV2 {
 
 export interface MatchV2 {
     matchKey: string;
-    telemetryVersion: number; // current: 2
+    telemetryVersion: 2 | 3;
     winner?: "victory" | "defeat" | "draw";
     matchDetails: MatchDetailsV2;
     players: PlayerEntryV2[];
@@ -185,5 +187,6 @@ export interface MatchV2 {
         dispels?: number;
     }>>;
     interruptSpellsBySource?: Record<string, Record<string, number>>;
+    castOutcomes?: unknown[];
     soloShuffle?: SoloShuffleDataV2;
 }

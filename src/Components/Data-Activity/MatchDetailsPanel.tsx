@@ -5,6 +5,11 @@ import MSSStatsSection from "./MSSStatsSection";
 import SpellCastGraph from "./SpellCastGraph";
 import DebugSpellInspector from "./DebugSpellInspector";
 import MatchSummaryHeader from "./MatchSummaryHeader";
+import {
+    computeKickTelemetrySnapshot,
+    resolveTelemetryVersion,
+    type KickTelemetrySnapshot,
+} from "./kickTelemetry";
 import type { MatchSummary } from "./utils";
 import type { MatchPlayer, MatchTimelineEntry } from "./types";
 import styles from "./DataActivity.module.css";
@@ -28,9 +33,29 @@ type SpellTotalEntry = {
 };
 
 type SpellTotalsMap = Record<string, SpellTotalEntry> | Record<number, SpellTotalEntry>;
+type MatchDetailsContent = {
+    players: MatchPlayer[];
+    timeline: MatchTimelineEntry[];
+    isSoloShuffle: boolean;
+    alliance: MatchPlayer[];
+    horde: MatchPlayer[];
+    showFactions: boolean;
+    playersTitle: string;
+    showRating: boolean;
+    gameVersion: string | null;
+    spellTotals: SpellTotalsMap | null;
+    spellTotalsBySource: Record<string, unknown> | null;
+    interruptSpellsBySource: Record<string, unknown> | null;
+    interruptSpellIds: number[];
+    ownerInterruptsIssued: number | null;
+    ownerInterruptsSucceeded: number | null;
+    kickTelemetrySnapshot: KickTelemetrySnapshot;
+};
 
 export default function MatchDetailsPanel({ match, isLoading, onBack }: MatchDetailsPanelProps) {
-    const content = useMemo(() => {
+    const debugEnabled = import.meta.env.DEV;
+
+    const content = useMemo<MatchDetailsContent | null>(() => {
         if (!match) return null;
         const players = (match.raw.players ?? []) as MatchPlayer[];
         const timeline = (match.raw.timeline ?? []) as MatchTimelineEntry[];
@@ -85,6 +110,20 @@ export default function MatchDetailsPanel({ match, isLoading, onBack }: MatchDet
             ownerInterruptTuple && ownerInterruptTuple.length > 1
                 ? Number(ownerInterruptTuple[1])
                 : null;
+        const normalizedInterruptSpellIds = Array.isArray(interruptSpellIds)
+            ? interruptSpellIds
+                  .map((value) => (typeof value === "number" ? value : Number(value)))
+                  .filter((value): value is number => Number.isFinite(value) && value > 0)
+            : [];
+        const telemetryVersion = resolveTelemetryVersion(match.raw);
+        const kickTelemetrySnapshot = computeKickTelemetrySnapshot({
+            matchId: match.id,
+            timeline,
+            kickSpellIds: normalizedInterruptSpellIds,
+            owner: ownerPlayer,
+            telemetryVersion,
+            includeDiagnostics: debugEnabled,
+        });
 
         if (import.meta.env.DEV) {
             console.log("[SpellMetrics] payload aggregate keys", {
@@ -115,11 +154,7 @@ export default function MatchDetailsPanel({ match, isLoading, onBack }: MatchDet
                 null
             ) as Record<string, unknown> | null,
             interruptSpellsBySource: (interruptSpellsBySource ?? null) as Record<string, unknown> | null,
-            interruptSpellIds: Array.isArray(interruptSpellIds)
-                ? interruptSpellIds
-                      .map((value) => (typeof value === "number" ? value : Number(value)))
-                      .filter((value): value is number => Number.isFinite(value) && value > 0)
-                : [],
+            interruptSpellIds: normalizedInterruptSpellIds,
             ownerInterruptsIssued:
                 ownerInterruptsIssued !== null && Number.isFinite(ownerInterruptsIssued)
                     ? Math.max(0, Math.trunc(ownerInterruptsIssued))
@@ -128,8 +163,9 @@ export default function MatchDetailsPanel({ match, isLoading, onBack }: MatchDet
                 ownerInterruptsSucceeded !== null && Number.isFinite(ownerInterruptsSucceeded)
                     ? Math.max(0, Math.trunc(ownerInterruptsSucceeded))
                     : null,
+            kickTelemetrySnapshot,
         };
-    }, [match]);
+    }, [match, debugEnabled]);
 
     if (isLoading && !match) {
         return (
@@ -150,15 +186,12 @@ export default function MatchDetailsPanel({ match, isLoading, onBack }: MatchDet
         );
     }
 
-    const showDebug = import.meta.env.DEV;
-
     return (
         <section className={styles.detailsCard}>
             <MatchSummaryHeader
                 match={match}
                 players={content.players}
-                timeline={content.timeline}
-                kickSpellIds={content.interruptSpellIds}
+                kickTelemetrySnapshot={content.kickTelemetrySnapshot}
                 onBack={onBack}
             />
             <div className={styles.detailsBody}>
@@ -188,7 +221,7 @@ export default function MatchDetailsPanel({ match, isLoading, onBack }: MatchDet
                     interruptSpellsBySource={content.interruptSpellsBySource}
                 />
 
-                {showDebug ? (
+                {debugEnabled ? (
                     <div className={styles.spellNote}>
                         <LuInfo className={styles.spellNoteIcon} aria-hidden="true" />
                         <span>
@@ -197,13 +230,14 @@ export default function MatchDetailsPanel({ match, isLoading, onBack }: MatchDet
                         </span>
                     </div>
                 ) : null}
-                {showDebug ? (
+                {debugEnabled ? (
                     <DebugSpellInspector
                         timeline={content.timeline}
                         gameVersion={content.gameVersion}
                         kickSpellIds={content.interruptSpellIds}
                         ownerInterruptsIssued={content.ownerInterruptsIssued}
                         ownerInterruptsSucceeded={content.ownerInterruptsSucceeded}
+                        kickTelemetrySnapshot={content.kickTelemetrySnapshot}
                     />
                 ) : null}
             </div>

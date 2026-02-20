@@ -12,6 +12,7 @@ import {
 } from "../../Domain/spellMetaCache";
 import type { MatchTimelineEntry } from "./types";
 import { resolveIntentAttempts, type AttemptRecord, type NormalizedEvent } from "./spellCastResolver";
+import type { KickTelemetrySnapshot } from "./kickTelemetry";
 import styles from "./DataActivity.module.css";
 
 interface DebugSpellInspectorProps {
@@ -20,11 +21,11 @@ interface DebugSpellInspectorProps {
     kickSpellIds?: number[];
     ownerInterruptsIssued?: number | null;
     ownerInterruptsSucceeded?: number | null;
+    kickTelemetrySnapshot?: KickTelemetrySnapshot | null;
 }
 
 type EventStatus = "outcome" | "collapsed" | "ignored" | "unresolved";
 const KICK_FILTER_VALUE = "__kick_catalog__";
-const isIntentSignalEvent = (event: string) => event === "SENT" || event === "START";
 const DEFAULT_COLLAPSE_WINDOW_SECONDS = 0.08;
 const KICK_COLLAPSE_WINDOW_SECONDS = 0.35;
 
@@ -179,6 +180,7 @@ export default function DebugSpellInspector({
     kickSpellIds,
     ownerInterruptsIssued,
     ownerInterruptsSucceeded,
+    kickTelemetrySnapshot,
 }: DebugSpellInspectorProps) {
     const { httpFetch } = useUserContext();
     const gameKey = useMemo(() => normalizeGameVersionKey(gameVersion), [gameVersion]);
@@ -342,44 +344,55 @@ export default function DebugSpellInspector({
     const kickValidation = useMemo(() => {
         if (!isKickFilter) return null;
 
-        const castEvents = filteredEvents.filter((event) => isIntentSignalEvent(event.event)).length;
-        const attemptsWithIntent = displayAttempts.filter((attempt) =>
-            attempt.events.some((event) => isIntentSignalEvent(event.event))
-        );
-        const attemptCount = attemptsWithIntent.length;
-        const outcomeOnlyAttempts = displayAttempts.length - attemptCount;
-        const succeededAttempts = attemptsWithIntent.filter(
-            (attempt) => attempt.resolvedOutcome === "succeeded"
-        ).length;
-        const interruptedAttempts = attemptsWithIntent.filter(
-            (attempt) => attempt.resolvedOutcome === "interrupted"
-        ).length;
-        const executedInterruptOutcomes = attemptsWithIntent.filter(
-            (attempt) =>
-                (attempt.resolvedOutcome === "succeeded" || attempt.resolvedOutcome === "interrupted")
-        ).length;
-        const failedAttempts = attemptsWithIntent.filter(
-            (attempt) => attempt.resolvedOutcome === "failed"
-        ).length;
-        const unresolvedAttempts = attemptsWithIntent.filter(
-            (attempt) => !attempt.resolvedOutcome
-        ).length;
-
-        const issued =
+        const fallbackIssued =
             typeof ownerInterruptsIssued === "number" && Number.isFinite(ownerInterruptsIssued)
                 ? Math.max(0, Math.trunc(ownerInterruptsIssued))
                 : null;
-        const succeeded =
+        const fallbackSucceeded =
             typeof ownerInterruptsSucceeded === "number" && Number.isFinite(ownerInterruptsSucceeded)
                 ? Math.max(0, Math.trunc(ownerInterruptsSucceeded))
                 : null;
+
+        if (!kickTelemetrySnapshot) {
+            return {
+                castEvents: 0,
+                rawEvents: filteredEvents.length,
+                attemptCount: 0,
+                outcomeOnlyAttempts: 0,
+                succeededAttempts: 0,
+                interruptedAttempts: 0,
+                executedInterruptOutcomes: 0,
+                failedAttempts: 0,
+                unresolvedAttempts: 0,
+                issued: fallbackIssued,
+                succeeded: fallbackSucceeded,
+                attemptsVsIssued: null,
+                intentVsSucceeded: null,
+                castsVsIssued: null,
+                executedVsIssued: null,
+                successVsSucceeded: null,
+                suggestedMissedKicks: 0,
+                estimatedBadKicks: 0,
+            };
+        }
+
+        const castEvents = kickTelemetrySnapshot.castEvents;
+        const attemptCount = kickTelemetrySnapshot.intentAttempts;
+        const outcomeOnlyAttempts = kickTelemetrySnapshot.outcomeOnlyAttempts;
+        const succeededAttempts = kickTelemetrySnapshot.succeededAttempts;
+        const interruptedAttempts = kickTelemetrySnapshot.interruptedAttempts;
+        const failedAttempts = kickTelemetrySnapshot.failedAttempts;
+        const unresolvedAttempts = kickTelemetrySnapshot.unresolvedAttempts;
+        const executedInterruptOutcomes = succeededAttempts + interruptedAttempts;
+        const issued = kickTelemetrySnapshot.issued ?? fallbackIssued;
+        const succeeded = kickTelemetrySnapshot.succeeded ?? fallbackSucceeded;
 
         const attemptsVsIssued = issued === null ? null : attemptCount - issued;
         const intentVsSucceeded = succeeded === null ? null : attemptCount - succeeded;
         const castsVsIssued = issued === null ? null : castEvents - issued;
         const executedVsIssued = issued === null ? null : executedInterruptOutcomes - issued;
         const successVsSucceeded = succeeded === null ? null : succeededAttempts - succeeded;
-        const suggestedMissedKicks = Math.max(0, castEvents - succeededAttempts);
+        const suggestedMissedKicks = Math.max(0, attemptCount - succeededAttempts);
         const estimatedBadKicks = Math.max(0, attemptCount - succeededAttempts);
 
         return {
@@ -402,7 +415,13 @@ export default function DebugSpellInspector({
             suggestedMissedKicks,
             estimatedBadKicks,
         };
-    }, [isKickFilter, filteredEvents, displayAttempts, ownerInterruptsIssued, ownerInterruptsSucceeded]);
+    }, [
+        isKickFilter,
+        filteredEvents.length,
+        kickTelemetrySnapshot,
+        ownerInterruptsIssued,
+        ownerInterruptsSucceeded,
+    ]);
 
     if (!spellOptions.length) {
         return null;
