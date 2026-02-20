@@ -121,7 +121,6 @@ export type KickTelemetrySnapshot = {
     unresolvedAttempts: number;
     issued: number | null;
     succeeded: number | null;
-    averageReactionMs: number | null;
 };
 
 export const computeKickTelemetrySnapshot = ({
@@ -153,7 +152,6 @@ export const computeKickTelemetrySnapshot = ({
     let interruptedAttempts = 0;
     let failedAttempts = 0;
     let unresolvedAttempts = 0;
-    let averageReactionMs: number | null = null;
 
     if (includeDiagnostics) {
         const rawKickEvents = rawEvents.filter((event) => kickSet.has(event.spellId));
@@ -169,12 +167,6 @@ export const computeKickTelemetrySnapshot = ({
             (attempt) => attempt.resolvedOutcome === "failed"
         ).length;
         unresolvedAttempts = attemptsWithIntent.filter((attempt) => !attempt.resolvedOutcome).length;
-        const reactionSamplesMs = attemptsWithIntent
-            .map((attempt) => (attempt.endTime - attempt.startTime) * 1000)
-            .filter((value) => Number.isFinite(value) && value > 0);
-        averageReactionMs = reactionSamplesMs.length
-            ? Math.round(reactionSamplesMs.reduce((sum, value) => sum + value, 0) / reactionSamplesMs.length)
-            : null;
     }
 
     const { issued, succeeded } = parseInterruptTuple(owner);
@@ -194,6 +186,5 @@ export const computeKickTelemetrySnapshot = ({
         unresolvedAttempts,
         issued,
         succeeded,
-        averageReactionMs,
     };
 };

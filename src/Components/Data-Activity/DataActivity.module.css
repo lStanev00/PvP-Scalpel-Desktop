@@ -431,6 +431,11 @@
     overflow: visible;
 }
 
+.summaryMainRowWithThreeMetrics {
+    grid-template-columns: 3fr 1fr 1fr 1fr;
+    gap: 2.8rem;
+}
+
 .summaryMainRow::after {
     content: "";
     position: absolute;
@@ -560,7 +565,7 @@
     fill: none;
     stroke-width: 9;
     stroke-linecap: round;
-    transition: stroke-dashoffset 860ms cubic-bezier(0.16, 1, 0.3, 1), stroke-dasharray 860ms
+    transition: stroke-dashoffset 1360ms cubic-bezier(0.16, 1, 0.3, 1), stroke-dasharray 1360ms
         cubic-bezier(0.16, 1, 0.3, 1);
 }
 

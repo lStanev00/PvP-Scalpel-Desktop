@@ -31,9 +31,28 @@ type KickHeaderTelemetry = {
     total: number;
 };
 
+type ContributionMetricKind = "damage" | "healing";
+
+type ContributionMetricView = {
+    kind: ContributionMetricKind;
+    label: "Damage" | "Healing";
+    percent: number;
+    averagePercent: number;
+    deltaPercent: number;
+    color: string;
+    outcome: string;
+    ownerTotal: number;
+    teamTotal: number;
+    deductionRows?: MetricTooltipRow[];
+};
+
+type RoleToken = "dps" | "healer" | "tank" | "unknown";
+
 const CIRCLE_RADIUS = 52;
 const CIRCLE_CENTER = 64;
 const CIRCLE_CIRCUMFERENCE = 2 * Math.PI * CIRCLE_RADIUS;
+const WARNING_LOWER_THRESHOLD_PCT = -5;
+const GREEN_TOLERANCE_THRESHOLD_PCT = -0.5;
 
 const clampPercent = (value: number) => Math.max(0, Math.min(100, value));
 
@@ -61,6 +80,109 @@ const roleLabelMap: Record<string, string> = {
     healer: "Healer",
     tank: "Tank",
     unknown: "Unknown",
+};
+
+const getContributionOutcome = (deltaPercent: number) => {
+    if (deltaPercent >= GREEN_TOLERANCE_THRESHOLD_PCT) return "Above role average";
+    if (deltaPercent >= WARNING_LOWER_THRESHOLD_PCT) return "Near role average";
+    return "Below role average";
+};
+
+const getContributionColor = (deltaPercent: number) => {
+    if (deltaPercent >= GREEN_TOLERANCE_THRESHOLD_PCT) return "var(--good)";
+    if (deltaPercent >= WARNING_LOWER_THRESHOLD_PCT) return "var(--warn)";
+    return "var(--bad)";
+};
+
+const asRoleToken = (value: string): RoleToken => {
+    if (value === "dps" || value === "healer" || value === "tank") return value;
+    return "unknown";
+};
+
+const getHealingWeightByOwnerRole = (
+    ownerRole: RoleToken,
+    playerRole: RoleToken,
+    hasHealer: boolean,
+    hasTank: boolean
+) => {
+    if (ownerRole === "tank") {
+        if (!hasHealer) return 1;
+        if (playerRole === "tank") return 1;
+        if (playerRole === "healer") return 0.65;
+        return 0;
+    }
+    if (ownerRole === "healer") {
+        if (!hasTank) return playerRole === "healer" ? 1 : 0;
+        if (playerRole === "healer") return 1;
+        if (playerRole === "tank") return 0.35;
+        return 0;
+    }
+    if (ownerRole === "dps") {
+        if (!hasTank) return playerRole === "dps" ? 1 : 0;
+        if (playerRole === "dps") return 1;
+        if (playerRole === "tank") return 0.2;
+        return 0;
+    }
+    return 1;
+};
+
+const getHealingDeductionRows = (
+    ownerRole: RoleToken,
+    hasHealer: boolean,
+    hasTank: boolean
+): MetricTooltipRow[] => {
+    const buildRows = (weights: Array<{ role: "Tank" | "Healer" | "DPS"; weight: number }>) =>
+        weights
+            .filter((entry) => entry.weight > 0)
+            .map((entry) => ({ label: entry.role, value: `${Math.round(entry.weight * 100)}%` }));
+
+    if (ownerRole === "tank") {
+        if (!hasHealer) {
+            return buildRows([
+                { role: "Tank", weight: 1 },
+                { role: "Healer", weight: 1 },
+                { role: "DPS", weight: 1 },
+            ]);
+        }
+        return buildRows([
+            { role: "Tank", weight: 1 },
+            { role: "Healer", weight: 0.65 },
+            { role: "DPS", weight: 0 },
+        ]);
+    }
+    if (ownerRole === "healer") {
+        if (!hasTank) {
+            return buildRows([
+                { role: "Healer", weight: 1 },
+                { role: "Tank", weight: 0 },
+                { role: "DPS", weight: 0 },
+            ]);
+        }
+        return buildRows([
+            { role: "Healer", weight: 1 },
+            { role: "Tank", weight: 0.35 },
+            { role: "DPS", weight: 0 },
+        ]);
+    }
+    if (ownerRole === "dps") {
+        if (!hasTank) {
+            return buildRows([
+                { role: "DPS", weight: 1 },
+                { role: "Tank", weight: 0 },
+                { role: "Healer", weight: 0 },
+            ]);
+        }
+        return buildRows([
+            { role: "DPS", weight: 1 },
+            { role: "Tank", weight: 0.2 },
+            { role: "Healer", weight: 0 },
+        ]);
+    }
+    return buildRows([
+        { role: "Tank", weight: 1 },
+        { role: "Healer", weight: 1 },
+        { role: "DPS", weight: 1 },
+    ]);
 };
 
 const resolveMediaUrl = (value?: string) => {
@@ -107,6 +229,7 @@ function ContributionCircle({
     centerLabel,
     tooltipTitle,
     tooltipRows,
+    animationProgress,
 }: {
     percent: number;
     color: string;
@@ -114,16 +237,11 @@ function ContributionCircle({
     centerLabel: string;
     tooltipTitle: string;
     tooltipRows: MetricTooltipRow[];
+    animationProgress: number;
 }) {
-    const [animatedPercent, setAnimatedPercent] = useState(0);
     const finalPercent = clampPercent(percent);
-    const fillLength = CIRCLE_CIRCUMFERENCE * (animatedPercent / 100);
+    const fillLength = CIRCLE_CIRCUMFERENCE * (finalPercent / 100) * animationProgress;
     const startOffset = CIRCLE_CIRCUMFERENCE * 0.25;
-
-    useEffect(() => {
-        const raf = window.requestAnimationFrame(() => setAnimatedPercent(finalPercent));
-        return () => window.cancelAnimationFrame(raf);
-    }, [finalPercent]);
 
     return (
         <div className={styles.summaryCircleShell} tabIndex={0}>
@@ -155,28 +273,21 @@ function ContributionCircle({
 
 function KickEfficiencyCircle({
     telemetry,
-    averageReactionMs,
     tooltipRows,
+    animationProgress,
 }: {
     telemetry: KickHeaderTelemetry;
-    averageReactionMs: number | null;
     tooltipRows: MetricTooltipRow[];
+    animationProgress: number;
 }) {
-    const [animationFactor, setAnimationFactor] = useState(0);
     const total = telemetry.total;
     const successful = telemetry.successful;
     const failed = telemetry.failed;
     const successPct = total > 0 ? successful / total : 0;
     const failedPct = total > 0 ? failed / total : 0;
     const successRate = total > 0 ? Math.round((successful / total) * 100) : 0;
-
-    useEffect(() => {
-        const raf = window.requestAnimationFrame(() => setAnimationFactor(1));
-        return () => window.cancelAnimationFrame(raf);
-    }, [successful, failed, telemetry.isAvailable]);
-
-    const animatedSuccessLength = CIRCLE_CIRCUMFERENCE * successPct * animationFactor;
-    const animatedFailedLength = CIRCLE_CIRCUMFERENCE * failedPct * animationFactor;
+    const animatedSuccessLength = CIRCLE_CIRCUMFERENCE * successPct * animationProgress;
+    const animatedFailedLength = CIRCLE_CIRCUMFERENCE * failedPct * animationProgress;
     const startOffset = CIRCLE_CIRCUMFERENCE * 0.25;
 
     return (
@@ -233,14 +344,6 @@ function KickEfficiencyCircle({
                     telemetry.isAvailable && total > 0
                         ? [
                               ...tooltipRows,
-                              ...(averageReactionMs === null
-                                  ? []
-                                  : [
-                                        {
-                                            label: "Avg Reaction",
-                                            value: `${averageReactionMs} ms`,
-                                        },
-                                    ]),
                               { label: "Success Rate", value: `${successRate}%` },
                           ]
                         : []
@@ -257,9 +360,16 @@ export default function MatchSummaryHeader({
     onBack,
 }: MatchSummaryHeaderProps) {
     const [isExpanded, setIsExpanded] = useState(false);
+    const [animationProgress, setAnimationProgress] = useState(0);
 
     useEffect(() => {
         setIsExpanded(false);
+    }, [match.id]);
+
+    useEffect(() => {
+        setAnimationProgress(0);
+        const raf = window.requestAnimationFrame(() => setAnimationProgress(1));
+        return () => window.cancelAnimationFrame(raf);
     }, [match.id]);
 
     const owner = useMemo(
@@ -275,38 +385,177 @@ export default function MatchSummaryHeader({
     const ownerDamage = normalizeCount(owner?.damage);
     const ownerHealing = normalizeCount(owner?.healing);
     const teamDamage = ownerTeam.reduce((sum, player) => sum + normalizeCount(player.damage), 0);
-    const teamHealing = ownerTeam.reduce((sum, player) => sum + normalizeCount(player.healing), 0);
     const role = getRoleBySpec(owner?.spec);
-    const isHealer = role === "healer";
-    const outputLabel = isHealer ? "Healing" : "Damage";
-    const outputTotal = isHealer ? ownerHealing : ownerDamage;
-    const outputTeamTotal = isHealer ? teamHealing : teamDamage;
-    const contributionPct = outputTeamTotal > 0 ? (outputTotal / outputTeamTotal) * 100 : 0;
+    const ownerRole = asRoleToken(role);
+    const rolePresence = useMemo(() => {
+        const roles = ownerTeam.map((player) => asRoleToken(getRoleBySpec(player.spec)));
+        return {
+            hasHealer: roles.includes("healer"),
+            hasTank: roles.includes("tank"),
+        };
+    }, [ownerTeam]);
 
     const contributionCohort = useMemo(() => {
         if (!ownerTeam.length) return [];
-        if (role === "dps") {
-            return ownerTeam.filter((player) => getRoleBySpec(player.spec) === "dps");
-        }
-        if (role === "healer") {
-            return ownerTeam.filter((player) => getRoleBySpec(player.spec) === "healer");
+        if (role === "dps" || role === "healer" || role === "tank") {
+            const sameRole = ownerTeam.filter((player) => getRoleBySpec(player.spec) === role);
+            return sameRole.length ? sameRole : ownerTeam;
         }
         return ownerTeam;
     }, [ownerTeam, role]);
 
-    const contributionAveragePct = useMemo(() => {
-        if (outputTeamTotal <= 0) return 0;
-        const shares = contributionCohort.map((player) => {
-            const total = isHealer ? normalizeCount(player.healing) : normalizeCount(player.damage);
-            return (total / outputTeamTotal) * 100;
-        });
-        if (!shares.length) return 0;
-        return shares.reduce((sum, value) => sum + value, 0) / shares.length;
-    }, [contributionCohort, isHealer, outputTeamTotal]);
+    const contributionMetrics = useMemo<ContributionMetricView[]>(() => {
+        const buildMetric = (kind: ContributionMetricKind): ContributionMetricView => {
+            const isHealingMetric = kind === "healing";
+            const ownerTotal = isHealingMetric
+                ? ownerHealing *
+                  getHealingWeightByOwnerRole(
+                      ownerRole,
+                      ownerRole,
+                      rolePresence.hasHealer,
+                      rolePresence.hasTank
+                  )
+                : ownerDamage;
+            const teamTotal = isHealingMetric
+                ? ownerTeam.reduce((sum, player) => {
+                      const playerRole = asRoleToken(getRoleBySpec(player.spec));
+                      const weightedHealing =
+                          normalizeCount(player.healing) *
+                          getHealingWeightByOwnerRole(
+                              ownerRole,
+                              playerRole,
+                              rolePresence.hasHealer,
+                              rolePresence.hasTank
+                          );
+                      return sum + weightedHealing;
+                  }, 0)
+                : teamDamage;
+            const percent = teamTotal > 0 ? (ownerTotal / teamTotal) * 100 : 0;
+            const shares = contributionCohort.map((player) => {
+                const sourceTotal = isHealingMetric
+                    ? normalizeCount(player.healing) *
+                      getHealingWeightByOwnerRole(
+                          ownerRole,
+                          asRoleToken(getRoleBySpec(player.spec)),
+                          rolePresence.hasHealer,
+                          rolePresence.hasTank
+                      )
+                    : normalizeCount(player.damage);
+                return teamTotal > 0 ? (sourceTotal / teamTotal) * 100 : 0;
+            });
+            const averagePercent = shares.length
+                ? shares.reduce((sum, value) => sum + value, 0) / shares.length
+                : 0;
+            const deltaPercent = percent - averagePercent;
+            const color = getContributionColor(deltaPercent);
+            const outcome = getContributionOutcome(deltaPercent);
 
-    const contributionIsPositive = contributionPct >= contributionAveragePct;
-    const contributionColor = contributionIsPositive ? "var(--good)" : "var(--bad)";
-    const performanceOutcome = contributionIsPositive ? "Above role average" : "Below role average";
+            return {
+                kind,
+                label: isHealingMetric ? "Healing" : "Damage",
+                percent,
+                averagePercent,
+                deltaPercent,
+                color,
+                outcome,
+                ownerTotal,
+                teamTotal,
+                deductionRows: isHealingMetric
+                    ? getHealingDeductionRows(
+                          ownerRole,
+                          rolePresence.hasHealer,
+                          rolePresence.hasTank
+                      )
+                    : undefined,
+            };
+        };
+
+        if (ownerRole === "tank") {
+            return [buildMetric("damage"), buildMetric("healing")];
+        }
+        if (ownerRole === "healer") {
+            return [buildMetric("healing")];
+        }
+        if (ownerRole === "dps") {
+            return [buildMetric("damage"), buildMetric("healing")];
+        }
+        return [buildMetric("damage"), buildMetric("healing")];
+    }, [
+        contributionCohort,
+        ownerDamage,
+        ownerHealing,
+        ownerRole,
+        ownerTeam,
+        rolePresence.hasHealer,
+        rolePresence.hasTank,
+        teamDamage,
+    ]);
+
+    const primaryContribution = contributionMetrics[0] ?? {
+        kind: "damage" as const,
+        label: "Damage" as const,
+        percent: 0,
+        averagePercent: 0,
+        deltaPercent: 0,
+        color: "var(--good)",
+        outcome: "Above role average",
+        ownerTotal: 0,
+        teamTotal: 0,
+    };
+    const performanceOutcome = primaryContribution.outcome;
+
+    const contributionRenderItems = useMemo(
+        () =>
+            contributionMetrics
+                .filter((metric) => metric.kind === "damage" || ownerRole === "healer")
+                .map((metric) => {
+                const tooltipRows: MetricTooltipRow[] = [
+                    {
+                        label: `Player ${metric.label.toLowerCase()}`,
+                        value: formatInteger(metric.ownerTotal),
+                    },
+                    {
+                        label: `Team ${metric.label.toLowerCase()}`,
+                        value: formatInteger(metric.teamTotal),
+                    },
+                    {
+                        label: "Contribution",
+                        value: `${clampPercent(metric.percent).toFixed(1)}%`,
+                    },
+                    {
+                        label: "Role average",
+                        value: `${clampPercent(metric.averagePercent).toFixed(1)}%`,
+                    },
+                    ...(metric.kind === "healing" && metric.deductionRows
+                        ? [
+                              { label: "Healing deduction:", value: "" },
+                              ...metric.deductionRows,
+                          ]
+                        : []),
+                    { label: "Outcome", value: metric.outcome },
+                ];
+                return {
+                    key: metric.kind,
+                    centerLabel: metric.label,
+                    tooltipTitle: `Team ${metric.label} Contribution`,
+                    color: metric.color,
+                    percent: metric.percent,
+                    tooltipRows,
+                };
+            }),
+        [contributionMetrics, ownerRole]
+    );
+
+    const contributionExpandedMetrics = useMemo(
+        () =>
+            contributionMetrics
+                .filter((metric) => metric.kind === "damage" || ownerRole === "healer")
+                .map((metric) => ({
+                    label: `${metric.label} / Team Total`,
+                    value: `${formatInteger(metric.ownerTotal)} / ${formatInteger(metric.teamTotal)}`,
+                })),
+        [contributionMetrics, ownerRole]
+    );
 
     const kickTelemetry = useMemo<KickHeaderTelemetry>(() => {
         const isAvailable =
@@ -335,14 +584,6 @@ export default function MatchSummaryHeader({
     const roleLabel = roleLabelMap[role] ?? "Unknown";
     const showMmrDelta = match.delta !== 0;
 
-    const contributionTooltipRows: MetricTooltipRow[] = [
-        { label: `Player ${outputLabel.toLowerCase()}`, value: formatInteger(outputTotal) },
-        { label: `Team ${outputLabel.toLowerCase()}`, value: formatInteger(outputTeamTotal) },
-        { label: "Contribution", value: `${clampPercent(contributionPct).toFixed(1)}%` },
-        { label: "Role average", value: `${clampPercent(contributionAveragePct).toFixed(1)}%` },
-        { label: "Outcome", value: performanceOutcome },
-    ];
-
     const kickTooltipRows: MetricTooltipRow[] = [
         { label: "Successful", value: String(kickTelemetry.successful) },
         { label: "Failed", value: String(kickTelemetry.failed) },
@@ -350,10 +591,7 @@ export default function MatchSummaryHeader({
 
     const expandedMetrics: Array<{ label: string; value: string }> = [
         { label: "Performance", value: performanceOutcome },
-        {
-            label: `${outputLabel} / Team Total`,
-            value: `${formatInteger(outputTotal)} / ${formatInteger(outputTeamTotal)}`,
-        },
+        ...contributionExpandedMetrics,
         {
             label: "Successful Kicks",
             value: kickTelemetry.isAvailable ? formatInteger(kickTelemetry.successful) : "N/A",
@@ -390,7 +628,13 @@ export default function MatchSummaryHeader({
                 </button>
             </div>
 
-            <div className={styles.summaryMainRow}>
+            <div
+                className={`${styles.summaryMainRow} ${
+                    contributionRenderItems.length > 1
+                        ? styles.summaryMainRowWithThreeMetrics
+                        : ""
+                }`}
+            >
                 <div className={styles.summaryIdentity}>
                     <div className={styles.summaryAvatar} aria-hidden="true">
                         {classMedia ? (
@@ -422,22 +666,25 @@ export default function MatchSummaryHeader({
                     </div>
                 </div>
 
-                <div className={styles.summaryMetricColumn}>
-                    <ContributionCircle
-                        percent={contributionPct}
-                        color={contributionColor}
-                        centerValue={`${Math.round(clampPercent(contributionPct))}%`}
-                        centerLabel="Contribution"
-                        tooltipTitle={`${isHealer ? "Team Healing" : "Team Damage"} Contribution`}
-                        tooltipRows={contributionTooltipRows}
-                    />
-                </div>
+                {contributionRenderItems.map((item) => (
+                    <div key={item.key} className={styles.summaryMetricColumn}>
+                        <ContributionCircle
+                            percent={item.percent}
+                            color={item.color}
+                            centerValue={`${Math.round(clampPercent(item.percent))}%`}
+                            centerLabel={item.centerLabel}
+                            tooltipTitle={item.tooltipTitle}
+                            tooltipRows={item.tooltipRows}
+                            animationProgress={animationProgress}
+                        />
+                    </div>
+                ))}
 
                 <div className={styles.summaryMetricColumn}>
                     <KickEfficiencyCircle
                         telemetry={kickTelemetry}
-                        averageReactionMs={kickTelemetrySnapshot.averageReactionMs}
                         tooltipRows={kickTooltipRows}
+                        animationProgress={animationProgress}
                     />
                 </div>
             </div>
