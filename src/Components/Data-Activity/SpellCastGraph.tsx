@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import useUserContext from "../../Hooks/useUserContext";
-import { getClassColor } from "../../Domain/CombatDomainContext";
+import { getClassColor, getClassMedia, getSpecMedia } from "../../Domain/CombatDomainContext";
 import {
     extractSpellPayload,
     getGameSpellMap,
@@ -519,6 +519,9 @@ export default function SpellCastGraph({
                             const barWidth = `${(row.value / maxValue) * 100}%`;
                             const classToken = (row.className ?? "?").slice(0, 1).toUpperCase();
                             const classColor = getClassColor(row.className) ?? "rgba(230, 234, 240, 0.8)";
+                            const specMediaUrl = resolveIconUrl(getSpecMedia(row.specName));
+                            const classMediaUrl = resolveIconUrl(getClassMedia(row.className));
+                            const badgeMediaUrl = specMediaUrl ?? classMediaUrl;
                             return (
                                 <li
                                     key={row.key}
@@ -549,9 +552,23 @@ export default function SpellCastGraph({
                                         }}
                                         aria-hidden="true"
                                     >
-                                        {classToken}
+                                        {badgeMediaUrl ? (
+                                            <img
+                                                className={styles.playerClassMedia}
+                                                src={badgeMediaUrl}
+                                                alt=""
+                                                loading="lazy"
+                                            />
+                                        ) : (
+                                            classToken
+                                        )}
                                     </span>
-                                    <span className={styles["spell-row__name"]}>{row.name}</span>
+                                    <span
+                                        className={styles["spell-row__name"]}
+                                        style={{ color: classColor }}
+                                    >
+                                        {row.name}
+                                    </span>
                                     <div className={styles["spell-row__bar-container"]}>
                                         <div
                                             className={`${styles["spell-row__bar"]} ${

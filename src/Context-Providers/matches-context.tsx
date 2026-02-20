@@ -26,6 +26,31 @@ const coerceMatchesArray = (value: unknown): unknown[] => {
     return numericEntries.map(({ item }) => item);
 };
 
+const coerceNumericIdArray = (value: unknown): number[] => {
+    const source = Array.isArray(value) ? value : coerceMatchesArray(value);
+    if (!source.length) return [];
+
+    const deduped = new Set<number>();
+    source.forEach((item) => {
+        const raw =
+            typeof item === "number"
+                ? item
+                : typeof item === "string"
+                  ? Number(item)
+                  : typeof item === "object" &&
+                      item !== null &&
+                      "value" in item &&
+                      typeof (item as { value?: unknown }).value === "number"
+                    ? (item as { value: number }).value
+                    : NaN;
+        if (Number.isFinite(raw) && raw > 0) {
+            deduped.add(Math.trunc(raw));
+        }
+    });
+
+    return Array.from(deduped).sort((a, b) => a - b);
+};
+
 const extractLuaTable = (content: string, key: string) => {
     const idx = content.indexOf(key);
     if (idx === -1) return null;
@@ -235,19 +260,21 @@ const validateMatchV1 = (value: unknown) => {
     }
 };
 
-const validateMatchV2 = (value: unknown) => {
+const validateMatchV2Plus = (value: unknown) => {
     if (!isPlainObject(value)) {
-        logSchemaMismatch("Match v2 is not an object", value);
+        logSchemaMismatch("Match v2+ is not an object", value);
         return;
     }
-    if (value.telemetryVersion !== 2) {
-        logSchemaMismatch("Match v2 telemetryVersion is not 2", value.telemetryVersion);
+    const telemetryVersion =
+        typeof value.telemetryVersion === "number" ? value.telemetryVersion : Number.NaN;
+    if (!Number.isFinite(telemetryVersion) || telemetryVersion < 2) {
+        logSchemaMismatch("Match v2+ telemetryVersion is invalid", value.telemetryVersion);
     }
     if (!isPlainObject(value.matchDetails)) {
-        logSchemaMismatch("Match v2 matchDetails missing or invalid", value.matchDetails);
+        logSchemaMismatch("Match v2+ matchDetails missing or invalid", value.matchDetails);
     }
     if (!Array.isArray(value.players)) {
-        logSchemaMismatch("Match v2 players missing or invalid", value.players);
+        logSchemaMismatch("Match v2+ players missing or invalid", value.players);
     }
 };
 
@@ -291,6 +318,18 @@ export const MatchesProvider = ({ children }: { children: ReactNode }) => {
                             }).catch(() => undefined);
                             return;
                         }
+
+                        const interruptSpellIds = coerceNumericIdArray(
+                            (() => {
+                                const kickTable = extractLuaTable(fileContent, "PvP_Scalpel_InteruptSpells");
+                                if (!kickTable) return [];
+                                try {
+                                    return luaJson.parse("return " + kickTable);
+                                } catch {
+                                    return [];
+                                }
+                            })()
+                        );
 
                         let parsedArray: unknown;
                         try {
@@ -347,21 +386,28 @@ export const MatchesProvider = ({ children }: { children: ReactNode }) => {
                                     obj: parsedMatch,
                                 });
 
-                                const isTelemetryV2 =
+                                const telemetryVersion =
+                                    typeof (parsedMatch as { telemetryVersion?: unknown })
+                                        .telemetryVersion === "number"
+                                        ? ((parsedMatch as { telemetryVersion?: number })
+                                              .telemetryVersion as number)
+                                        : Number.NaN;
+                                const isTelemetryV2Plus =
                                     typeof parsedMatch === "object" &&
                                     parsedMatch !== null &&
-                                    "telemetryVersion" in parsedMatch &&
-                                    (parsedMatch as { telemetryVersion?: unknown }).telemetryVersion === 2;
+                                    Number.isFinite(telemetryVersion) &&
+                                    telemetryVersion >= 2;
 
-                                if (isTelemetryV2) {
-                                    validateMatchV2(parsedMatch);
+                                if (isTelemetryV2Plus) {
+                                    validateMatchV2Plus(parsedMatch);
                                 } else {
                                     validateMatchV1(parsedMatch);
                                 }
 
                                 results.push({
                                     id,
-                                    ...(isTelemetryV2 ? (parsedMatch as MatchV2) : (parsedMatch as Match)),
+                                    ...(isTelemetryV2Plus ? (parsedMatch as MatchV2) : (parsedMatch as Match)),
+                                    interruptSpellIds,
                                 });
                             } catch (matchErr) {
                                 failedCount += 1;

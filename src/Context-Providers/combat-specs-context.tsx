@@ -72,7 +72,11 @@ export default function CombatSpecsProvider({ children }: { children: ReactNode 
 
     const applySpecs = useMemo(() => {
         return (items: GameSpecPayload[]) => {
-            const mapped = items.map((item) => ({ name: item.name, role: mapRole(item.role) }));
+            const mapped = items.map((item) => ({
+                name: item.name,
+                role: mapRole(item.role),
+                media: item.media,
+            }));
             setSpecRoleMappings(mapped);
             setRevision((value) => value + 1);
         };
@@ -80,7 +84,7 @@ export default function CombatSpecsProvider({ children }: { children: ReactNode 
 
     const applyClasses = useMemo(() => {
         return (items: GameClassPayload[]) => {
-            setClassMappings(items.map((item) => ({ name: item.name })));
+            setClassMappings(items.map((item) => ({ name: item.name, media: item.media })));
             setRevision((value) => value + 1);
         };
     }, []);

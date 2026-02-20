@@ -31,6 +31,7 @@ export type ComparePlayerRow = {
     guid?: string;
     name: string;
     className?: string;
+    specName?: string;
     value: number;
     sharePct: number;
     spells: SpellMetricRow[];
@@ -438,6 +439,7 @@ export const buildCompareModel = ({
                 guid: guid ?? undefined,
                 name: player.name,
                 className: player.class,
+                specName: typeof player.spec === "string" ? player.spec : undefined,
                 value,
                 sharePct: 0,
                 spells,
