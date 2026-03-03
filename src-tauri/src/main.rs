@@ -11,6 +11,8 @@ mod version_command;
 mod manifest_command;
 mod launcher_command;
 mod log_command;
+mod computed_matches_command;
+mod gc_state_command;
 
 use tauri::{
     menu::{Menu, MenuItem, PredefinedMenuItem},
@@ -203,6 +205,10 @@ fn main() {
             launcher_command::launch_launcher_path,
             log_command::push_log,
             log_command::get_logs,
+            computed_matches_command::load_computed_matches,
+            computed_matches_command::load_all_computed_matches,
+            computed_matches_command::upsert_computed_matches,
+            gc_state_command::mark_gc_matches_synced,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri app");

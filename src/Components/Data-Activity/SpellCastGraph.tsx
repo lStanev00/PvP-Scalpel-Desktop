@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { LuTriangleAlert } from "react-icons/lu";
 import useUserContext from "../../Hooks/useUserContext";
 import { getClassColor, getClassMedia, getSpecMedia } from "../../Domain/CombatDomainContext";
 import {
@@ -37,10 +38,36 @@ interface SpellCastGraphProps {
     timeline: MatchTimelineEntry[];
     players: MatchPlayer[];
     gameVersion?: string | null;
+    telemetryVersion?: number | null;
+    matchFormat?: string | null;
     spellTotals?: Record<string, unknown> | Record<number, unknown> | null;
     spellTotalsBySource?: Record<string, unknown> | null;
     interruptSpellsBySource?: Record<string, unknown> | null;
+    computedSpellOutcomes?: Record<
+        string,
+        {
+            succeeded: number;
+            interrupted: number;
+            failed: number;
+        }
+    > | null;
 }
+
+const BG_TELEMETRY_SUPPORT_VERSION = 3.1;
+
+const isBattlegroundFormat = (format?: string | null) => {
+    if (!format) return false;
+    const normalized = format.toLowerCase();
+    return (
+        normalized.includes("battleground") ||
+        normalized.includes("random bg") ||
+        normalized.includes("randombg") ||
+        normalized.includes("rated battleground") ||
+        normalized.includes("rbg") ||
+        normalized.includes("epic bg") ||
+        normalized.includes("epic battleground")
+    );
+};
 
 type ActiveTooltipState =
     | { kind: "personal"; spellId: number }
@@ -57,9 +84,12 @@ export default function SpellCastGraph({
     timeline,
     players,
     gameVersion,
+    telemetryVersion,
+    matchFormat,
     spellTotals,
     spellTotalsBySource,
     interruptSpellsBySource,
+    computedSpellOutcomes,
 }: SpellCastGraphProps) {
     const { httpFetch } = useUserContext();
     const gameKey = useMemo(() => normalizeGameVersionKey(gameVersion), [gameVersion]);
@@ -82,9 +112,23 @@ export default function SpellCastGraph({
         [owner]
     );
 
-    const { resolvedAttempts } = useMemo(() => resolveIntentAttempts(timeline), [timeline]);
-
     const attemptCounts = useMemo(() => {
+        if (computedSpellOutcomes && Object.keys(computedSpellOutcomes).length > 0) {
+            const map = new Map<number, AttemptCounts>();
+            Object.entries(computedSpellOutcomes).forEach(([spellIdRaw, row]) => {
+                const spellId = Number(spellIdRaw);
+                if (!Number.isFinite(spellId) || spellId <= 0) return;
+                map.set(spellId, {
+                    spellId,
+                    succeeded: Math.max(0, Math.trunc(row.succeeded)),
+                    failed: Math.max(0, Math.trunc(row.failed)),
+                    interrupted: Math.max(0, Math.trunc(row.interrupted)),
+                });
+            });
+            return map;
+        }
+
+        const { resolvedAttempts } = resolveIntentAttempts(timeline);
         const map = new Map<number, AttemptCounts>();
         resolvedAttempts.forEach((attempt) => {
             const outcome = attempt.resolvedOutcome;
@@ -101,7 +145,7 @@ export default function SpellCastGraph({
             map.set(attempt.spellId, existing);
         });
         return map;
-    }, [resolvedAttempts]);
+    }, [computedSpellOutcomes, timeline]);
 
     const parsedSpellTotals = useMemo(() => parseSpellTotals(spellTotals), [spellTotals]);
     const parsedSpellTotalsBySource = useMemo(
@@ -317,20 +361,46 @@ export default function SpellCastGraph({
 
     const activeRows = viewMode === "personal" ? personalModel.rows : compareModel.rows;
     const maxValue = viewMode === "personal" ? personalModel.maxValue : compareModel.maxValue;
+    const isBgMatch = useMemo(() => isBattlegroundFormat(matchFormat), [matchFormat]);
+    const isBgTelemetryUnsupported =
+        isBgMatch &&
+        (telemetryVersion === null ||
+            telemetryVersion === undefined ||
+            !Number.isFinite(telemetryVersion) ||
+            telemetryVersion < BG_TELEMETRY_SUPPORT_VERSION);
+
+    useEffect(() => {
+        if (!isBgTelemetryUnsupported) return;
+        setActiveTooltip(null);
+        setTooltipPos(null);
+    }, [isBgTelemetryUnsupported]);
 
     const emptyLabel = useMemo(() => {
+        if (isBgTelemetryUnsupported) {
+            return "This telemetry version is not supported for BG spell analytics. Supported from 3.1+.";
+        }
         if (viewMode === "personal") {
             if (metric === "interrupts") return "No interrupts captured for the current player.";
             return "No spell totals captured for the current player.";
         }
         if (metric === "interrupts") return "No interrupt activity captured for this match.";
         return "No player totals captured for this metric.";
-    }, [metric, viewMode]);
+    }, [isBgTelemetryUnsupported, metric, viewMode]);
 
     const showFallbackNotice =
+        !isBgTelemetryUnsupported &&
         viewMode === "personal" &&
         (metric === "damage" || metric === "healing") &&
         personalModel.isFallbackToMatchTotals;
+    const showBgCaptureNotice =
+        !isBgTelemetryUnsupported &&
+        isBgMatch &&
+        viewMode === "compare" &&
+        (metric === "damage" || metric === "healing") &&
+        telemetryVersion !== null &&
+        telemetryVersion !== undefined &&
+        Number.isFinite(telemetryVersion) &&
+        telemetryVersion >= BG_TELEMETRY_SUPPORT_VERSION;
 
     useEffect(() => {
         if (!import.meta.env.DEV) return;
@@ -438,6 +508,15 @@ export default function SpellCastGraph({
                     Per-player spell totals are not present in this payload. Showing match-level spell totals.
                 </div>
             ) : null}
+            {showBgCaptureNotice ? (
+                <div className={`${styles.spellMetricHint} ${styles.spellMetricHintWarning}`} role="note">
+                    <LuTriangleAlert className={styles.spellMetricHintIcon} aria-hidden="true" />
+                    <span>
+                        BG lobby totals capture damage and healing from players who were near your character during
+                        combat.
+                    </span>
+                </div>
+            ) : null}
 
             <div className={styles["spells-panel__body"]} ref={shellRef}>
                 {isFetching ? (
@@ -447,7 +526,9 @@ export default function SpellCastGraph({
                     </div>
                 ) : null}
 
-                {activeRows.length === 0 ? (
+                {isBgTelemetryUnsupported ? (
+                    <div className={styles.spellEmpty}>{emptyLabel}</div>
+                ) : activeRows.length === 0 ? (
                     <div className={styles.spellEmpty}>{emptyLabel}</div>
                 ) : viewMode === "personal" ? (
                     <ol className={styles["spell-list"]}>

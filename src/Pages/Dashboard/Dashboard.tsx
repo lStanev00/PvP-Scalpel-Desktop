@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import useMatches from "../../Hooks/useMatches";
 import RouteLayout from "../../Components/RouteLayout/RouteLayout";
@@ -5,13 +6,22 @@ import StatusCard from "../../Components/StatusCard/StatusCard";
 import PrimaryActionButton from "../../Components/PrimaryActionButton/PrimaryActionButton";
 import EmptyState from "../../Components/EmptyState/EmptyState";
 import { openUrl } from "../../Helpers/open";
+import { buildMatchSummary } from "../../Components/Data-Activity/utils";
 import styles from "./Dashboard.module.css";
 
 export default function Dashboard() {
     const matches = useMatches();
     const navigate = useNavigate();
     const totalMatches = matches.length;
-    const latestMatch = totalMatches > 0 ? matches[totalMatches - 1] : null;
+    const latestMatch = useMemo(() => {
+        if (!matches.length) return null;
+
+        const summaries = matches
+            .map((match) => ({ match, summary: buildMatchSummary(match) }))
+            .sort((a, b) => b.summary.timestampMs - a.summary.timestampMs);
+
+        return summaries[0]?.match ?? null;
+    }, [matches]);
     const owner = latestMatch?.players.find((player) => player.isOwner);
     const prematch = owner?.prematchMMR ?? null;
     const postmatch = owner?.postmatchMMR ?? null;

@@ -3,6 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import luaJson from "lua-json";
 import { Match, MatchV2, MatchWithId } from "../Interfaces/matches";
+import { buildMatchComputed, extractMatchKey, toStoredComputedMatch } from "../Domain/computedMatch";
 
 const logSchemaMismatch = (message: string, details?: unknown) => {
     if (import.meta.env.DEV) {
@@ -49,6 +50,99 @@ const coerceNumericIdArray = (value: unknown): number[] => {
     });
 
     return Array.from(deduped).sort((a, b) => a - b);
+};
+
+const toPendingMatchKeys = (value: unknown) => {
+    const pending = new Set<string>();
+    if (!isPlainObject(value)) return pending;
+
+    Object.entries(value).forEach(([rawKey, rawState]) => {
+        const key = rawKey.trim();
+        const state = typeof rawState === "string" ? rawState.trim().toLowerCase() : "";
+        if (key && state === "pending") {
+            pending.add(key);
+        }
+    });
+
+    return pending;
+};
+
+const mergeMatchesByKey = (primary: unknown[], overlay: unknown[]) => {
+    const byMatchKey = new Map<string, unknown>();
+    const unkeyed: unknown[] = [];
+
+    primary.forEach((entry) => {
+        const key = extractMatchKey(entry);
+        if (!key) {
+            unkeyed.push(entry);
+            return;
+        }
+        byMatchKey.set(key, entry);
+    });
+
+    overlay.forEach((entry) => {
+        const key = extractMatchKey(entry);
+        if (!key) {
+            unkeyed.push(entry);
+            return;
+        }
+        byMatchKey.set(key, entry);
+    });
+
+    return [...unkeyed, ...Array.from(byMatchKey.values())];
+};
+
+const deriveDurationSeconds = (value: unknown) => {
+    if (!isPlainObject(value)) return null;
+
+    const direct = value.durationSeconds;
+    if (typeof direct === "number" && Number.isFinite(direct) && direct > 0) {
+        return Math.max(0, Math.round(direct));
+    }
+
+    const soloShuffle = value.soloShuffle;
+    if (isPlainObject(soloShuffle)) {
+        const duration = soloShuffle.duration;
+        if (typeof duration === "number" && Number.isFinite(duration) && duration > 0) {
+            return Math.max(0, Math.round(duration));
+        }
+    }
+
+    const matchDetails = value.matchDetails;
+    if (isPlainObject(matchDetails)) {
+        const rawLength = matchDetails.matchLength ?? matchDetails.duration;
+        if (typeof rawLength === "number" && Number.isFinite(rawLength) && rawLength > 0) {
+            return Math.max(0, Math.round(rawLength));
+        }
+        if (typeof rawLength === "string") {
+            const trimmed = rawLength.trim();
+            if (/^\d+:\d{2}$/.test(trimmed)) {
+                const [mins, secs] = trimmed.split(":").map((part) => Number(part));
+                if (Number.isFinite(mins) && Number.isFinite(secs)) {
+                    return Math.max(0, Math.round(mins * 60 + secs));
+                }
+            }
+            const numeric = Number(trimmed);
+            if (Number.isFinite(numeric) && numeric > 0) {
+                return Math.max(0, Math.round(numeric));
+            }
+        }
+    }
+
+    const timeline = value.timeline;
+    if (Array.isArray(timeline) && timeline.length > 0) {
+        const maxTime = timeline.reduce((max, row) => {
+            if (!isPlainObject(row)) return max;
+            const t = row.t;
+            if (typeof t !== "number" || !Number.isFinite(t)) return max;
+            return t > max ? t : max;
+        }, 0);
+        if (maxTime > 0) {
+            return Math.max(0, Math.round(maxTime));
+        }
+    }
+
+    return null;
 };
 
 const extractLuaTable = (content: string, key: string) => {
@@ -287,8 +381,73 @@ export const MatchesProvider = ({ children }: { children: ReactNode }) => {
 
     useEffect(() => {
         let timeout: ReturnType<typeof setTimeout> | null = null;
+        const hydrateFromComputedStore = async () => {
+            const persistedComputedMatches = await invoke<unknown[]>("load_all_computed_matches").catch(
+                () => []
+            );
+            const computedForMerge = Array.isArray(persistedComputedMatches)
+                ? persistedComputedMatches
+                : [];
+            if (!computedForMerge.length) return;
 
-        const unlistenPromise = listen<{ account: string; path: string }>(
+            const results: MatchWithId[] = [];
+            let failedCount = 0;
+
+            for (const parsedMatch of computedForMerge) {
+                try {
+                    const derivedDuration = deriveDurationSeconds(parsedMatch);
+                    const normalizedParsedMatch =
+                        derivedDuration !== null && isPlainObject(parsedMatch)
+                            ? ({
+                                  ...parsedMatch,
+                                  durationSeconds: derivedDuration,
+                              } as unknown)
+                            : parsedMatch;
+
+                    const id = await invoke<string>("identify_match", {
+                        obj: normalizedParsedMatch,
+                    });
+
+                    const telemetryVersion =
+                        typeof (normalizedParsedMatch as { telemetryVersion?: unknown })
+                            .telemetryVersion === "number"
+                            ? ((normalizedParsedMatch as { telemetryVersion?: number }).telemetryVersion as number)
+                            : Number.NaN;
+                    const isTelemetryV2Plus =
+                        typeof normalizedParsedMatch === "object" &&
+                        normalizedParsedMatch !== null &&
+                        Number.isFinite(telemetryVersion) &&
+                        telemetryVersion >= 2;
+
+                    if (isTelemetryV2Plus) {
+                        validateMatchV2Plus(normalizedParsedMatch);
+                    } else {
+                        validateMatchV1(normalizedParsedMatch);
+                    }
+
+                    results.push({
+                        id,
+                        ...(isTelemetryV2Plus
+                            ? (normalizedParsedMatch as MatchV2)
+                            : (normalizedParsedMatch as Match)),
+                        interruptSpellIds: [],
+                    });
+                } catch {
+                    failedCount += 1;
+                }
+            }
+
+            if (!results.length) return;
+            setMatches((prev) => (prev.length > 0 ? prev : results));
+            invoke("push_log", {
+                message:
+                    failedCount > 0
+                        ? `Computed store bootstrap (${results.length} loaded, ${failedCount} failed)`
+                        : `Computed store bootstrap (${results.length} matches)`,
+            }).catch(() => undefined);
+        };
+
+        const unlistenPromise = listen<{ account: string; path: string; gameState?: string }>(
             "savedvars-updated",
             async ({ payload }) => {
                 if (timeout) clearTimeout(timeout);
@@ -367,46 +526,210 @@ export const MatchesProvider = ({ children }: { children: ReactNode }) => {
                                     keys: isPlainObject(parsedArray) ? Object.keys(parsedArray).slice(0, 12) : [],
                                 });
                             }
-                            invoke("push_log", {
-                                message: "Match data found, but entries are empty",
-                            }).catch(() => undefined);
-                            return;
                         }
 
                         invoke("push_log", {
                             message: `Parsed ${parsedMatches.length} raw match entries`,
                         }).catch(() => undefined);
 
+                        const gcPendingKeys = toPendingMatchKeys(
+                            (() => {
+                                const gcTable = extractLuaTable(fileContent, "PvP_Scalpel_GC");
+                                if (!gcTable) return {};
+                                try {
+                                    return luaJson.parse("return " + gcTable);
+                                } catch {
+                                    return {};
+                                }
+                            })()
+                        );
+                        const shouldFinalizeComputed =
+                            payload.gameState === "not_running" || payload.gameState === "just_closed";
+                        const accountKey = payload.account?.trim() || "unknown";
+
+                        if (import.meta.env.DEV) {
+                            console.log("[matches] computed finalize gate", {
+                                gameState: payload.gameState ?? "unknown",
+                                shouldFinalizeComputed,
+                                pendingCount: gcPendingKeys.size,
+                                parsedMatches: parsedMatches.length,
+                            });
+                        }
+
+                        if (shouldFinalizeComputed && gcPendingKeys.size > 0) {
+                            const computedEntries = parsedMatches
+                                .filter((entry) => {
+                                    const matchKey = extractMatchKey(entry);
+                                    return !!matchKey && gcPendingKeys.has(matchKey);
+                                })
+                                .map((entry) => {
+                                    const computed = buildMatchComputed(entry, interruptSpellIds);
+                                    if (!computed) return null;
+                                    return toStoredComputedMatch(entry, computed);
+                                })
+                                .filter((entry): entry is Record<string, unknown> => !!entry);
+
+                            if (import.meta.env.DEV) {
+                                console.log("[matches] computed finalize candidates", {
+                                    pendingCount: gcPendingKeys.size,
+                                    matchedCount: computedEntries.length,
+                                });
+                            }
+
+                            if (computedEntries.length > 0) {
+                                const persisted = await invoke("upsert_computed_matches", {
+                                    account: accountKey,
+                                    matches: computedEntries,
+                                })
+                                    .then(() => true)
+                                    .catch(() => false);
+
+                                if (persisted) {
+                                    const syncedKeys = computedEntries
+                                        .map((entry) =>
+                                            typeof entry.matchKey === "string"
+                                                ? entry.matchKey.trim()
+                                                : ""
+                                        )
+                                        .filter((value): value is string => !!value);
+
+                                    if (syncedKeys.length > 0) {
+                                        const syncedCount = await invoke<number>("mark_gc_matches_synced", {
+                                            path: payload.path,
+                                            keys: syncedKeys,
+                                        }).catch(() => 0);
+
+                                        invoke("push_log", {
+                                            message: `GC state updated to synced (${syncedCount})`,
+                                        }).catch(() => undefined);
+                                    }
+
+                                    invoke("push_log", {
+                                        message: `Computed matches persisted (${computedEntries.length})`,
+                                    }).catch(() => undefined);
+                                }
+                            }
+                        }
+
+                        const persistedComputedMatches = await invoke<unknown[]>("load_computed_matches", {
+                            account: accountKey,
+                        }).catch(() => []);
+
+                        const rawByMatchKey = new Map<string, unknown>();
+                        parsedMatches.forEach((entry) => {
+                            const key = extractMatchKey(entry);
+                            if (!key) return;
+                            rawByMatchKey.set(key, entry);
+                        });
+
+                        const computedForMerge = Array.isArray(persistedComputedMatches)
+                            ? persistedComputedMatches
+                            : [];
+                        const computedDurationByKey = new Map<string, number>();
+                        const computedBackfill: Record<string, unknown>[] = [];
+
+                        const normalizedComputedForMerge = computedForMerge.map((entry) => {
+                            if (!isPlainObject(entry)) return entry;
+                            const key = extractMatchKey(entry);
+                            if (!key) return entry;
+
+                            const existingDuration = deriveDurationSeconds(entry);
+                            if (existingDuration !== null) {
+                                computedDurationByKey.set(key, existingDuration);
+                            }
+
+                            const hasDuration =
+                                typeof entry.durationSeconds === "number" &&
+                                Number.isFinite(entry.durationSeconds) &&
+                                entry.durationSeconds > 0;
+                            if (hasDuration) return entry;
+
+                            const rawSource = rawByMatchKey.get(key);
+                            const derivedDuration = deriveDurationSeconds(rawSource);
+                            if (derivedDuration === null) return entry;
+
+                            const patched = {
+                                ...entry,
+                                durationSeconds: derivedDuration,
+                            };
+                            computedDurationByKey.set(key, derivedDuration);
+                            computedBackfill.push(patched);
+                            return patched;
+                        });
+
+                        if (computedBackfill.length > 0) {
+                            await invoke("upsert_computed_matches", {
+                                account: accountKey,
+                                matches: computedBackfill,
+                            }).catch(() => undefined);
+                            invoke("push_log", {
+                                message: `Computed duration backfilled (${computedBackfill.length})`,
+                            }).catch(() => undefined);
+                        }
+
+                        const mergedParsedMatches = mergeMatchesByKey(
+                            parsedMatches,
+                            normalizedComputedForMerge
+                        );
+
+                        if (!mergedParsedMatches.length) {
+                            invoke("push_log", {
+                                message: "Match data found, but entries are empty",
+                            }).catch(() => undefined);
+                            return;
+                        }
+
                         const results: MatchWithId[] = [];
                         let failedCount = 0;
 
-                        for (const parsedMatch of parsedMatches) {
+                        for (const parsedMatch of mergedParsedMatches) {
                             try {
+                                const matchKey = extractMatchKey(parsedMatch);
+                                const fallbackDuration =
+                                    matchKey ? computedDurationByKey.get(matchKey) : undefined;
+                                const parsedDuration = deriveDurationSeconds(parsedMatch);
+                                const effectiveDuration =
+                                    parsedDuration !== null
+                                        ? parsedDuration
+                                        : typeof fallbackDuration === "number" &&
+                                            Number.isFinite(fallbackDuration) &&
+                                            fallbackDuration > 0
+                                          ? fallbackDuration
+                                          : null;
+                                const normalizedParsedMatch =
+                                    effectiveDuration !== null && isPlainObject(parsedMatch)
+                                        ? ({
+                                              ...parsedMatch,
+                                              durationSeconds: effectiveDuration,
+                                          } as unknown)
+                                        : parsedMatch;
                                 const id = await invoke<string>("identify_match", {
-                                    obj: parsedMatch,
+                                    obj: normalizedParsedMatch,
                                 });
 
                                 const telemetryVersion =
-                                    typeof (parsedMatch as { telemetryVersion?: unknown })
+                                    typeof (normalizedParsedMatch as { telemetryVersion?: unknown })
                                         .telemetryVersion === "number"
-                                        ? ((parsedMatch as { telemetryVersion?: number })
+                                        ? ((normalizedParsedMatch as { telemetryVersion?: number })
                                               .telemetryVersion as number)
                                         : Number.NaN;
                                 const isTelemetryV2Plus =
-                                    typeof parsedMatch === "object" &&
-                                    parsedMatch !== null &&
+                                    typeof normalizedParsedMatch === "object" &&
+                                    normalizedParsedMatch !== null &&
                                     Number.isFinite(telemetryVersion) &&
                                     telemetryVersion >= 2;
 
                                 if (isTelemetryV2Plus) {
-                                    validateMatchV2Plus(parsedMatch);
+                                    validateMatchV2Plus(normalizedParsedMatch);
                                 } else {
-                                    validateMatchV1(parsedMatch);
+                                    validateMatchV1(normalizedParsedMatch);
                                 }
 
                                 results.push({
                                     id,
-                                    ...(isTelemetryV2Plus ? (parsedMatch as MatchV2) : (parsedMatch as Match)),
+                                    ...(isTelemetryV2Plus
+                                        ? (normalizedParsedMatch as MatchV2)
+                                        : (normalizedParsedMatch as Match)),
                                     interruptSpellIds,
                                 });
                             } catch (matchErr) {
@@ -442,6 +765,8 @@ export const MatchesProvider = ({ children }: { children: ReactNode }) => {
                 }, 350);
             }
         );
+
+        hydrateFromComputedStore().catch(() => undefined);
 
         unlistenPromise
             .then(() => invoke("scan_saved_vars"))

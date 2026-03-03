@@ -2,15 +2,24 @@ import useUserContext from "../../Hooks/useUserContext";
 import { openUrl } from "../../Helpers/open";
 import { getClassColor } from "../../Domain/CombatDomainContext";
 import type { MatchPlayer } from "./types";
+import { getPlayerIdentityKey } from "./playerIdentity";
 import styles from "./DataActivity.module.css";
 
 interface TeamTableProps {
     title: string;
     players: MatchPlayer[];
     showRating?: boolean;
+    highlightedPlayerKey?: string | null;
+    onHoverPlayerKey?: (playerKey: string | null) => void;
 }
 
-export default function TeamTable({ title, players, showRating = true }: TeamTableProps) {
+export default function TeamTable({
+    title,
+    players,
+    showRating = true,
+    highlightedPlayerKey = null,
+    onHoverPlayerKey,
+}: TeamTableProps) {
     const { webUrl } = useUserContext();
 
     const formatClass = (c?: string) => (c ? c[0].toUpperCase() + c.slice(1).toLowerCase() : "-");
@@ -67,6 +76,9 @@ export default function TeamTable({ title, players, showRating = true }: TeamTab
                     <tbody>
                         {players.map((p, i) => {
                             const delta = (p.postmatchMMR ?? 0) - (p.prematchMMR ?? 0);
+                            const playerKey = getPlayerIdentityKey(p);
+                            const isHighlighted =
+                                !!playerKey && !!highlightedPlayerKey && playerKey === highlightedPlayerKey;
                             const deltaStyle =
                                 delta > 0
                                     ? styles.deltaPositive
@@ -84,11 +96,21 @@ export default function TeamTable({ title, players, showRating = true }: TeamTab
 
                             return (
                                 <tr
-                                    key={i}
-                                    className={`${styles.tableRow} ${styles.tableRowClickable}`}
+                                    key={playerKey ? `${playerKey}:${i}` : i}
+                                    className={`${styles.tableRow} ${styles.tableRowClickable} ${
+                                        isHighlighted ? styles.tableRowHighlighted : ""
+                                    }`}
                                     tabIndex={0}
                                     role="link"
                                     onClick={() => handleRowAction(p.realm, p.name)}
+                                    onMouseEnter={() => {
+                                        if (!playerKey || !onHoverPlayerKey) return;
+                                        onHoverPlayerKey(playerKey);
+                                    }}
+                                    onMouseLeave={() => {
+                                        if (!onHoverPlayerKey) return;
+                                        onHoverPlayerKey(null);
+                                    }}
                                     onKeyDown={(event) => {
                                         if (event.key === "Enter" || event.key === " ") {
                                             event.preventDefault();

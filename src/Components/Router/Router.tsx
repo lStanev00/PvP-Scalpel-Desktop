@@ -7,6 +7,7 @@ import Dashboard from "../../Pages/Dashboard/Dashboard";
 import Logs from "../../Pages/Logs/Logs";
 import Settings from "../../Pages/Settings/Settings";
 import About from "../../Pages/About/About";
+import { LogsProvider } from "../../Context-Providers/logs-context";
 
 export default function AppRoutes() {
     return (
@@ -18,7 +19,14 @@ export default function AppRoutes() {
                         <Route index element={<Navigate to="/dashboard" replace />} />
                         <Route path="dashboard" element={<Dashboard />} />
                         <Route path="data" element={<DataActivity />} />
-                        <Route path="logs" element={<Logs />} />
+                        <Route
+                            path="logs"
+                            element={
+                                <LogsProvider>
+                                    <Logs />
+                                </LogsProvider>
+                            }
+                        />
                         <Route path="settings" element={<Settings />} />
                         <Route path="about" element={<About />} />
                     </Route>

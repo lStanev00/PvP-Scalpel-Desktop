@@ -1,11 +1,18 @@
 import type { MatchPlayer } from "./types";
+import { getPlayerIdentityKey } from "./playerIdentity";
 import styles from "./DataActivity.module.css";
 
 interface MSSStatsSectionProps {
     players: MatchPlayer[];
+    highlightedPlayerKey?: string | null;
+    onHoverPlayerKey?: (playerKey: string | null) => void;
 }
 
-export default function MSSStatsSection({ players }: MSSStatsSectionProps) {
+export default function MSSStatsSection({
+    players,
+    highlightedPlayerKey = null,
+    onHoverPlayerKey,
+}: MSSStatsSectionProps) {
     const statSet = new Set<string>();
 
     players.forEach((p) => {
@@ -32,6 +39,7 @@ export default function MSSStatsSection({ players }: MSSStatsSectionProps) {
 
         return {
             player: p.name ?? "-",
+            playerKey: getPlayerIdentityKey(p),
             isOwner: p.isOwner ?? false,
             stats: statsRecord,
         };
@@ -56,7 +64,22 @@ export default function MSSStatsSection({ players }: MSSStatsSectionProps) {
                     </thead>
                     <tbody>
                         {filteredRows.map((row, i) => (
-                            <tr key={i} className={styles.tableRow}>
+                            <tr
+                                key={row.playerKey ? `${row.playerKey}:${i}` : i}
+                                className={`${styles.tableRow} ${
+                                    row.playerKey && row.playerKey === highlightedPlayerKey
+                                        ? styles.tableRowHighlighted
+                                        : ""
+                                }`}
+                                onMouseEnter={() => {
+                                    if (!row.playerKey || !onHoverPlayerKey) return;
+                                    onHoverPlayerKey(row.playerKey);
+                                }}
+                                onMouseLeave={() => {
+                                    if (!onHoverPlayerKey) return;
+                                    onHoverPlayerKey(null);
+                                }}
+                            >
                                 <td
                                     className={`${styles.playerCell} ${
                                         row.isOwner ? styles.owner : ""

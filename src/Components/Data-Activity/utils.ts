@@ -27,6 +27,7 @@ export interface MatchSummary {
     timestampLabel: string;
     timestampMs: number;
     durationLabel: string;
+    durationSeconds: number | null;
     delta: number | null;
     deltaLabel: string;
     owner: {
@@ -34,6 +35,7 @@ export interface MatchSummary {
         spec?: string;
         class?: string;
         isOwner: boolean;
+        rating: number | null;
     };
     raw: MatchWithId;
 }
@@ -90,9 +92,13 @@ const getOwner = (players: MatchPlayer[]) => {
 
 const getDurationSeconds = (match: MatchWithId) => {
     const anyMatch = match as MatchWithId & {
+        durationSeconds?: number;
         soloShuffle?: { duration?: number };
         timeline?: MatchTimelineEntry[];
     };
+    if (typeof anyMatch.durationSeconds === "number" && Number.isFinite(anyMatch.durationSeconds)) {
+        return anyMatch.durationSeconds > 0 ? anyMatch.durationSeconds : null;
+    }
     if (anyMatch.soloShuffle?.duration) return anyMatch.soloShuffle.duration;
     const timeline = anyMatch.timeline;
     if (timeline && timeline.length > 0) {
@@ -173,6 +179,7 @@ export const buildMatchSummary = (match: MatchWithId): MatchSummary => {
             ? getTimestampMs(match.matchDetails.timestamp)
             : 0,
         durationLabel: formatDuration(duration),
+        durationSeconds: duration,
         delta,
         deltaLabel: delta === null ? "--" : `${delta > 0 ? "+" : ""}${delta}`,
         owner: {
@@ -180,6 +187,7 @@ export const buildMatchSummary = (match: MatchWithId): MatchSummary => {
             spec: owner?.spec ?? undefined,
             class: owner?.class ?? undefined,
             isOwner: !!owner?.isOwner,
+            rating: owner?.postmatchMMR ?? owner?.prematchMMR ?? null,
         },
         raw: match,
     };

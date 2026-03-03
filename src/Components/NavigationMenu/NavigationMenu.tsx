@@ -5,8 +5,6 @@ import {
     LuFileText,
     LuSettings,
     LuInfo,
-    LuChevronLeft,
-    LuChevronRight,
 } from "react-icons/lu";
 import styles from "./NavigationMenu.module.css";
 
@@ -20,30 +18,9 @@ const navItems = [
 const mainNavItems = navItems.filter((item) => item.to !== "/about");
 const aboutNavItem = navItems.find((item) => item.to === "/about");
 
-interface NavigationMenuProps {
-    collapsed: boolean;
-    onToggle: () => void;
-}
-
-export default function NavigationMenu({ collapsed, onToggle }: NavigationMenuProps) {
+export default function NavigationMenu() {
     return (
-        <nav className={`${styles.nav} ${collapsed ? styles.collapsed : ""}`} aria-label="Primary">
-            <div className={styles.sectionHeader}>
-                {/* <div className={styles.sectionLabel}>Navigation</div> */}
-                <button
-                    className={styles.toggle}
-                    type="button"
-                    onClick={onToggle}
-                    aria-label={collapsed ? "Expand navigation" : "Collapse navigation"}
-                    title={collapsed ? "Expand navigation" : "Collapse navigation"}
-                >
-                    {collapsed ? (
-                        <LuChevronRight className={styles.toggleIcon} />
-                    ) : (
-                        <LuChevronLeft className={styles.toggleIcon} />
-                    )}
-                </button>
-            </div>
+        <nav className={styles.nav} aria-label="Primary">
             <div className={styles.list}>
                 {mainNavItems.map((item) => (
                     <NavLink
@@ -52,7 +29,7 @@ export default function NavigationMenu({ collapsed, onToggle }: NavigationMenuPr
                         className={({ isActive }) =>
                             `${styles.link} ${isActive ? styles.active : ""}`
                         }
-                        aria-label={collapsed ? item.label : undefined}
+                        aria-label={item.label}
                         onClick={() => {
                             if (item.to === "/data") {
                                 window.dispatchEvent(new CustomEvent("match-history-reset"));
@@ -73,7 +50,7 @@ export default function NavigationMenu({ collapsed, onToggle }: NavigationMenuPr
                         className={({ isActive }) =>
                             `${styles.link} ${isActive ? styles.active : ""}`
                         }
-                        aria-label={collapsed ? aboutNavItem.label : undefined}
+                        aria-label={aboutNavItem.label}
                     >
                         <span className={styles.icon}>{aboutNavItem.icon}</span>
                         <span className={styles.label}>{aboutNavItem.label}</span>
