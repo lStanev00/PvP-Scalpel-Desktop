@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { LuInfo } from "react-icons/lu";
 import TeamTable from "./TeamTable";
 import MSSStatsSection from "./MSSStatsSection";
@@ -43,6 +43,8 @@ type MatchDetailsContent = {
     playersTitle: string;
     showRating: boolean;
     gameVersion: string | null;
+    telemetryVersion: number | null;
+    matchFormat: string;
     spellTotals: SpellTotalsMap | null;
     spellTotalsBySource: Record<string, unknown> | null;
     interruptSpellsBySource: Record<string, unknown> | null;
@@ -50,10 +52,16 @@ type MatchDetailsContent = {
     ownerInterruptsIssued: number | null;
     ownerInterruptsSucceeded: number | null;
     kickTelemetrySnapshot: KickTelemetrySnapshot;
+    computedSpellOutcomes: Record<string, { succeeded: number; interrupted: number; failed: number }> | null;
 };
 
 export default function MatchDetailsPanel({ match, isLoading, onBack }: MatchDetailsPanelProps) {
     const debugEnabled = import.meta.env.DEV;
+    const [highlightedPlayerKey, setHighlightedPlayerKey] = useState<string | null>(null);
+
+    useEffect(() => {
+        setHighlightedPlayerKey(null);
+    }, [match?.id]);
 
     const content = useMemo<MatchDetailsContent | null>(() => {
         if (!match) return null;
@@ -83,6 +91,8 @@ export default function MatchDetailsPanel({ match, isLoading, onBack }: MatchDet
                 : typeof build?.version === "string"
                   ? build.version
                   : null;
+        const matchFormat =
+            typeof match.raw.matchDetails?.format === "string" ? match.raw.matchDetails.format : "";
 
         const spellTotals = (match.raw as unknown as { spellTotals?: unknown }).spellTotals;
         const spellTotalsBySource = (
@@ -98,6 +108,17 @@ export default function MatchDetailsPanel({ match, isLoading, onBack }: MatchDet
         const interruptSpellIds = (
             match.raw as unknown as { interruptSpellIds?: unknown }
         ).interruptSpellIds;
+        const computed = (
+            match.raw as unknown as {
+                computed?: {
+                    spellOutcomesBySpellId?: Record<
+                        string,
+                        { succeeded?: unknown; interrupted?: unknown; failed?: unknown }
+                    >;
+                    ownerKicks?: { intentAttempts?: unknown; succeeded?: unknown; failed?: unknown };
+                };
+            }
+        ).computed;
         const ownerPlayer = players.find((player) => player.isOwner) ?? null;
         const ownerInterruptTuple = Array.isArray((ownerPlayer as { interrupts?: unknown } | null)?.interrupts)
             ? ((ownerPlayer as { interrupts?: unknown }).interrupts as unknown[])
@@ -116,7 +137,7 @@ export default function MatchDetailsPanel({ match, isLoading, onBack }: MatchDet
                   .filter((value): value is number => Number.isFinite(value) && value > 0)
             : [];
         const telemetryVersion = resolveTelemetryVersion(match.raw);
-        const kickTelemetrySnapshot = computeKickTelemetrySnapshot({
+        const baseKickTelemetrySnapshot = computeKickTelemetrySnapshot({
             matchId: match.id,
             timeline,
             kickSpellIds: normalizedInterruptSpellIds,
@@ -124,6 +145,60 @@ export default function MatchDetailsPanel({ match, isLoading, onBack }: MatchDet
             telemetryVersion,
             includeDiagnostics: debugEnabled,
         });
+        const computedOwnerKicks = computed?.ownerKicks;
+        const kickTelemetrySnapshot: KickTelemetrySnapshot =
+            computedOwnerKicks &&
+            typeof computedOwnerKicks === "object" &&
+            computedOwnerKicks !== null
+                ? {
+                      ...baseKickTelemetrySnapshot,
+                      intentAttempts:
+                          typeof computedOwnerKicks.intentAttempts === "number" &&
+                          Number.isFinite(computedOwnerKicks.intentAttempts)
+                              ? Math.max(0, Math.trunc(computedOwnerKicks.intentAttempts))
+                              : baseKickTelemetrySnapshot.intentAttempts,
+                      succeeded:
+                          typeof computedOwnerKicks.succeeded === "number" &&
+                          Number.isFinite(computedOwnerKicks.succeeded)
+                              ? Math.max(0, Math.trunc(computedOwnerKicks.succeeded))
+                              : baseKickTelemetrySnapshot.succeeded,
+                  }
+                : baseKickTelemetrySnapshot;
+        const computedSpellOutcomes =
+            computed?.spellOutcomesBySpellId && typeof computed.spellOutcomesBySpellId === "object"
+                ? Object.fromEntries(
+                      Object.entries(computed.spellOutcomesBySpellId)
+                          .map(([spellId, value]) => {
+                              if (!value || typeof value !== "object") return null;
+                              const row = value as {
+                                  succeeded?: unknown;
+                                  interrupted?: unknown;
+                                  failed?: unknown;
+                              };
+                              const succeeded =
+                                  typeof row.succeeded === "number" && Number.isFinite(row.succeeded)
+                                      ? Math.max(0, Math.trunc(row.succeeded))
+                                      : 0;
+                              const interrupted =
+                                  typeof row.interrupted === "number" && Number.isFinite(row.interrupted)
+                                      ? Math.max(0, Math.trunc(row.interrupted))
+                                      : 0;
+                              const failed =
+                                  typeof row.failed === "number" && Number.isFinite(row.failed)
+                                      ? Math.max(0, Math.trunc(row.failed))
+                                      : 0;
+                              return [spellId, { succeeded, interrupted, failed }] as const;
+                          })
+                          .filter(
+                              (
+                                  item
+                              ): item is readonly [
+                                  string,
+                                  { succeeded: number; interrupted: number; failed: number },
+                              ] => !!item
+                          )
+                  )
+                : null;
 
         if (import.meta.env.DEV) {
             console.log("[SpellMetrics] payload aggregate keys", {
@@ -146,6 +221,8 @@ export default function MatchDetailsPanel({ match, isLoading, onBack }: MatchDet
             playersTitle,
             showRating,
             gameVersion,
+            telemetryVersion,
+            matchFormat,
             spellTotals: (spellTotals ?? null) as SpellTotalsMap | null,
             spellTotalsBySource: (
                 spellTotalsBySource ??
@@ -164,6 +241,7 @@ export default function MatchDetailsPanel({ match, isLoading, onBack }: MatchDet
                     ? Math.max(0, Math.trunc(ownerInterruptsSucceeded))
                     : null,
             kickTelemetrySnapshot,
+            computedSpellOutcomes,
         };
     }, [match, debugEnabled]);
 
@@ -197,14 +275,36 @@ export default function MatchDetailsPanel({ match, isLoading, onBack }: MatchDet
             <div className={styles.detailsBody}>
                 {content.showFactions ? (
                     <div className={styles.teamGrid}>
-                        <TeamTable title="Alliance" players={content.alliance} showRating={content.showRating} />
-                        <TeamTable title="Horde" players={content.horde} showRating={content.showRating} />
+                        <TeamTable
+                            title="Alliance"
+                            players={content.alliance}
+                            showRating={content.showRating}
+                            highlightedPlayerKey={highlightedPlayerKey}
+                            onHoverPlayerKey={setHighlightedPlayerKey}
+                        />
+                        <TeamTable
+                            title="Horde"
+                            players={content.horde}
+                            showRating={content.showRating}
+                            highlightedPlayerKey={highlightedPlayerKey}
+                            onHoverPlayerKey={setHighlightedPlayerKey}
+                        />
                     </div>
                 ) : (
-                    <TeamTable title={content.playersTitle} players={content.players} showRating={content.showRating} />
+                    <TeamTable
+                        title={content.playersTitle}
+                        players={content.players}
+                        showRating={content.showRating}
+                        highlightedPlayerKey={highlightedPlayerKey}
+                        onHoverPlayerKey={setHighlightedPlayerKey}
+                    />
                 )}
 
-                <MSSStatsSection players={content.players} />
+                <MSSStatsSection
+                    players={content.players}
+                    highlightedPlayerKey={highlightedPlayerKey}
+                    onHoverPlayerKey={setHighlightedPlayerKey}
+                />
                 <div className={styles.spellNote}>
                     <LuInfo className={styles.spellNoteIcon} aria-hidden="true" />
                     <span>
@@ -216,9 +316,12 @@ export default function MatchDetailsPanel({ match, isLoading, onBack }: MatchDet
                     timeline={content.timeline}
                     players={content.players}
                     gameVersion={content.gameVersion}
+                    telemetryVersion={content.telemetryVersion}
+                    matchFormat={content.matchFormat}
                     spellTotals={content.spellTotals}
                     spellTotalsBySource={content.spellTotalsBySource}
                     interruptSpellsBySource={content.interruptSpellsBySource}
+                    computedSpellOutcomes={content.computedSpellOutcomes}
                 />
 
                 {debugEnabled ? (

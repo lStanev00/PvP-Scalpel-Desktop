@@ -53,6 +53,7 @@ const CIRCLE_CENTER = 64;
 const CIRCLE_CIRCUMFERENCE = 2 * Math.PI * CIRCLE_RADIUS;
 const WARNING_LOWER_THRESHOLD_PCT = -5;
 const GREEN_TOLERANCE_THRESHOLD_PCT = -0.5;
+const BG_KICK_SUPPORT_VERSION = 3.1;
 
 const clampPercent = (value: number) => Math.max(0, Math.min(100, value));
 
@@ -97,6 +98,20 @@ const getContributionColor = (deltaPercent: number) => {
 const asRoleToken = (value: string): RoleToken => {
     if (value === "dps" || value === "healer" || value === "tank") return value;
     return "unknown";
+};
+
+const isBattlegroundFormat = (format?: string) => {
+    if (!format) return false;
+    const normalized = format.toLowerCase();
+    return (
+        normalized.includes("battleground") ||
+        normalized.includes("random bg") ||
+        normalized.includes("randombg") ||
+        normalized.includes("rated battleground") ||
+        normalized.includes("rbg") ||
+        normalized.includes("epic bg") ||
+        normalized.includes("epic battleground")
+    );
 };
 
 const getHealingWeightByOwnerRole = (
@@ -558,14 +573,21 @@ export default function MatchSummaryHeader({
     );
 
     const kickTelemetry = useMemo<KickHeaderTelemetry>(() => {
-        const isAvailable =
-            !kickTelemetrySnapshot.isLegacyMatch && kickTelemetrySnapshot.succeeded !== null;
+        const matchFormat = match.raw.matchDetails?.format ?? "";
+        const isBgMatch = isBattlegroundFormat(matchFormat);
+        const telemetryVersion = kickTelemetrySnapshot.telemetryVersion;
+        const isBgUnsupported =
+            isBgMatch &&
+            (telemetryVersion === null || !Number.isFinite(telemetryVersion) || telemetryVersion < BG_KICK_SUPPORT_VERSION);
+        const isAvailable = !isBgUnsupported && kickTelemetrySnapshot.succeeded !== null;
         if (!isAvailable) {
             return {
                 isAvailable: false,
-                message: kickTelemetrySnapshot.isLegacyMatch
-                    ? "Data version is not supported for this analytics."
-                    : "Interrupt telemetry not available for this match.",
+                message: isBgUnsupported
+                    ? "Kick analytics for Battleground formats are supported from telemetry 3.1+."
+                    : kickTelemetrySnapshot.isLegacyMatch
+                      ? "Data version is not supported for this analytics."
+                      : "Interrupt telemetry not available for this match.",
                 successful: 0,
                 failed: 0,
                 total: 0,
@@ -577,7 +599,7 @@ export default function MatchSummaryHeader({
         const failed = Math.max(0, total - successful);
 
         return { isAvailable: true, successful, failed, total };
-    }, [kickTelemetrySnapshot]);
+    }, [kickTelemetrySnapshot, match.raw.matchDetails?.format]);
 
     const ownerClassColor = getClassColor(owner?.class) ?? "#8a94a6";
     const classMedia = resolveMediaUrl(getClassMedia(owner?.class) ?? getSpecMedia(owner?.spec));

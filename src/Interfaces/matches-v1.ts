@@ -96,6 +96,7 @@ export interface TimelineEntry {
 export interface Match {
     matchDetails: MatchDetails;
     players: Player[];
+    durationSeconds?: number;
     interrupts?: Interrupts;
     auras?: Auras;
     timeline?: TimelineEntry[];

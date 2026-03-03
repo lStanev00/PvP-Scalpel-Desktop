@@ -1,5 +1,5 @@
 .nav {
-    width: 240px;
+    width: 72px;
     padding: 18px 14px;
     border-right: 1px solid rgba(255, 255, 255, 0.08);
     background: rgba(18, 24, 33, 0.65);
@@ -7,55 +7,12 @@
     flex-direction: column;
     gap: 12px;
     transition: width 180ms ease;
+    overflow: visible;
 }
 
-.collapsed {
-    width: 72px;
-}
-
-.sectionHeader {
-    display: flex;
-    align-items: center;
-    justify-content: flex-start;
-    gap: 8px;
-    padding: 0 6px;
-}
-
-.sectionLabel {
-    font-size: 11px;
-    letter-spacing: 1.4px;
-    text-transform: uppercase;
-    color: rgba(138, 148, 166, 0.95);
-}
-
-.toggle {
-    width: 28px;
-    height: 28px;
-    border-radius: 10px;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    background: rgba(255, 255, 255, 0.05);
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-}
-
-.toggle:hover {
-    background: rgba(255, 255, 255, 0.08);
-    border-color: rgba(255, 255, 255, 0.18);
-}
-
-.toggleIcon {
-    width: 14px;
-    height: 14px;
-}
-
-.collapsed .sectionHeader {
-    justify-content: flex-end;
-}
-
-.collapsed .toggle {
-    margin-left: auto;
+.nav:hover,
+.nav:focus-within {
+    width: 240px;
 }
 
 .list {
@@ -76,17 +33,19 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 10px 12px;
+    padding: 10px;
     border-radius: 14px;
     border: 1px solid transparent;
     color: rgba(230, 234, 240, 0.85);
     transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
     position: relative;
+    justify-content: center;
 }
 
-.collapsed .link {
-    justify-content: center;
-    padding: 10px;
+.nav:hover .link,
+.nav:focus-within .link {
+    justify-content: flex-start;
+    padding: 10px 12px;
 }
 
 .link:hover {
@@ -122,21 +81,15 @@
 .label {
     font-size: 13px;
     letter-spacing: 0.2px;
-}
-
-.collapsed .label {
     display: none;
 }
 
-.collapsed .sectionLabel {
-    display: none;
+.nav:hover .label,
+.nav:focus-within .label {
+    display: inline;
 }
 
 .tooltip {
-    display: none;
-}
-
-.collapsed .tooltip {
     display: inline-flex;
     align-items: center;
     padding: 6px 10px;
@@ -159,8 +112,8 @@
     z-index: 4;
 }
 
-.collapsed .link:hover .tooltip,
-.collapsed .link:focus-visible .tooltip {
+.nav:not(:hover):not(:focus-within) .link:hover .tooltip,
+.nav:not(:hover):not(:focus-within) .link:focus-visible .tooltip {
     opacity: 1;
     visibility: visible;
     transform: translate(0, -50%);
@@ -176,10 +129,6 @@
         overflow-x: auto;
     }
 
-    .collapsed {
-        width: 100%;
-    }
-
     .list {
         flex-direction: row;
         flex-wrap: nowrap;
@@ -191,19 +140,16 @@
         flex-direction: row;
     }
 
-    .sectionLabel {
-        display: none;
-    }
-
     .label {
         display: inline;
     }
 
     .link {
         justify-content: flex-start;
+        padding: 10px 12px;
     }
 
-    .toggle {
+    .tooltip {
         display: none;
     }
 }

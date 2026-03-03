@@ -30,7 +30,7 @@ export default function AppShell() {
     const [requiredAddonVersion, setRequiredAddonVersion] = useState<string | null>(null);
     const [launcherBusy, setLauncherBusy] = useState(false);
     const [launcherError, setLauncherError] = useState<string | null>(null);
-    const { minimizeToTray, navCollapsed, setNavCollapsed } = usePreferences();
+    const { minimizeToTray } = usePreferences();
     const { desktopVersion, addonVersion } = useAppInfo();
     const minimizeToTrayRef = useRef(minimizeToTray);
     const closeListenerRef = useRef<null | (() => void)>(null);
@@ -277,10 +277,7 @@ export default function AppShell() {
                             <TopBar onMinimize={handleMinimize} onMaximize={handleMaximize} onClose={handleClose} />
                         </div>
                         <div className={styles.body}>
-                            <NavigationMenu
-                                collapsed={navCollapsed}
-                                onToggle={() => setNavCollapsed(!navCollapsed)}
-                            />
+                            <NavigationMenu />
                             <main className={styles.main}>
                                 <Outlet />
                             </main>

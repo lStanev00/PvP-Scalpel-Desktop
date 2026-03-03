@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { LuClock3, LuFlame, LuPercent, LuTrendingUp } from "react-icons/lu";
 import useMatches from "../../Hooks/useMatches";
 import updatePersence from "../../Helpers/updatePresence";
 import RouteLayout from "../RouteLayout/RouteLayout";
@@ -14,6 +15,13 @@ import {
     type MatchSummary,
 } from "./utils";
 import styles from "./DataActivity.module.css";
+
+const formatDurationLabel = (seconds: number) => {
+    const total = Math.max(0, Math.round(seconds));
+    const minutes = Math.floor(total / 60);
+    const remainingSeconds = total % 60;
+    return `${minutes}:${String(remainingSeconds).padStart(2, "0")}`;
+};
 
 export default function DataActivity() {
     const matches = useMatches();
@@ -112,6 +120,66 @@ export default function DataActivity() {
         }
     }, [characterOptions, filters.character]);
     const filtered = useMemo(() => filterMatches(summaries, filters), [summaries, filters]);
+    const historyStats = useMemo(() => {
+        const winCount = filtered.filter((match) => match.result === "win").length;
+        const lossCount = filtered.filter((match) => match.result === "loss").length;
+        const resolvedCount = winCount + lossCount;
+        const winRate = resolvedCount > 0 ? Math.round((winCount / resolvedCount) * 100) : 0;
+
+        const durationSamples = filtered
+            .map((match) => match.durationSeconds)
+            .filter((seconds): seconds is number => typeof seconds === "number" && seconds > 0);
+        const averageDurationSeconds =
+            durationSamples.length > 0
+                ? durationSamples.reduce((sum, value) => sum + value, 0) / durationSamples.length
+                : null;
+
+        const ratingNet = filtered.reduce((sum, match) => {
+            if (typeof match.delta !== "number") return sum;
+            return sum + match.delta;
+        }, 0);
+        const hasRatingDeltas = filtered.some((match) => typeof match.delta === "number");
+        const latestRating =
+            filtered.find((match) => typeof match.owner.rating === "number")?.owner.rating ?? null;
+
+        let winStreak = 0;
+        for (const match of filtered) {
+            if (match.result !== "win") break;
+            winStreak += 1;
+        }
+
+        return {
+            winRateLabel: `${winRate}%`,
+            winBreakdownLabel:
+                resolvedCount > 0 ? `${winCount}W - ${lossCount}L` : "No resolved matches",
+            currentRatingLabel:
+                typeof latestRating === "number" ? String(Math.round(latestRating)) : "--",
+            ratingNetLabel: hasRatingDeltas
+                ? `${ratingNet > 0 ? "+" : ""}${ratingNet} net`
+                : "No rating deltas",
+            averageDurationLabel:
+                averageDurationSeconds === null ? "--" : formatDurationLabel(averageDurationSeconds),
+            averageDurationDetail:
+                durationSamples.length > 0
+                    ? `${durationSamples.length} match${durationSamples.length === 1 ? "" : "es"}`
+                    : "No duration data",
+            winStreakLabel: String(winStreak),
+            winStreakDetail: "current",
+        };
+    }, [filtered]);
+    const needsScopedStats = filters.mode === "all" || filters.character === "all";
+    const displayedHistoryStats = needsScopedStats
+        ? {
+              winRateLabel: "--",
+              winBreakdownLabel: "Select bracket and character",
+              currentRatingLabel: "--",
+              ratingNetLabel: "Select bracket and character",
+              averageDurationLabel: "--",
+              averageDurationDetail: "Select bracket and character",
+              winStreakLabel: "--",
+              winStreakDetail: "Select bracket and character",
+          }
+        : historyStats;
 
     useEffect(() => {
         const nextId = getDefaultSelectedId(selectedId, filtered);
@@ -186,6 +254,89 @@ export default function DataActivity() {
             <div className={styles.page}>
                 {view === "list" ? (
                     <div className={`${styles.viewPanel} ${styles.viewList}`}>
+                        <section className={styles.historyStatsGrid} aria-label="Match history overview">
+                            {needsScopedStats ? (
+                                <div
+                                    className={styles.historyStatsPrompt}
+                                    role="status"
+                                    aria-live="polite"
+                                >
+                                    Select a character and a bracket to unlock these statistics.
+                                </div>
+                            ) : null}
+                            <article className={styles.historyStatCard}>
+                                <span
+                                    className={`${styles.historyStatIcon} ${styles.historyStatIconGood}`}
+                                    aria-hidden="true"
+                                >
+                                    <LuPercent />
+                                </span>
+                                <div className={styles.historyStatContent}>
+                                    <span className={styles.historyStatLabel}>Win Rate</span>
+                                    <span className={styles.historyStatValue}>
+                                        {displayedHistoryStats.winRateLabel}
+                                    </span>
+                                    <span className={styles.historyStatDetail}>
+                                        {displayedHistoryStats.winBreakdownLabel}
+                                    </span>
+                                </div>
+                            </article>
+
+                            <article className={styles.historyStatCard}>
+                                <span
+                                    className={`${styles.historyStatIcon} ${styles.historyStatIconInfo}`}
+                                    aria-hidden="true"
+                                >
+                                    <LuTrendingUp />
+                                </span>
+                                <div className={styles.historyStatContent}>
+                                    <span className={styles.historyStatLabel}>Current Rating</span>
+                                    <span className={styles.historyStatValue}>
+                                        {displayedHistoryStats.currentRatingLabel}
+                                    </span>
+                                    <span className={styles.historyStatDetail}>
+                                        {displayedHistoryStats.ratingNetLabel}
+                                    </span>
+                                </div>
+                            </article>
+
+                            <article className={styles.historyStatCard}>
+                                <span
+                                    className={`${styles.historyStatIcon} ${styles.historyStatIconAccent}`}
+                                    aria-hidden="true"
+                                >
+                                    <LuClock3 />
+                                </span>
+                                <div className={styles.historyStatContent}>
+                                    <span className={styles.historyStatLabel}>Avg Duration</span>
+                                    <span className={styles.historyStatValue}>
+                                        {displayedHistoryStats.averageDurationLabel}
+                                    </span>
+                                    <span className={styles.historyStatDetail}>
+                                        {displayedHistoryStats.averageDurationDetail}
+                                    </span>
+                                </div>
+                            </article>
+
+                            <article className={styles.historyStatCard}>
+                                <span
+                                    className={`${styles.historyStatIcon} ${styles.historyStatIconWarn}`}
+                                    aria-hidden="true"
+                                >
+                                    <LuFlame />
+                                </span>
+                                <div className={styles.historyStatContent}>
+                                    <span className={styles.historyStatLabel}>Win Streak</span>
+                                    <span className={styles.historyStatValue}>
+                                        {displayedHistoryStats.winStreakLabel}
+                                    </span>
+                                    <span className={styles.historyStatDetail}>
+                                        {displayedHistoryStats.winStreakDetail}
+                                    </span>
+                                </div>
+                            </article>
+                        </section>
+
                         <FiltersBar
                             filters={filters}
                             onChange={setFilters}

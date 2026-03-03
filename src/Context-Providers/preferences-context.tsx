@@ -3,8 +3,6 @@ import { createContext, ReactNode, useContext, useEffect, useState } from "react
 interface PreferencesContextValue {
     minimizeToTray: boolean;
     setMinimizeToTray: (value: boolean) => void;
-    navCollapsed: boolean;
-    setNavCollapsed: (value: boolean) => void;
 }
 
 const PreferencesContext = createContext<PreferencesContextValue | null>(null);
@@ -22,21 +20,18 @@ export const PreferencesProvider = ({ children }: { children: ReactNode }) => {
     const [minimizeToTray, setMinimizeToTray] = useState(() =>
         loadStoredBoolean("minimizeToTray", true)
     );
-    const [navCollapsed, setNavCollapsed] = useState(() =>
-        loadStoredBoolean("navCollapsed", false)
-    );
 
     useEffect(() => {
         localStorage.setItem("minimizeToTray", String(minimizeToTray));
     }, [minimizeToTray]);
 
     useEffect(() => {
-        localStorage.setItem("navCollapsed", String(navCollapsed));
-    }, [navCollapsed]);
+        localStorage.removeItem("navCollapsed");
+    }, []);
 
     return (
         <PreferencesContext.Provider
-            value={{ minimizeToTray, setMinimizeToTray, navCollapsed, setNavCollapsed }}
+            value={{ minimizeToTray, setMinimizeToTray }}
         >
             {children}
         </PreferencesContext.Provider>

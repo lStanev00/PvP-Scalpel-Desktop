@@ -159,6 +159,7 @@ export interface SoloShuffleDataV2 {
 export interface MatchV2 {
     matchKey: string;
     telemetryVersion: 2 | 3;
+    durationSeconds?: number;
     winner?: "victory" | "defeat" | "draw";
     matchDetails: MatchDetailsV2;
     players: PlayerEntryV2[];
@@ -188,5 +189,20 @@ export interface MatchV2 {
     }>>;
     interruptSpellsBySource?: Record<string, Record<string, number>>;
     castOutcomes?: unknown[];
+    computed?: {
+        spellOutcomesBySpellId?: Record<
+            string,
+            {
+                succeeded?: number;
+                interrupted?: number;
+                failed?: number;
+            }
+        >;
+        ownerKicks?: {
+            intentAttempts?: number;
+            succeeded?: number;
+            failed?: number;
+        };
+    };
     soloShuffle?: SoloShuffleDataV2;
 }
