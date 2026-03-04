@@ -143,25 +143,37 @@ export default function MatchDetailsPanel({ match, isLoading, onBack }: MatchDet
             kickSpellIds: normalizedInterruptSpellIds,
             owner: ownerPlayer,
             telemetryVersion,
+            interruptSpellsBySource,
             includeDiagnostics: debugEnabled,
         });
         const computedOwnerKicks = computed?.ownerKicks;
+        const computedIntentAttempts =
+            typeof computedOwnerKicks?.intentAttempts === "number" &&
+            Number.isFinite(computedOwnerKicks.intentAttempts)
+                ? Math.max(0, Math.trunc(computedOwnerKicks.intentAttempts))
+                : null;
+        const computedSucceeded =
+            typeof computedOwnerKicks?.succeeded === "number" &&
+            Number.isFinite(computedOwnerKicks.succeeded)
+                ? Math.max(0, Math.trunc(computedOwnerKicks.succeeded))
+                : null;
+        const resolvedIntentAttempts =
+            computedIntentAttempts !== null && computedIntentAttempts > 0
+                ? computedIntentAttempts
+                : baseKickTelemetrySnapshot.intentAttempts;
+        const resolvedSucceeded =
+            computedSucceeded !== null &&
+            (computedSucceeded > 0 || (baseKickTelemetrySnapshot.succeeded ?? 0) <= 0)
+                ? computedSucceeded
+                : baseKickTelemetrySnapshot.succeeded;
         const kickTelemetrySnapshot: KickTelemetrySnapshot =
             computedOwnerKicks &&
             typeof computedOwnerKicks === "object" &&
             computedOwnerKicks !== null
                 ? {
                       ...baseKickTelemetrySnapshot,
-                      intentAttempts:
-                          typeof computedOwnerKicks.intentAttempts === "number" &&
-                          Number.isFinite(computedOwnerKicks.intentAttempts)
-                              ? Math.max(0, Math.trunc(computedOwnerKicks.intentAttempts))
-                              : baseKickTelemetrySnapshot.intentAttempts,
-                      succeeded:
-                          typeof computedOwnerKicks.succeeded === "number" &&
-                          Number.isFinite(computedOwnerKicks.succeeded)
-                              ? Math.max(0, Math.trunc(computedOwnerKicks.succeeded))
-                              : baseKickTelemetrySnapshot.succeeded,
+                      intentAttempts: resolvedIntentAttempts,
+                      succeeded: resolvedSucceeded,
                   }
                 : baseKickTelemetrySnapshot;
         const computedSpellOutcomes =

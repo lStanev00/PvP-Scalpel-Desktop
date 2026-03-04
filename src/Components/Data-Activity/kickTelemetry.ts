@@ -99,6 +99,32 @@ const parseInterruptTuple = (player: MatchPlayer | null) => {
     return { issued: null, succeeded: null };
 };
 
+const parseSucceededFromInterruptSpellsBySource = (
+    interruptSpellsBySource: unknown,
+    owner: MatchPlayer | null
+): number | null => {
+    const ownerGuid =
+        typeof (owner as { guid?: unknown } | null)?.guid === "string"
+            ? ((owner as { guid?: string }).guid ?? "").trim()
+            : "";
+    if (!ownerGuid || !interruptSpellsBySource || typeof interruptSpellsBySource !== "object") {
+        return null;
+    }
+
+    const bySource = interruptSpellsBySource as Record<string, unknown>;
+    const ownerSpells = bySource[ownerGuid];
+    if (!ownerSpells || typeof ownerSpells !== "object" || Array.isArray(ownerSpells)) {
+        return null;
+    }
+
+    const spellCounts = ownerSpells as Record<string, unknown>;
+    const total = Object.values(spellCounts).reduce<number>(
+        (sum, value) => sum + normalizeCount(value),
+        0
+    );
+    return total > 0 ? total : 0;
+};
+
 export const resolveTelemetryVersion = (rawMatch: unknown) => {
     const raw = rawMatch as { telemetryVersion?: unknown; dataVersion?: unknown };
     const telemetryVersion = normalizeNumber(raw.telemetryVersion);
@@ -129,6 +155,7 @@ export const computeKickTelemetrySnapshot = ({
     kickSpellIds,
     owner,
     telemetryVersion,
+    interruptSpellsBySource,
     includeDiagnostics = false,
 }: {
     matchId: string;
@@ -136,6 +163,7 @@ export const computeKickTelemetrySnapshot = ({
     kickSpellIds: number[];
     owner: MatchPlayer | null;
     telemetryVersion: number | null;
+    interruptSpellsBySource?: unknown;
     includeDiagnostics?: boolean;
 }): KickTelemetrySnapshot => {
     const kickSet = new Set(kickSpellIds.filter((value) => Number.isFinite(value) && value > 0));
@@ -146,30 +174,42 @@ export const computeKickTelemetrySnapshot = ({
     const attemptsWithIntent = collapsedKickAttempts.filter(hasIntentSignal);
 
     const intentAttempts = attemptsWithIntent.length;
+    const succeededAttempts = attemptsWithIntent.filter(
+        (attempt) => attempt.resolvedOutcome === "succeeded"
+    ).length;
+    const interruptedAttempts = attemptsWithIntent.filter(
+        (attempt) => attempt.resolvedOutcome === "interrupted"
+    ).length;
+    const failedAttempts = attemptsWithIntent.filter(
+        (attempt) => attempt.resolvedOutcome === "failed"
+    ).length;
+    const unresolvedAttempts = attemptsWithIntent.filter((attempt) => !attempt.resolvedOutcome).length;
     let castEvents = 0;
     let outcomeOnlyAttempts = 0;
-    let succeededAttempts = 0;
-    let interruptedAttempts = 0;
-    let failedAttempts = 0;
-    let unresolvedAttempts = 0;
 
     if (includeDiagnostics) {
         const rawKickEvents = rawEvents.filter((event) => kickSet.has(event.spellId));
         castEvents = rawKickEvents.filter((event) => isIntentSignalEvent(event.event)).length;
         outcomeOnlyAttempts = Math.max(0, collapsedKickAttempts.length - intentAttempts);
-        succeededAttempts = attemptsWithIntent.filter(
-            (attempt) => attempt.resolvedOutcome === "succeeded"
-        ).length;
-        interruptedAttempts = attemptsWithIntent.filter(
-            (attempt) => attempt.resolvedOutcome === "interrupted"
-        ).length;
-        failedAttempts = attemptsWithIntent.filter(
-            (attempt) => attempt.resolvedOutcome === "failed"
-        ).length;
-        unresolvedAttempts = attemptsWithIntent.filter((attempt) => !attempt.resolvedOutcome).length;
     }
 
     const { issued, succeeded } = parseInterruptTuple(owner);
+    const succeededFromSource = parseSucceededFromInterruptSpellsBySource(
+        interruptSpellsBySource,
+        owner
+    );
+    const normalizedSucceeded =
+        succeededFromSource !== null && (succeeded === null || (succeeded === 0 && succeededFromSource > 0))
+            ? succeededFromSource
+            : succeeded;
+    const resolvedSucceededFallback =
+        normalizedSucceeded === null || (normalizedSucceeded === 0 && intentAttempts > 0 && succeededAttempts > 0)
+            ? succeededAttempts
+            : normalizedSucceeded;
+    const clampedSucceeded =
+        resolvedSucceededFallback === null
+            ? null
+            : Math.max(0, Math.min(intentAttempts, Math.trunc(resolvedSucceededFallback)));
     const isLegacyMatch =
         telemetryVersion !== null && telemetryVersion < INTERRUPT_TRACKING_VERSION;
 
@@ -185,6 +225,6 @@ export const computeKickTelemetrySnapshot = ({
         failedAttempts,
         unresolvedAttempts,
         issued,
-        succeeded,
+        succeeded: clampedSucceeded,
     };
 };
