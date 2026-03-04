@@ -74,6 +74,7 @@ export const buildMatchComputed = (rawMatch: unknown, kickSpellIds: number[]): M
         kickSpellIds,
         owner,
         telemetryVersion,
+        interruptSpellsBySource: rawMatch.interruptSpellsBySource,
         includeDiagnostics: false,
     });
 
