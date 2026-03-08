@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { LuTriangleAlert } from "react-icons/lu";
+import { LuCircleHelp, LuTriangleAlert } from "react-icons/lu";
 import useUserContext from "../../Hooks/useUserContext";
 import { getClassColor, getClassMedia, getSpecMedia } from "../../Domain/CombatDomainContext";
 import {
@@ -568,12 +568,25 @@ export default function SpellCastGraph({
                                             alt=""
                                             loading="lazy"
                                         />
+                                    ) : row.isUnknownMeta ? (
+                                        <div
+                                            className={`${styles["spell-row__icon-fallback"]} ${styles.spellRowIconUnknown}`}
+                                            aria-hidden="true"
+                                        >
+                                            <LuCircleHelp />
+                                        </div>
                                     ) : (
                                         <div className={styles["spell-row__icon-fallback"]}>
                                             {row.name.slice(0, 1).toUpperCase()}
                                         </div>
                                     )}
-                                    <span className={styles["spell-row__name"]}>{row.name}</span>
+                                    <span
+                                        className={`${styles["spell-row__name"]} ${
+                                            row.isUnknownMeta ? styles.spellRowNameUnknown : ""
+                                        }`}
+                                    >
+                                        {row.name}
+                                    </span>
                                     <div className={styles["spell-row__bar-container"]}>
                                         <div
                                             className={`${styles["spell-row__bar"]} ${

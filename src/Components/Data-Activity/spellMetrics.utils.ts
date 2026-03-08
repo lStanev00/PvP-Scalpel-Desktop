@@ -17,6 +17,7 @@ export type SpellMetricRow = {
     name: string;
     icon?: string;
     description?: string | null;
+    isUnknownMeta?: boolean;
     value: number;
     sharePct: number;
     totalAttempts: number;
@@ -257,25 +258,78 @@ const getSpellValueFromEntry = (entry: ParsedSpellTotalEntry, metric: SpellMetri
 const buildSpellMetricRows = (
     spellValues: Map<number, number>,
     attemptCounts: Map<number, AttemptCounts>,
-    spellMetaById: Record<string, GameSpellEntry | null>
+    spellMetaById: Record<string, GameSpellEntry | null>,
+    metric: SpellMetricType
 ): SpellMetricRow[] => {
     const rawRows = Array.from(spellValues.entries())
         .map(([spellId, value]): SpellMetricRow | null => {
             if (value <= 0) return null;
             const meta = spellMetaById[String(spellId)];
-            if (!isRenderableSpellMeta(meta)) return null;
-            if (!meta) return null;
-            const metaName = typeof meta.name === "string" ? meta.name : null;
-            if (!metaName || !metaName.trim()) return null;
-
             const attempts = attemptCounts.get(spellId) ?? { ...zeroAttempts, spellId };
             const totalAttempts = attempts.succeeded + attempts.failed + attempts.interrupted;
+            const isInterruptMetric = metric === "interrupts";
+
+            if (!isRenderableSpellMeta(meta)) {
+                if (!isInterruptMetric) return null;
+                return {
+                    spellId,
+                    name: "Unknown Spell",
+                    icon: undefined,
+                    description: null,
+                    isUnknownMeta: true,
+                    value,
+                    sharePct: 0,
+                    totalAttempts,
+                    succeeded: attempts.succeeded,
+                    failed: attempts.failed,
+                    interrupted: attempts.interrupted,
+                    avgPerCast: totalAttempts > 0 ? value / totalAttempts : null,
+                };
+            }
+
+            if (!meta) {
+                if (!isInterruptMetric) return null;
+                return {
+                    spellId,
+                    name: "Unknown Spell",
+                    icon: undefined,
+                    description: null,
+                    isUnknownMeta: true,
+                    value,
+                    sharePct: 0,
+                    totalAttempts,
+                    succeeded: attempts.succeeded,
+                    failed: attempts.failed,
+                    interrupted: attempts.interrupted,
+                    avgPerCast: totalAttempts > 0 ? value / totalAttempts : null,
+                };
+            }
+
+            const metaName = typeof meta.name === "string" ? meta.name : null;
+            if (!metaName || !metaName.trim()) {
+                if (!isInterruptMetric) return null;
+                return {
+                    spellId,
+                    name: "Unknown Spell",
+                    icon: undefined,
+                    description: null,
+                    isUnknownMeta: true,
+                    value,
+                    sharePct: 0,
+                    totalAttempts,
+                    succeeded: attempts.succeeded,
+                    failed: attempts.failed,
+                    interrupted: attempts.interrupted,
+                    avgPerCast: totalAttempts > 0 ? value / totalAttempts : null,
+                };
+            }
 
             return {
                 spellId,
                 name: metaName,
                 icon: meta.media ?? undefined,
                 description: meta.description ?? null,
+                isUnknownMeta: false,
                 value,
                 sharePct: 0,
                 totalAttempts,
@@ -396,7 +450,8 @@ export const buildPersonalModel = ({
     const rows = buildSpellMetricRows(
         useFallback ? fallbackSpellValues : sourceSpellValues,
         attemptCounts,
-        spellMetaById
+        spellMetaById,
+        metric
     );
 
     return {
@@ -432,7 +487,8 @@ export const buildCompareModel = ({
                     ? getInterruptSpellValues(guid, interruptsBySource)
                     : getSourceSpellValues(guid, metric, spellTotalsBySource);
 
-            const spells = buildSpellMetricRows(spellValues, attemptCounts, spellMetaById);
+            const spells = buildSpellMetricRows(spellValues, attemptCounts, spellMetaById, metric);
+
 
             return {
                 key: buildPlayerKey(player, index),
