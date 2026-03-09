@@ -471,9 +471,384 @@
     gap: 16px;
 }
 
+/* Match details header */
+
+.mdHeader {
+    display: grid;
+    gap: 0;
+    width: 100%;
+    border-radius: var(--r20);
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    background: linear-gradient(165deg, rgba(14, 20, 34, 0.92) 0%, rgba(8, 14, 24, 0.96) 100%);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    position: relative;
+}
+
+.mdHeader::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    border-radius: inherit;
+}
+
+.mdResultWin::before {
+    background: linear-gradient(135deg, rgba(58, 210, 159, 0.06) 0%, transparent 50%);
+}
+
+.mdResultLoss::before {
+    background: linear-gradient(135deg, rgba(255, 77, 79, 0.06) 0%, transparent 50%);
+}
+
+.mdResultNeutral::before {
+    background: linear-gradient(135deg, rgba(138, 148, 166, 0.04) 0%, transparent 50%);
+}
+
+.mdBanner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    position: relative;
+    z-index: 1;
+}
+
+.mdBannerLeft {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    min-width: 0;
+}
+
+.mdBackBtn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.03);
+    color: rgba(230, 234, 240, 0.72);
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 120ms ease;
+}
+
+.mdBackBtn:hover {
+    color: rgba(244, 247, 255, 0.95);
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.14);
+}
+
+.mdBackBtn:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+}
+
+.mdBackBtn svg {
+    width: 13px;
+    height: 13px;
+}
+
+.mdResultPill {
+    padding: 3px 12px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+}
+
+.mdResultWin .mdResultPill {
+    color: var(--result-win);
+    background: var(--result-win-soft);
+    border: 1px solid rgba(58, 210, 159, 0.3);
+}
+
+.mdResultLoss .mdResultPill {
+    color: var(--result-loss);
+    background: var(--result-loss-soft);
+    border: 1px solid rgba(255, 77, 79, 0.3);
+}
+
+.mdResultNeutral .mdResultPill {
+    color: var(--result-neutral);
+    background: var(--result-neutral-soft);
+    border: 1px solid rgba(138, 148, 166, 0.3);
+}
+
+.mdBannerMeta {
+    font-size: 11px;
+    color: rgba(230, 234, 240, 0.62);
+    letter-spacing: 0.2px;
+    white-space: nowrap;
+}
+
+.mdBannerDelta {
+    font-weight: 700;
+}
+
+.mdResultWin .mdBannerDelta {
+    color: var(--result-win);
+}
+
+.mdResultLoss .mdBannerDelta {
+    color: var(--result-loss);
+}
+
+.mdExpandBtn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 10px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.02);
+    color: rgba(230, 234, 240, 0.68);
+    font-size: 10px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 120ms ease;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+}
+
+.mdExpandBtn:hover {
+    color: rgba(230, 234, 240, 0.88);
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.mdExpandBtn svg {
+    width: 12px;
+    height: 12px;
+}
+
+.mdIdentityRow {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 18px 20px 14px;
+    position: relative;
+    z-index: 1;
+}
+
+.mdAvatarWrap {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.04);
+    flex-shrink: 0;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.mdAvatar {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.mdAvatarFallback {
+    width: 100%;
+    height: 100%;
+    display: grid;
+    place-items: center;
+    font-size: 16px;
+    font-weight: 800;
+    color: rgba(230, 234, 240, 0.8);
+}
+
+.mdIdentityText {
+    flex: 1;
+    min-width: 0;
+    display: grid;
+    gap: 4px;
+}
+
+.mdPlayerName {
+    margin: 0;
+    font-size: 26px;
+    font-weight: 800;
+    line-height: 1;
+    letter-spacing: -0.4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.mdPlayerMeta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: rgba(230, 234, 240, 0.58);
+    flex-wrap: wrap;
+}
+
+.mdMetaDot {
+    color: rgba(230, 234, 240, 0.22);
+}
+
+.mdRingCard {
+    display: grid;
+    justify-items: center;
+    gap: 6px;
+    padding: 0 12px;
+    min-width: 92px;
+}
+
+.mdRingWrap {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 56px;
+    height: 56px;
+}
+
+.mdRingWrap svg {
+    position: absolute;
+    inset: 0;
+}
+
+.mdRingValue {
+    position: relative;
+    font-size: 12px;
+    font-weight: 700;
+    color: rgba(244, 247, 255, 0.92);
+    font-variant-numeric: tabular-nums;
+    z-index: 1;
+}
+
+.mdRingLabel {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: rgba(230, 234, 240, 0.48);
+    text-align: center;
+}
+
+.mdStatsStrip {
+    display: flex;
+    gap: 1px;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    position: relative;
+    z-index: 1;
+}
+
+.mdStatCard {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 16px;
+    background: rgba(255, 255, 255, 0.015);
+    transition: background 140ms ease;
+    min-width: 0;
+}
+
+.mdStatCard:hover {
+    background: rgba(255, 255, 255, 0.035);
+}
+
+.mdStatCard:not(:last-child) {
+    border-right: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.mdStatIcon {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.04);
+    display: grid;
+    place-items: center;
+    color: rgba(230, 234, 240, 0.5);
+    flex-shrink: 0;
+}
+
+.mdStatContent {
+    display: grid;
+    gap: 1px;
+    min-width: 0;
+}
+
+.mdStatValue {
+    font-size: 15px;
+    font-weight: 700;
+    color: rgba(244, 247, 255, 0.94);
+    font-variant-numeric: tabular-nums;
+    line-height: 1.1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.mdStatLabel {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: rgba(230, 234, 240, 0.42);
+    line-height: 1;
+}
+
+.mdStatSub {
+    font-size: 10px;
+    color: rgba(230, 234, 240, 0.36);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.mdExpandedLayer {
+    max-height: 0;
+    opacity: 0;
+    overflow: hidden;
+    transition: max-height 300ms ease, opacity 220ms ease;
+}
+
+.mdExpandedOpen {
+    max-height: 160px;
+    opacity: 1;
+}
+
+.mdExpandedGrid {
+    display: flex;
+    gap: 1px;
+    border-top: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.mdExpandedItem {
+    flex: 1;
+    display: grid;
+    gap: 2px;
+    padding: 12px 16px;
+    background: rgba(255, 255, 255, 0.01);
+}
+
+.mdExpandedLabel {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: rgba(230, 234, 240, 0.35);
+}
+
+.mdExpandedValue {
+    font-size: 13px;
+    font-weight: 650;
+    color: rgba(230, 234, 240, 0.88);
+    font-variant-numeric: tabular-nums;
+}
+
 .summaryHeader {
     display: grid;
-    gap: 14px;
+    gap: 12px;
     width: 100%;
     border-radius: var(--r20);
     border: 1px solid rgba(255, 255, 255, 0.06);
@@ -481,7 +856,7 @@
         linear-gradient(180deg, rgba(20, 30, 44, 0.82) 0%, rgba(10, 17, 27, 0.82) 100%);
     backdrop-filter: blur(7px);
     box-shadow: 0 8px 26px rgba(5, 10, 17, 0.28);
-    padding: 2.5rem 3rem;
+    padding: 0;
     overflow: visible;
 }
 
@@ -490,20 +865,54 @@
     align-items: center;
     justify-content: space-between;
     gap: 12px;
+    padding: 10px 18px 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.summaryTopBarLeft {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    flex-wrap: nowrap;
+    overflow: hidden;
+}
+
+.summaryTopBarText,
+.summaryTopBarDelta {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    color: rgba(230, 234, 240, 0.72);
+    white-space: nowrap;
+}
+
+.summaryTopBarText svg {
+    width: 12px;
+    height: 12px;
+    color: rgba(160, 245, 204, 0.8);
+}
+
+.summaryTopBarDelta {
+    color: rgba(58, 210, 159, 0.95);
 }
 
 .summaryExpandButton {
     display: inline-flex;
     align-items: center;
-    gap: 12px;
-    height: 34px;
-    padding: 0 12px;
+    gap: 8px;
+    height: 30px;
+    padding: 0 10px;
     border-radius: var(--r12);
     border: 1px solid rgba(255, 255, 255, 0.16);
     background: rgba(12, 16, 24, 0.55);
     color: rgba(230, 234, 240, 0.86);
-    font-size: 12px;
-    font-weight: 600;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
     cursor: pointer;
     transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
 }
@@ -521,45 +930,30 @@
 
 .summaryMainRow {
     display: grid;
-    grid-template-columns: 3fr 1.2fr 1.2fr;
-    gap: 4rem;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 20px;
     align-items: center;
-    padding-bottom: 16px;
+    padding: 18px 18px 0;
     position: relative;
     overflow: visible;
 }
 
 .summaryMainRowWithThreeMetrics {
     grid-template-columns: 3fr 1fr 1fr 1fr;
-    gap: 2.8rem;
-}
-
-.summaryMainRow::after {
-    content: "";
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    height: 1px;
-    background: linear-gradient(
-        90deg,
-        rgba(255, 255, 255, 0) 0%,
-        rgba(124, 242, 194, 0.4) 50%,
-        rgba(255, 255, 255, 0) 100%
-    );
-    box-shadow: 0 0 14px rgba(124, 242, 194, 0.16);
+    gap: 1.5rem;
 }
 
 .summaryIdentity {
     display: flex;
     align-items: center;
-    gap: 18px;
+    gap: 14px;
     min-width: 0;
+    padding: 18px 0 16px;
 }
 
 .summaryAvatar {
-    width: 56px;
-    height: 56px;
+    width: 50px;
+    height: 50px;
     border-radius: 12px;
     border: 1px solid rgba(255, 255, 255, 0.14);
     background: rgba(255, 255, 255, 0.06);
@@ -583,8 +977,61 @@
 
 .summaryIdentityText {
     display: grid;
-    gap: 8px;
+    gap: 4px;
     min-width: 0;
+}
+
+.summaryResultPill,
+.summaryContextChip,
+.summaryContextChipAccent {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 24px;
+    padding: 0 10px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.55px;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.summaryResultPillWin {
+    color: var(--result-win);
+    background: rgba(58, 210, 159, 0.12);
+    border: 1px solid rgba(58, 210, 159, 0.24);
+}
+
+.summaryResultPillLoss {
+    color: var(--result-loss);
+    background: rgba(255, 77, 79, 0.12);
+    border: 1px solid rgba(255, 77, 79, 0.24);
+}
+
+.summaryResultPillNeutral {
+    color: var(--result-neutral);
+    background: rgba(138, 148, 166, 0.12);
+    border: 1px solid rgba(138, 148, 166, 0.22);
+}
+
+.summaryContextChip,
+.summaryContextChipAccent {
+    color: rgba(230, 234, 240, 0.74);
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.summaryContextChip svg {
+    width: 12px;
+    height: 12px;
+    color: rgba(160, 245, 204, 0.82);
+}
+
+.summaryContextChipAccent {
+    color: rgba(244, 247, 255, 0.9);
+    border-color: rgba(124, 242, 194, 0.18);
+    box-shadow: inset 0 0 0 1px rgba(124, 242, 194, 0.06);
 }
 
 .summaryNameRow {
@@ -595,73 +1042,87 @@
 
 .summaryPlayerName {
     margin: 0;
-    font-size: 42px;
+    font-size: 26px;
     line-height: 1;
     font-weight: 850;
-    letter-spacing: 0.3px;
+    letter-spacing: -0.3px;
     white-space: nowrap;
     min-width: 0;
-}
-
-.summaryRealm {
-    font-size: 13px;
-    color: rgba(230, 234, 240, 0.65);
-    white-space: nowrap;
-}
-
-.summaryRealmLine {
-    font-size: 13px;
-    color: rgba(230, 234, 240, 0.65);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
 }
 
 .summaryMetaRow {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 7px;
     flex-wrap: wrap;
     font-size: 12px;
-    color: rgba(230, 234, 240, 0.7);
+    color: rgba(230, 234, 240, 0.62);
     letter-spacing: 0.25px;
+}
+
+.summaryMetaDot {
+    color: rgba(230, 234, 240, 0.25);
+}
+
+.summaryMetricsRail {
+    display: grid;
+    grid-auto-flow: column;
+    gap: 28px;
+    align-items: start;
 }
 
 .summaryMetricColumn {
     display: grid;
     justify-items: center;
     align-content: center;
+    gap: 10px;
     min-width: 0;
     overflow: visible;
+}
+
+.summaryMetricFooter {
+    display: grid;
+    gap: 0;
+    width: 100%;
+    max-width: 132px;
+    text-align: center;
+}
+
+.summaryMetricTitle {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.65px;
+    text-transform: uppercase;
+    color: rgba(230, 234, 240, 0.46);
 }
 
 .summaryCircleShell {
     position: relative;
     display: grid;
     place-items: center;
-    width: 124px;
-    height: 124px;
+    width: 88px;
+    height: 88px;
     border-radius: 999px;
     outline: none;
     overflow: visible;
 }
 
 .summaryCircle {
-    width: 124px;
-    height: 124px;
+    width: 88px;
+    height: 88px;
     transform: rotate(-90deg);
 }
 
 .summaryCircleTrack {
     fill: none;
-    stroke: rgba(255, 255, 255, 0.14);
-    stroke-width: 9;
+    stroke: rgba(255, 255, 255, 0.12);
+    stroke-width: 8;
 }
 
 .summaryCircleArc,
 .summaryCircleArcSegment {
     fill: none;
-    stroke-width: 9;
+    stroke-width: 8;
     stroke-linecap: round;
     transition: stroke-dashoffset 1360ms cubic-bezier(0.16, 1, 0.3, 1), stroke-dasharray 1360ms
         cubic-bezier(0.16, 1, 0.3, 1);
@@ -683,7 +1144,7 @@
 }
 
 .summaryCircleValue {
-    font-size: 28px;
+    font-size: 17px;
     line-height: 1;
     font-weight: 780;
     color: rgba(244, 247, 255, 0.95);
@@ -691,10 +1152,19 @@
 }
 
 .summaryCircleLabel {
-    margin-top: 6px;
-    font-size: 12px;
+    margin-top: 4px;
+    font-size: 9px;
     line-height: 1.25;
     color: rgba(230, 234, 240, 0.76);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.summaryMetricFooterLabel {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.65px;
+    color: rgba(230, 234, 240, 0.52);
 }
 
 .summaryMetricTooltip {
@@ -766,7 +1236,7 @@
     max-height: 0;
     opacity: 0;
     overflow: hidden;
-    padding-top: 0;
+    padding: 0 18px;
     transition: max-height 300ms ease, opacity 220ms ease, padding-top 300ms ease;
 }
 
@@ -774,6 +1244,7 @@
     max-height: 220px;
     opacity: 1;
     padding-top: 12px;
+    padding-bottom: 16px;
 }
 
 .summaryExpandedGrid {
@@ -786,6 +1257,72 @@
     display: grid;
     gap: 4px;
     min-width: 0;
+    padding: 12px 14px;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.025);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.summaryStatRail {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    background: linear-gradient(180deg, rgba(8, 15, 26, 0.16) 0%, rgba(8, 15, 26, 0.32) 100%);
+}
+
+.summaryStatTile {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+    padding: 16px 16px;
+}
+
+.summaryStatTile:not(:last-child) {
+    border-right: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.summaryStatTileIcon {
+    width: 30px;
+    height: 30px;
+    border-radius: 9px;
+    display: grid;
+    place-items: center;
+    color: rgba(230, 234, 240, 0.52);
+    background: rgba(255, 255, 255, 0.04);
+    flex: 0 0 auto;
+}
+
+.summaryStatTileText {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+}
+
+.summaryStatTileValue {
+    font-size: 13px;
+    font-weight: 800;
+    color: rgba(244, 247, 255, 0.96);
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.summaryStatTileLabel {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.65px;
+    color: rgba(230, 234, 240, 0.48);
+}
+
+.summaryStatTileDetail {
+    font-size: 10px;
+    color: rgba(230, 234, 240, 0.62);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .summaryExpandedMetricLabel {
@@ -2053,6 +2590,8 @@
 
     .summaryTopBar {
         flex-wrap: wrap;
+        padding: 14px 14px 0;
+        border-bottom: none;
     }
 
     .summaryExpandButton {
@@ -2063,16 +2602,32 @@
     .summaryMainRow {
         grid-template-columns: 1fr;
         gap: 10px;
+        padding: 8px 14px 0;
     }
 
     .summaryPlayerName {
-        font-size: 30px;
+        font-size: 24px;
     }
 
     .summaryAvatar {
         width: 46px;
         height: 46px;
         border-radius: 10px;
+    }
+
+    .summaryMetricsRail {
+        grid-auto-flow: row;
+        justify-items: center;
+        gap: 18px;
+    }
+
+    .summaryStatRail {
+        grid-template-columns: 1fr;
+    }
+
+    .summaryStatTile:not(:last-child) {
+        border-right: none;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
     }
 
     .summaryCircleShell {

@@ -11,6 +11,7 @@ import {
 } from "react-icons/lu";
 import useMatches from "../../Hooks/useMatches";
 import useCharacterProfile, {
+    resolveCharacterProfile,
     resolveCharacterBracketSnapshot,
 } from "../../Hooks/useCharacterProfile";
 import RouteLayout from "../../Components/RouteLayout/RouteLayout";
@@ -43,11 +44,20 @@ export default function Dashboard() {
         return latest.raw.players.find((player) => player.isOwner) ?? latest.raw.players[0] ?? null;
     }, [latest]);
     const latestOwnerRealm = latestOwner?.realm ?? null;
-    const profile = useCharacterProfile({
+    const profiles = useCharacterProfile({
         server: latest ? CHARACTER_API_SERVER : null,
         realm: latestOwnerRealm,
         name: latest?.owner.name ?? null,
     });
+    const profile = useMemo(
+        () =>
+            resolveCharacterProfile(profiles, {
+                server: latest ? CHARACTER_API_SERVER : null,
+                realm: latestOwnerRealm,
+                name: latest?.owner.name ?? null,
+            }),
+        [latest, latestOwnerRealm, profiles]
+    );
     const scopedSummaries = useMemo(() => {
         if (!latest) return [];
         return summaries.filter(
@@ -71,7 +81,7 @@ export default function Dashboard() {
                       recentDurationSamples.length
               )
             : null;
-    const apiBracketSnapshot = resolveCharacterBracketSnapshot(profile, latest);
+    const apiBracketSnapshot = resolveCharacterBracketSnapshot(profiles, latest);
     const currentRating =
         scopedSummaries.find((match) => typeof match.owner.rating === "number")?.owner.rating ??
         apiBracketSnapshot?.rating ??

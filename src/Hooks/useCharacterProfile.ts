@@ -48,9 +48,11 @@ export interface CharacterProfile {
     rating?: Record<string, RatingBucket>;
 }
 
+export type CharacterProfiles = CharacterProfile[];
+
 type StoredProfile = {
     expiresAt: number;
-    data: CharacterProfile | null;
+    data: CharacterProfiles;
 };
 
 type ProfileArgs = {
@@ -66,7 +68,7 @@ type ResolvedProfileArgs = {
 };
 
 const memoryCache = new Map<string, StoredProfile>();
-const inflight = new Map<string, Promise<CharacterProfile | null>>();
+const inflight = new Map<string, Promise<CharacterProfiles>>();
 
 const slugifyToken = (value?: string | null) =>
     (value ?? "")
@@ -101,7 +103,7 @@ const readStoredProfile = (key: string): StoredProfile | null => {
     }
 };
 
-const writeStoredProfile = (key: string, data: CharacterProfile | null) => {
+const writeStoredProfile = (key: string, data: CharacterProfiles) => {
     const payload: StoredProfile = {
         expiresAt: Date.now() + PROFILE_CACHE_TTL_MS,
         data,
@@ -116,10 +118,25 @@ const writeStoredProfile = (key: string, data: CharacterProfile | null) => {
 
 type HttpFetch = UserContextType["httpFetch"];
 
+const normalizeProfiles = (value: unknown): CharacterProfiles => {
+    if (Array.isArray(value)) {
+        return value.filter(
+            (entry): entry is CharacterProfile =>
+                !!entry && typeof entry === "object" && !Array.isArray(entry)
+        );
+    }
+
+    if (value && typeof value === "object") {
+        return [value as CharacterProfile];
+    }
+
+    return [];
+};
+
 const fetchCharacterProfile = async (
     { server, realm, name }: ResolvedProfileArgs,
     httpFetch: HttpFetch,
-): Promise<CharacterProfile | null> => {
+): Promise<CharacterProfiles> => {
     const key = makeCacheKey({ server, realm, name });
     const cached = readStoredProfile(key);
     if (cached) return cached.data;
@@ -136,13 +153,13 @@ const fetchCharacterProfile = async (
                     response.error || `Character profile request failed: ${response.status}`,
                 );
             }
-            const data = response.data as CharacterProfile;
+            const data = normalizeProfiles(response.data);
             writeStoredProfile(key, data);
             return data;
         })
         .catch(() => {
             const fallback = readStoredProfile(key);
-            return fallback?.data ?? null;
+            return fallback?.data ?? [];
         })
         .finally(() => {
             inflight.delete(key);
@@ -150,6 +167,36 @@ const fetchCharacterProfile = async (
 
     inflight.set(key, request);
     return request;
+};
+
+type ProfileMatchArgs = {
+    name?: string | null;
+    realm?: string | null;
+    server?: string | null;
+};
+
+export const resolveCharacterProfile = (
+    profiles: CharacterProfiles,
+    { name, realm, server }: ProfileMatchArgs
+): CharacterProfile | null => {
+    if (!profiles.length) return null;
+
+    const normalizedName = slugifyToken(name);
+    const normalizedRealm = slugifyToken(realm);
+    const normalizedServer = slugifyToken(server);
+
+    const exact = profiles.find((profile) => {
+        const profileName = slugifyToken(profile.name);
+        const profileRealm = slugifyToken(profile.playerRealm?.slug ?? profile.playerRealm?.name);
+        const profileServer = slugifyToken(profile.server);
+
+        if (normalizedName && profileName && profileName !== normalizedName) return false;
+        if (normalizedRealm && profileRealm && profileRealm !== normalizedRealm) return false;
+        if (normalizedServer && profileServer && profileServer !== normalizedServer) return false;
+        return true;
+    });
+
+    return exact ?? profiles[0] ?? null;
 };
 
 const resolveSpecBracketKey = (
@@ -164,9 +211,15 @@ const resolveSpecBracketKey = (
 };
 
 export const resolveCharacterBracketSnapshot = (
-    profile: CharacterProfile | null,
+    profiles: CharacterProfiles,
     match: MatchSummary | null,
 ): RatingSeason | null => {
+    const profile = resolveCharacterProfile(profiles, {
+        name: match?.owner.name ?? null,
+        realm:
+            (match?.raw.players?.find((player) => player.isOwner) ?? match?.raw.players?.[0])?.realm ?? null,
+        server: null,
+    });
     if (!profile?.rating || !match) return null;
 
     const ratingEntries = profile.rating;
@@ -199,12 +252,12 @@ export const resolveCharacterBracketSnapshot = (
 };
 
 export default function useCharacterProfile({ server, realm, name }: ProfileArgs) {
-    const [profile, setProfile] = useState<CharacterProfile | null>(null);
+    const [profile, setProfile] = useState<CharacterProfiles>([]);
     const { httpFetch } = useUserContext();
 
     useEffect(() => {
         if (!server || !realm || !name) {
-            setProfile(null);
+            setProfile([]);
             return;
         }
 
