@@ -26,8 +26,37 @@ use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 use std::sync::Mutex;
 use std::time::Duration;
 
+#[cfg(not(debug_assertions))]
+use std::{
+    io::{Read, Write},
+    net::{TcpListener, TcpStream},
+    sync::Arc,
+};
+
+#[cfg(not(debug_assertions))]
+use xxhash_rust::xxh64::xxh64;
+
 #[derive(Default)]
 struct WatcherKeeper(Mutex<Option<RecommendedWatcher>>);
+
+#[cfg(not(debug_assertions))]
+const APP_IDENTIFIER: &str = "bg.pvpscalpel.desktop";
+
+#[cfg(not(debug_assertions))]
+const SINGLE_INSTANCE_SIGNAL: &str = "pvp-scalpel-desktop:show:v1";
+
+#[cfg(not(debug_assertions))]
+const SINGLE_INSTANCE_ACK: &str = "ok";
+
+#[cfg(not(debug_assertions))]
+type SharedAppHandle = Arc<Mutex<Option<AppHandle>>>;
+
+#[cfg(not(debug_assertions))]
+enum SingleInstanceStartup {
+    Primary(TcpListener),
+    ExistingInstanceSignaled,
+    Disabled,
+}
 
 #[tauri::command] // Ship a custom command to the FE
 fn read_saved_variables(path: String) -> Result<String, String> {
@@ -77,10 +106,123 @@ fn scan_saved_vars(app: AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+#[cfg(not(debug_assertions))]
+fn single_instance_addr() -> String {
+    let port = 43_000 + (xxh64(APP_IDENTIFIER.as_bytes(), 0) % 1_000) as u16;
+    format!("127.0.0.1:{port}")
+}
+
+#[cfg(not(debug_assertions))]
+fn prepare_single_instance() -> SingleInstanceStartup {
+    let addr = single_instance_addr();
+    match TcpListener::bind(&addr) {
+        Ok(listener) => SingleInstanceStartup::Primary(listener),
+        Err(_) => {
+            if signal_existing_instance() {
+                SingleInstanceStartup::ExistingInstanceSignaled
+            } else {
+                SingleInstanceStartup::Disabled
+            }
+        }
+    }
+}
+
+#[cfg(not(debug_assertions))]
+fn signal_existing_instance() -> bool {
+    let Ok(addr) = single_instance_addr().parse() else {
+        return false;
+    };
+
+    let Ok(mut stream) = TcpStream::connect_timeout(&addr, Duration::from_millis(500)) else {
+        return false;
+    };
+
+    let _ = stream.set_write_timeout(Some(Duration::from_millis(500)));
+    let _ = stream.set_read_timeout(Some(Duration::from_millis(500)));
+
+    if stream.write_all(SINGLE_INSTANCE_SIGNAL.as_bytes()).is_err() {
+        return false;
+    }
+
+    let mut ack = [0_u8; 8];
+    match stream.read(&mut ack) {
+        Ok(count) if count > 0 => std::str::from_utf8(&ack[..count])
+            .map(|value| value == SINGLE_INSTANCE_ACK)
+            .unwrap_or(false),
+        _ => false,
+    }
+}
+
+#[cfg(not(debug_assertions))]
+fn spawn_single_instance_listener(listener: TcpListener, app_slot: SharedAppHandle) {
+    std::thread::spawn(move || {
+        for stream in listener.incoming() {
+            let Ok(mut stream) = stream else {
+                continue;
+            };
+
+            let mut payload = [0_u8; 64];
+            let Ok(count) = stream.read(&mut payload) else {
+                continue;
+            };
+            if count == 0 {
+                continue;
+            }
+
+            let is_show_signal = std::str::from_utf8(&payload[..count])
+                .map(|value| value == SINGLE_INSTANCE_SIGNAL)
+                .unwrap_or(false);
+            if !is_show_signal {
+                continue;
+            }
+
+            for _ in 0..100 {
+                let app_handle = app_slot.lock().ok().and_then(|guard| guard.clone());
+                if let Some(app_handle) = app_handle {
+                    reveal_running_instance(&app_handle);
+                    let _ = stream.write_all(SINGLE_INSTANCE_ACK.as_bytes());
+                    break;
+                }
+                std::thread::sleep(Duration::from_millis(50));
+            }
+        }
+    });
+}
+
+#[cfg(not(debug_assertions))]
+fn reveal_running_instance(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.set_skip_taskbar(false);
+        let _ = window.show();
+        let _ = window.unminimize();
+        let _ = window.set_focus();
+    }
+    let _ = app.emit_to("main", "tray-show", ());
+}
+
 fn main() {
+    #[cfg(not(debug_assertions))]
+    let single_instance_handle: SharedAppHandle = Arc::new(Mutex::new(None));
+
+    #[cfg(not(debug_assertions))]
+    match prepare_single_instance() {
+        SingleInstanceStartup::Primary(listener) => {
+            spawn_single_instance_listener(listener, Arc::clone(&single_instance_handle));
+        }
+        SingleInstanceStartup::ExistingInstanceSignaled => {
+            std::process::exit(0);
+        }
+        SingleInstanceStartup::Disabled => {}
+    }
+
     tauri::Builder::default()
     .manage(WatcherKeeper::default())
-    .setup(|app| {
+    .setup(move |app| {
+            #[cfg(not(debug_assertions))]
+            if let Ok(mut stored) = single_instance_handle.lock() {
+                *stored = Some(app.handle().clone());
+            }
+
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.center();
                 let _ = window.set_shadow(false);
