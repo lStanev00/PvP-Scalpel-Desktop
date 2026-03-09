@@ -1,5 +1,4 @@
 import { MouseEvent } from "react";
-import { NavLink } from "react-router-dom";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { LuMinus, LuSquare, LuX } from "react-icons/lu";
 import useUserContext from "../../Hooks/useUserContext";
@@ -42,15 +41,6 @@ export default function TopBar({ onMinimize, onMaximize, onClose }: TopBarProps)
             </div>
 
             <div className={styles.right}>
-                <div className={styles.actions}>
-                    <NavLink className={styles.actionBtn} to="/logs" data-no-drag>
-                        Logs
-                    </NavLink>
-                    <NavLink className={styles.actionBtn} to="/settings" data-no-drag>
-                        Settings
-                    </NavLink>
-                </div>
-
                 <div className={styles.status} data-no-drag>
                     <span className={styles.statusDot} aria-hidden="true" />
                     <span className={styles.statusText}>{identity}</span>

@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { LuInfo } from "react-icons/lu";
 import TeamTable from "./TeamTable";
-import MSSStatsSection from "./MSSStatsSection";
+import MSSStatsSection, { collectMSSStats } from "./MSSStatsSection";
 import SpellCastGraph from "./SpellCastGraph";
 import DebugSpellInspector from "./DebugSpellInspector";
 import MatchSummaryHeader from "./MatchSummaryHeader";
@@ -55,12 +55,83 @@ type MatchDetailsContent = {
     computedSpellOutcomes: Record<string, { succeeded: number; interrupted: number; failed: number }> | null;
 };
 
+const PLAYER_COL_WIDTH = 180;
+const KD_COL_WIDTH = 72;
+const OUTPUT_COL_WIDTH = 220;
+const EXTRA_STAT_MIN_WIDTH = 92;
+const PRE_POST_COL_WIDTH = 64;
+const RATING_COL_WIDTH = 84;
+const TABLE_FRAME_WIDTH = 68;
+
+const getRequiredMergedTableWidth = ({
+    extraStatNames,
+    showRating,
+    players,
+}: {
+    extraStatNames: string[];
+    showRating: boolean;
+    players: MatchPlayer[];
+}) => {
+    const hasPreMMR = players.some((player) => {
+        const value = player.prematchMMR;
+        return typeof value === "number" && Number.isFinite(value) && value !== 0;
+    });
+    const hasPostMMR = players.some((player) => {
+        const value = player.postmatchMMR;
+        return typeof value === "number" && Number.isFinite(value) && value !== 0;
+    });
+    const hasMMRDelta =
+        players.some((player) => {
+            const value = player.ratingChange;
+            return typeof value === "number" && Number.isFinite(value) && value !== 0;
+        }) ||
+        players.some((player) => {
+            const pre = player.prematchMMR ?? 0;
+            const post = player.postmatchMMR ?? 0;
+            return typeof pre === "number" && typeof post === "number" && post - pre !== 0;
+        });
+
+    const extraStatsWidth = extraStatNames.reduce((sum, stat) => {
+        const labelWidth = stat.length * 7 + 28;
+        return sum + Math.max(EXTRA_STAT_MIN_WIDTH, Math.min(136, labelWidth));
+    }, 0);
+
+    return (
+        TABLE_FRAME_WIDTH +
+        PLAYER_COL_WIDTH +
+        KD_COL_WIDTH +
+        OUTPUT_COL_WIDTH +
+        extraStatsWidth +
+        (hasPreMMR ? PRE_POST_COL_WIDTH : 0) +
+        (hasPostMMR ? PRE_POST_COL_WIDTH : 0) +
+        (hasMMRDelta ? PRE_POST_COL_WIDTH : 0) +
+        (showRating ? RATING_COL_WIDTH : 0)
+    );
+};
+
 export default function MatchDetailsPanel({ match, isLoading, onBack }: MatchDetailsPanelProps) {
     const debugEnabled = import.meta.env.DEV;
     const [highlightedPlayerKey, setHighlightedPlayerKey] = useState<string | null>(null);
+    const detailsBodyRef = useRef<HTMLDivElement | null>(null);
+    const [detailsBodyWidth, setDetailsBodyWidth] = useState(0);
 
     useEffect(() => {
         setHighlightedPlayerKey(null);
+    }, [match?.id]);
+
+    useEffect(() => {
+        const element = detailsBodyRef.current;
+        if (!element || typeof ResizeObserver === "undefined") return;
+
+        const observer = new ResizeObserver((entries) => {
+            const nextWidth = entries[0]?.contentRect.width;
+            if (!nextWidth) return;
+            setDetailsBodyWidth(nextWidth);
+        });
+
+        setDetailsBodyWidth(element.getBoundingClientRect().width);
+        observer.observe(element);
+        return () => observer.disconnect();
     }, [match?.id]);
 
     const content = useMemo<MatchDetailsContent | null>(() => {
@@ -276,6 +347,16 @@ export default function MatchDetailsPanel({ match, isLoading, onBack }: MatchDet
         );
     }
 
+    const mssData = collectMSSStats(content.players);
+    const shouldMergeMSS =
+        mssData.statNames.length > 0 &&
+        detailsBodyWidth >=
+            getRequiredMergedTableWidth({
+                extraStatNames: mssData.statNames,
+                showRating: content.showRating,
+                players: content.players,
+            });
+
     return (
         <section className={styles.detailsCard}>
             <MatchSummaryHeader
@@ -284,39 +365,31 @@ export default function MatchDetailsPanel({ match, isLoading, onBack }: MatchDet
                 kickTelemetrySnapshot={content.kickTelemetrySnapshot}
                 onBack={onBack}
             />
-            <div className={styles.detailsBody}>
-                {content.showFactions ? (
-                    <div className={styles.teamGrid}>
-                        <TeamTable
-                            title="Alliance"
-                            players={content.alliance}
-                            showRating={content.showRating}
-                            highlightedPlayerKey={highlightedPlayerKey}
-                            onHoverPlayerKey={setHighlightedPlayerKey}
-                        />
-                        <TeamTable
-                            title="Horde"
-                            players={content.horde}
-                            showRating={content.showRating}
-                            highlightedPlayerKey={highlightedPlayerKey}
-                            onHoverPlayerKey={setHighlightedPlayerKey}
-                        />
-                    </div>
-                ) : (
-                    <TeamTable
-                        title={content.playersTitle}
+            <div className={styles.detailsBody} ref={detailsBodyRef}>
+                <TeamTable
+                    title={content.playersTitle}
+                    players={content.players}
+                    showRating={content.showRating}
+                    showTeams={content.showFactions}
+                    extraStats={
+                        shouldMergeMSS
+                            ? {
+                                  statNames: mssData.statNames,
+                                  valuesByPlayerKey: mssData.valuesByPlayerKey,
+                              }
+                            : null
+                    }
+                    highlightedPlayerKey={highlightedPlayerKey}
+                    onHoverPlayerKey={setHighlightedPlayerKey}
+                />
+
+                {shouldMergeMSS ? null : (
+                    <MSSStatsSection
                         players={content.players}
-                        showRating={content.showRating}
                         highlightedPlayerKey={highlightedPlayerKey}
                         onHoverPlayerKey={setHighlightedPlayerKey}
                     />
                 )}
-
-                <MSSStatsSection
-                    players={content.players}
-                    highlightedPlayerKey={highlightedPlayerKey}
-                    onHoverPlayerKey={setHighlightedPlayerKey}
-                />
                 <div className={styles.spellNote}>
                     <LuInfo className={styles.spellNoteIcon} aria-hidden="true" />
                     <span>

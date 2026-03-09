@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { LuClock3, LuFlame, LuPercent, LuTrendingUp } from "react-icons/lu";
+import { useNavigate } from "react-router-dom";
 import useMatches from "../../Hooks/useMatches";
 import updatePersence from "../../Helpers/updatePresence";
+import { usePreferences } from "../../Context-Providers/preferences-context";
 import RouteLayout from "../RouteLayout/RouteLayout";
 import FiltersBar from "./FiltersBar";
 import MatchHistoryList from "./MatchHistoryList";
@@ -11,6 +13,7 @@ import {
     type MatchMode,
     filterMatches,
     getDefaultSelectedId,
+    getModeLabel,
     type MatchFilters,
     type MatchSummary,
 } from "./utils";
@@ -23,8 +26,18 @@ const formatDurationLabel = (seconds: number) => {
     return `${minutes}:${String(remainingSeconds).padStart(2, "0")}`;
 };
 
+const isRatedMode = (mode: MatchMode) =>
+    mode === "solo" || mode === "rated2" || mode === "rated3" || mode === "rbg";
+
 export default function DataActivity() {
+    const navigate = useNavigate();
     const matches = useMatches();
+    const {
+        autoScopeStrategy,
+        autoScopeCharacter,
+        autoScopeBracket,
+        autoScopeRatedPreference,
+    } = usePreferences();
     const [rpcUpdate, setRpcUpdate] = useState("");
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(true);
@@ -35,6 +48,7 @@ export default function DataActivity() {
         query: "",
     });
     const listScrollTop = useRef(0);
+    const hasInitializedScopedFilters = useRef(false);
 
     useEffect(() => {
         if (matches.length > 0) {
@@ -105,6 +119,155 @@ export default function DataActivity() {
             ...sorted.map((name) => ({ label: name, value: name })),
         ];
     }, [summaries]);
+
+    const latestSummary = summaries[0] ?? null;
+    const autoScopeResolution = useMemo(() => {
+        if (!summaries.length) {
+            return { filters: null, isLimited: false, limitedReason: null as string | null };
+        }
+
+        const limitedReason =
+            autoScopeRatedPreference === "prefer_rated"
+                ? "No rated matches fit the current auto-scope rules."
+                : autoScopeRatedPreference === "prefer_non_rated"
+                  ? "No non-rated matches fit the current auto-scope rules."
+                  : null;
+
+        const pickPreferredMatch = (candidates: MatchSummary[]) => {
+            if (!candidates.length) {
+                return { match: null, isLimited: false, limitedReason: null as string | null };
+            }
+
+            if (autoScopeRatedPreference === "prefer_rated") {
+                const preferred = candidates.find((match) => isRatedMode(match.mode)) ?? null;
+                return {
+                    match: preferred ?? candidates[0],
+                    isLimited: !preferred,
+                    limitedReason: preferred ? null : limitedReason,
+                };
+            }
+
+            if (autoScopeRatedPreference === "prefer_non_rated") {
+                const preferred =
+                    candidates.find(
+                        (match) => !isRatedMode(match.mode) && match.mode !== "unknown"
+                    ) ?? null;
+                return {
+                    match: preferred ?? candidates[0],
+                    isLimited: !preferred,
+                    limitedReason: preferred ? null : limitedReason,
+                };
+            }
+
+            return { match: candidates[0], isLimited: false, limitedReason: null as string | null };
+        };
+
+        if (autoScopeStrategy === "latest_character_latest_bracket") {
+            const result = pickPreferredMatch(summaries);
+            return {
+                filters: result.match
+                    ? { character: result.match.owner.name, mode: result.match.mode }
+                    : null,
+                isLimited: result.isLimited,
+                limitedReason: result.limitedReason,
+            };
+        }
+
+        const resolvedCharacter =
+            autoScopeCharacter !== "auto" ? autoScopeCharacter : latestSummary?.owner.name ?? null;
+        if (!resolvedCharacter) {
+            return { filters: null, isLimited: false, limitedReason: null as string | null };
+        }
+
+        const characterMatches = summaries.filter(
+            (summary) => summary.owner.name === resolvedCharacter
+        );
+
+        if (autoScopeStrategy === "selected_character_latest_bracket") {
+            const result = pickPreferredMatch(characterMatches);
+            return {
+                filters: result.match
+                    ? { character: resolvedCharacter, mode: result.match.mode }
+                    : null,
+                isLimited: result.isLimited,
+                limitedReason: result.limitedReason,
+            };
+        }
+
+        const resolvedMode =
+            autoScopeBracket !== "auto"
+                ? autoScopeBracket
+                : pickPreferredMatch(characterMatches).match?.mode ?? latestSummary?.mode ?? null;
+
+        return {
+            filters: resolvedMode
+                ? { character: resolvedCharacter, mode: resolvedMode }
+                : null,
+            isLimited: false,
+            limitedReason: null as string | null,
+        };
+    }, [
+        summaries,
+        latestSummary,
+        autoScopeStrategy,
+        autoScopeCharacter,
+        autoScopeBracket,
+        autoScopeRatedPreference,
+    ]);
+    const latestScopedFilters = autoScopeResolution.filters;
+
+    const applyAutoScope = useCallback(() => {
+        if (!latestScopedFilters) return;
+
+        setFilters((prev) => ({
+            ...prev,
+            mode: latestScopedFilters.mode,
+            character: latestScopedFilters.character,
+            query: "",
+        }));
+    }, [latestScopedFilters]);
+
+    const clearAutoScope = useCallback(() => {
+        setFilters({
+            mode: "all",
+            character: "all",
+            query: "",
+        });
+    }, []);
+
+    useEffect(() => {
+        if (hasInitializedScopedFilters.current) return;
+        if (!latestScopedFilters) return;
+
+        setFilters((prev) => {
+            if (prev.mode !== "all" || prev.character !== "all" || prev.query.trim() !== "") {
+                hasInitializedScopedFilters.current = true;
+                return prev;
+            }
+
+            hasInitializedScopedFilters.current = true;
+            return {
+                ...prev,
+                mode: latestScopedFilters.mode,
+                character: latestScopedFilters.character,
+            };
+        });
+    }, [latestScopedFilters]);
+
+    const isAutoLockedContext =
+        !!latestScopedFilters &&
+        filters.query.trim() === "" &&
+        filters.mode === latestScopedFilters.mode &&
+        filters.character === latestScopedFilters.character;
+    const autoLockedLabel = latestScopedFilters
+        ? isAutoLockedContext
+            ? autoScopeResolution.isLimited
+                ? `${autoScopeResolution.limitedReason} Click to clear auto scope and show all matches.`
+                : "Click to clear auto scope and show all matches."
+            : autoScopeResolution.isLimited
+              ? `${autoScopeResolution.limitedReason} Click to reapply auto scope for ${latestScopedFilters.character} in ${getModeLabel(latestScopedFilters.mode)}.`
+              : `Click to reapply auto scope for ${latestScopedFilters.character} in ${getModeLabel(latestScopedFilters.mode)}.`
+        : null;
 
     useEffect(() => {
         const modeValues = new Set(modeOptions.map((option) => option.value));
@@ -203,12 +366,6 @@ export default function DataActivity() {
         }
     }, [selectedMatch?.owner.name, rpcUpdate]);
 
-    const showRouteHeader = view === "list";
-    const headerActions = useMemo(
-        () => <div className={styles.headerMeta}>Total matches: {matches.length}</div>,
-        [matches.length]
-    );
-
     const onSelectMatch = useCallback((match: MatchSummary) => {
         listScrollTop.current = window.scrollY;
         setSelectedId(match.id);
@@ -248,22 +405,12 @@ export default function DataActivity() {
     return (
         <RouteLayout
             title="Match History"
-            actions={showRouteHeader ? headerActions : undefined}
-            showHeader={showRouteHeader}
+            showHeader={false}
         >
             <div className={styles.page}>
                 {view === "list" ? (
                     <div className={`${styles.viewPanel} ${styles.viewList}`}>
                         <section className={styles.historyStatsGrid} aria-label="Match history overview">
-                            {needsScopedStats ? (
-                                <div
-                                    className={styles.historyStatsPrompt}
-                                    role="status"
-                                    aria-live="polite"
-                                >
-                                    Select a character and a bracket to unlock these statistics.
-                                </div>
-                            ) : null}
                             <article className={styles.historyStatCard}>
                                 <span
                                     className={`${styles.historyStatIcon} ${styles.historyStatIconGood}`}
@@ -342,6 +489,22 @@ export default function DataActivity() {
                             onChange={setFilters}
                             modeOptions={modeOptions}
                             characterOptions={characterOptions}
+                            filteredCount={filtered.length}
+                            infoMessage={autoLockedLabel}
+                            autoScopeActive={isAutoLockedContext}
+                            autoScopeLimited={autoScopeResolution.isLimited}
+                            onApplyAutoScope={
+                                latestScopedFilters
+                                    ? isAutoLockedContext
+                                        ? clearAutoScope
+                                        : applyAutoScope
+                                    : undefined
+                            }
+                            onOpenAutoScopeSettings={() =>
+                                navigate("/settings", {
+                                    state: { highlightAutoScope: true },
+                                })
+                            }
                         />
 
                         <MatchHistoryList

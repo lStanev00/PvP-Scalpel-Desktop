@@ -1,3 +1,5 @@
+import { useMemo } from "react";
+import { getClassColor } from "../../Domain/CombatDomainContext";
 import type { MatchPlayer } from "./types";
 import { getPlayerIdentityKey } from "./playerIdentity";
 import styles from "./DataActivity.module.css";
@@ -8,92 +10,209 @@ interface MSSStatsSectionProps {
     onHoverPlayerKey?: (playerKey: string | null) => void;
 }
 
+type MSSRow = {
+    name: string;
+    playerKey: string | null;
+    isOwner: boolean;
+    faction?: number;
+    classColor?: string;
+    stats: Record<string, number>;
+};
+
+export type MSSStatsData = {
+    statNames: string[];
+    rows: MSSRow[];
+    distinctFactions: number[];
+    valuesByPlayerKey: Record<string, Record<string, number>>;
+};
+
+export function collectMSSStats(players: MatchPlayer[]): MSSStatsData {
+    const statSet = new Set<string>();
+    players.forEach((player) => {
+        if (!player.MSS) return;
+        for (const [statName] of player.MSS) {
+            statSet.add(statName);
+        }
+    });
+
+    const statNames = Array.from(statSet);
+    if (statNames.length === 0) {
+        return {
+            statNames,
+            rows: [],
+            distinctFactions: [],
+            valuesByPlayerKey: {},
+        };
+    }
+
+    const rows = players
+        .map((player) => {
+            const statsRecord: Record<string, number> = {};
+            statNames.forEach((stat) => {
+                statsRecord[stat] = 0;
+            });
+
+            if (player.MSS) {
+                for (const [statName, statValue] of player.MSS) {
+                    statsRecord[statName] = statValue;
+                }
+            }
+
+            return {
+                name: player.name ?? "-",
+                playerKey: getPlayerIdentityKey(player),
+                isOwner: !!player.isOwner,
+                faction: player.faction,
+                classColor: getClassColor(player.class),
+                stats: statsRecord,
+            };
+        })
+        .filter((row) => Object.values(row.stats).some((value) => value > 0));
+
+    const distinctFactions = Array.from(
+        new Set(rows.map((row) => row.faction).filter((faction): faction is number => faction != null))
+    ).sort((a, b) => a - b);
+
+    const valuesByPlayerKey = rows.reduce<Record<string, Record<string, number>>>((acc, row) => {
+        if (!row.playerKey) return acc;
+        acc[row.playerKey] = row.stats;
+        return acc;
+    }, {});
+
+    return {
+        statNames,
+        rows,
+        distinctFactions,
+        valuesByPlayerKey,
+    };
+}
+
 export default function MSSStatsSection({
     players,
     highlightedPlayerKey = null,
     onHoverPlayerKey,
 }: MSSStatsSectionProps) {
-    const statSet = new Set<string>();
+    const mssData = useMemo(() => collectMSSStats(players), [players]);
+    const { statNames, rows, distinctFactions } = mssData;
 
-    players.forEach((p) => {
-        if (p.MSS) {
-            for (const [statName] of p.MSS) {
-                statSet.add(statName);
-            }
-        }
-    });
+    const showFactions = distinctFactions.length > 1;
 
-    const statNames = Array.from(statSet);
+    const teamMap = useMemo(() => {
+        const map = new Map<number, number>();
+        distinctFactions.forEach((faction, index) => {
+            map.set(faction, index + 1);
+        });
+        return map;
+    }, [distinctFactions]);
 
-    if (statNames.length === 0) return null;
+    const sorted = useMemo(
+        () =>
+            showFactions
+                ? [...rows].sort((a, b) => {
+                      const factionDelta = (a.faction ?? 99) - (b.faction ?? 99);
+                      if (factionDelta !== 0) return factionDelta;
+                      if (a.isOwner !== b.isOwner) return a.isOwner ? -1 : 1;
+                      return a.name.localeCompare(b.name);
+                  })
+                : rows,
+        [rows, showFactions]
+    );
 
-    const grouped = players.map((p) => {
-        const statsRecord: Record<string, number> = {};
-        statNames.forEach((s) => (statsRecord[s] = 0));
+    const ownerTeamIndex = useMemo(() => {
+        const ownerRow = rows.find((row) => row.isOwner);
+        if (!ownerRow || ownerRow.faction == null) return null;
+        return teamMap.get(ownerRow.faction) ?? null;
+    }, [rows, teamMap]);
 
-        if (p.MSS) {
-            for (const [statName, statValue] of p.MSS) {
-                statsRecord[statName] = statValue;
-            }
-        }
+    const colTemplate = `${showFactions ? "44px " : ""}minmax(180px, 1.4fr) ${statNames
+        .map(() => "minmax(72px, auto)")
+        .join(" ")}`;
 
-        return {
-            player: p.name ?? "-",
-            playerKey: getPlayerIdentityKey(p),
-            isOwner: p.isOwner ?? false,
-            stats: statsRecord,
-        };
-    });
-
-    const filteredRows = grouped.filter((row) => Object.values(row.stats).some((v) => v > 0));
-
-    if (filteredRows.length === 0) return null;
+    if (statNames.length === 0 || rows.length === 0) return null;
 
     return (
-        <div className={styles.mssBox}>
-            <h3 className={styles.teamTitle}>Map-Specific Stats</h3>
-            <div className={styles.tableWrap}>
-                <table className={styles.table}>
-                    <thead>
-                        <tr>
-                            <th>Player</th>
-                            {statNames.map((stat) => (
-                                <th key={stat}>{stat}</th>
-                            ))}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {filteredRows.map((row, i) => (
-                            <tr
-                                key={row.playerKey ? `${row.playerKey}:${i}` : i}
-                                className={`${styles.tableRow} ${
-                                    row.playerKey && row.playerKey === highlightedPlayerKey
-                                        ? styles.tableRowHighlighted
-                                        : ""
-                                }`}
-                                onMouseEnter={() => {
-                                    if (!row.playerKey || !onHoverPlayerKey) return;
-                                    onHoverPlayerKey(row.playerKey);
-                                }}
-                                onMouseLeave={() => {
-                                    if (!onHoverPlayerKey) return;
-                                    onHoverPlayerKey(null);
-                                }}
-                            >
-                                <td
-                                    className={`${styles.playerCell} ${
-                                        row.isOwner ? styles.owner : ""
-                                    }`}
+        <div className={styles.ttBox}>
+            <div className={styles.ttHeader}>
+                <h3 className={styles.ttTitle}>Map-Specific Stats</h3>
+                <span className={styles.ttCount}>{rows.length} players</span>
+            </div>
+            <div className={styles.ttBody}>
+                <div className={styles.mssGrid} style={{ gridTemplateColumns: colTemplate }}>
+                    {showFactions ? <span className={styles.mssColLabel}>T</span> : null}
+                    <span className={styles.mssColLabel}>Player</span>
+                    {statNames.map((stat) => (
+                        <span key={stat} className={styles.mssColLabel}>
+                            {stat}
+                        </span>
+                    ))}
+
+                    {sorted.map((row, index) => {
+                        const teamIdx = teamMap.get(row.faction ?? -1);
+                        const isHighlighted =
+                            !!row.playerKey && !!highlightedPlayerKey && row.playerKey === highlightedPlayerKey;
+                        const sharedRowClass = `${styles.mssRowCell} ${isHighlighted ? styles.mssRowCellHighlighted : ""}`;
+
+                        return (
+                            <div key={row.playerKey ? `${row.playerKey}:${index}` : index} style={{ display: "contents" }}>
+                                {showFactions ? (
+                                    <span
+                                        className={`${styles.mssTeamIdx} ${sharedRowClass}`}
+                                        onMouseEnter={() => {
+                                            if (!row.playerKey || !onHoverPlayerKey) return;
+                                            onHoverPlayerKey(row.playerKey);
+                                        }}
+                                        onMouseLeave={() => {
+                                            if (!onHoverPlayerKey) return;
+                                            onHoverPlayerKey(null);
+                                        }}
+                                    >
+                                        <span
+                                            className={`${styles.mssTeamBadge} ${
+                                                ownerTeamIndex !== null && teamIdx === ownerTeamIndex
+                                                    ? styles.mssTeamBadgeFriendly
+                                                    : styles.mssTeamBadgeEnemy
+                                            }`}
+                                        >
+                                            {teamIdx != null ? `T${teamIdx}` : "-"}
+                                        </span>
+                                    </span>
+                                ) : null}
+                                <span
+                                    className={`${styles.mssPlayerName} ${styles.mssRowCell} ${
+                                        isHighlighted ? styles.mssRowCellHighlighted : ""
+                                    } ${row.isOwner ? styles.mssOwner : ""}`}
+                                    style={row.classColor ? { color: row.classColor } : undefined}
+                                    onMouseEnter={() => {
+                                        if (!row.playerKey || !onHoverPlayerKey) return;
+                                        onHoverPlayerKey(row.playerKey);
+                                    }}
+                                    onMouseLeave={() => {
+                                        if (!onHoverPlayerKey) return;
+                                        onHoverPlayerKey(null);
+                                    }}
                                 >
-                                    {row.player}
-                                </td>
+                                    {row.name}
+                                </span>
                                 {statNames.map((stat) => (
-                                    <td key={stat}>{row.stats[stat]}</td>
+                                    <span
+                                        key={stat}
+                                        className={`${styles.mssStat} ${sharedRowClass}`}
+                                        onMouseEnter={() => {
+                                            if (!row.playerKey || !onHoverPlayerKey) return;
+                                            onHoverPlayerKey(row.playerKey);
+                                        }}
+                                        onMouseLeave={() => {
+                                            if (!onHoverPlayerKey) return;
+                                            onHoverPlayerKey(null);
+                                        }}
+                                    >
+                                        {row.stats[stat]}
+                                    </span>
                                 ))}
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
+                            </div>
+                        );
+                    })}
+                </div>
             </div>
         </div>
     );

@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
+import { FaDiscord } from "react-icons/fa6";
 import {
     LuBadgeCheck,
     LuClock3,
@@ -16,9 +17,11 @@ import useCharacterProfile, {
 } from "../../Hooks/useCharacterProfile";
 import RouteLayout from "../../Components/RouteLayout/RouteLayout";
 import { buildMatchSummary } from "../../Components/Data-Activity/utils";
+import { openUrl } from "../../Helpers/open";
 import styles from "./Dashboard.module.css";
 
 const CHARACTER_API_SERVER = "eu";
+const DEMO_DISCORD_URL = "https://discord.com/invite/2h45zpyJdb";
 
 const formatResultLabel = (result: "win" | "loss" | "neutral") => {
     if (result === "win") return "Victory";
@@ -158,247 +161,269 @@ export default function Dashboard() {
             description="A sharper starting point for your desktop sessions, match review, and next actions."
             showHeader={false}
         >
-            <section className={styles.hero} style={heroStyle}>
-                <div className={styles.heroCopy}>
-                    <span className={styles.eyebrow}>PvP Scalpel Desktop</span>
-                    <h2 className={styles.heroTitle}>{heroTitle}</h2>
-                    <p className={styles.heroText}>{heroCopy}</p>
+            <div className={styles.dashboardSurface}>
+                <div className={styles.dashboardCross}>
+                    <span className={`${styles.dashboardCrossBand} ${styles.dashboardCrossBandA}`} />
+                    <span className={`${styles.dashboardCrossBand} ${styles.dashboardCrossBandB}`} />
+                    <div className={styles.demoOverlayCopy}>
+                        <span className={`${styles.demoNote} ${styles.demoNoteTop}`}>Demo content</span>
+                        <span className={`${styles.demoNote} ${styles.demoNoteLeft}`}>Demo content</span>
+                        <span className={`${styles.demoNote} ${styles.demoNoteRight}`}>Demo content</span>
+                        <div className={styles.demoCallout}>
+                            <span className={styles.demoCalloutText}>Have ideas? Give them there</span>
+                            <button
+                                className={styles.demoCalloutBtn}
+                                type="button"
+                                onClick={() => openUrl(DEMO_DISCORD_URL)}
+                            >
+                                <FaDiscord aria-hidden="true" />
+                                <span>Join Discord</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <section className={styles.hero} style={heroStyle}>
+                    <div className={styles.heroCopy}>
+                        <span className={styles.eyebrow}>PvP Scalpel Desktop</span>
+                        <h2 className={styles.heroTitle}>{heroTitle}</h2>
+                        <p className={styles.heroText}>{heroCopy}</p>
 
-                    <div className={styles.heroIdentity}>
-                        <div className={styles.identityVisual}>
-                            {profile?.media?.avatar ? (
-                                <img
-                                    className={styles.identityAvatar}
-                                    src={profile.media.avatar}
-                                    alt={`${ownerName} avatar`}
-                                />
-                            ) : (
-                                <div className={styles.identityFallback}>{ownerName.charAt(0)}</div>
-                            )}
-                            <div className={styles.identityText}>
-                                <div className={styles.identityPrimary}>{ownerName}</div>
-                                <div className={styles.identityMeta}>
-                                    <span>{ownerSpec}</span>
-                                    <span>{ownerClass}</span>
-                                    <span>{ownerRealmLabel}</span>
-                                    <span>{latest?.timestampLabel ?? "Awaiting first session"}</span>
-                                </div>
-                                {ownerGuild ? (
-                                    <div className={styles.identityGuild}>
-                                        <LuBadgeCheck aria-hidden="true" />
-                                        <span>{ownerGuild}</span>
+                        <div className={styles.heroIdentity}>
+                            <div className={styles.identityVisual}>
+                                {profile?.media?.avatar ? (
+                                    <img
+                                        className={styles.identityAvatar}
+                                        src={profile.media.avatar}
+                                        alt={`${ownerName} avatar`}
+                                    />
+                                ) : (
+                                    <div className={styles.identityFallback}>{ownerName.charAt(0)}</div>
+                                )}
+                                <div className={styles.identityText}>
+                                    <div className={styles.identityPrimary}>{ownerName}</div>
+                                    <div className={styles.identityMeta}>
+                                        <span>{ownerSpec}</span>
+                                        <span>{ownerClass}</span>
+                                        <span>{ownerRealmLabel}</span>
+                                        <span>{latest?.timestampLabel ?? "Awaiting first session"}</span>
                                     </div>
-                                ) : null}
+                                    {ownerGuild ? (
+                                        <div className={styles.identityGuild}>
+                                            <LuBadgeCheck aria-hidden="true" />
+                                            <span>{ownerGuild}</span>
+                                        </div>
+                                    ) : null}
+                                </div>
                             </div>
                         </div>
+
+                        <div className={styles.heroActions}>
+                            <button
+                                className={styles.workflowBtn}
+                                type="button"
+                                onClick={() => navigate("/data")}
+                                disabled={!latest}
+                            >
+                                <LuCrosshair aria-hidden="true" />
+                                <span>Inspect match history</span>
+                            </button>
+                        </div>
                     </div>
 
-                    <div className={styles.heroActions}>
-                        <button
-                            className={styles.workflowBtn}
-                            type="button"
-                            onClick={() => navigate("/data")}
-                            disabled={!latest}
-                        >
-                            <LuCrosshair aria-hidden="true" />
-                            <span>Inspect match history</span>
-                        </button>
-                    </div>
-                </div>
-
-                <div className={styles.heroRail}>
-                    <article className={styles.signalCard}>
-                        <div className={styles.signalTop}>
-                            <span className={styles.signalLabel}>Latest capture</span>
-                            <span className={`${styles.signalBadge} ${latest ? styles.signalLive : styles.signalIdle}`}>
-                                {latest ? "LIVE" : "IDLE"}
-                            </span>
-                        </div>
-                        <div className={styles.signalValue}>{latest?.mapName ?? "Waiting for first match"}</div>
-                        <div className={styles.signalMeta}>
-                            <span>{latest?.modeLabel ?? "No bracket yet"}</span>
-                            <span>{latest?.timestampLabel ?? "No capture time"}</span>
-                        </div>
-                        <div className={styles.signalSubMeta}>
-                            <span>{ownerName}</span>
-                            <span>{latest?.durationLabel ?? "--"}</span>
-                        </div>
-                    </article>
-
-                    <article className={styles.signalCard}>
-                        <div className={styles.signalTop}>
-                            <span className={styles.signalLabel}>Match verdict</span>
-                            <span className={`${styles.deltaPill} ${latestDeltaTone}`}>{latestDeltaLabel}</span>
-                        </div>
-                        <div className={styles.signalValue}>
-                            {latest ? formatResultLabel(latest.result) : "No verdict yet"}
-                        </div>
-                        <div className={styles.signalInsight}>{verdictInsight}</div>
-                        <div className={styles.signalMeta}>
-                            <span>{currentRating === null ? "Rating unavailable" : `${Math.round(currentRating)} rating`}</span>
-                            <span>
-                                {seasonRecord?.won !== undefined && seasonRecord?.lost !== undefined
-                                    ? `${seasonRecord.won}W - ${seasonRecord.lost}L season`
-                                    : `${scopedSummaries.length} tracked in ${currentBracketLabel}`}
-                            </span>
-                        </div>
-                    </article>
-                </div>
-            </section>
-
-            <section className={styles.metricsGrid}>
-                <article className={styles.metricCard}>
-                    <div className={styles.metricIcon}>
-                        <LuRadar aria-hidden="true" />
-                    </div>
-                    <div>
-                        <div className={styles.metricLabel}>Matches tracked</div>
-                        <div className={styles.metricValue}>{scopedSummaries.length}</div>
-                        <div className={styles.metricDetail}>
-                            {latest ? `${ownerName} in ${currentBracketLabel}` : "Across current desktop history"}
-                        </div>
-                    </div>
-                </article>
-
-                <article className={styles.metricCard}>
-                    <div className={styles.metricIcon}>
-                        <LuTrendingUp aria-hidden="true" />
-                    </div>
-                    <div>
-                        <div className={styles.metricLabel}>Recent win rate</div>
-                        <div className={styles.metricValue}>
-                            {recentWinRate === null ? "--" : `${recentWinRate}%`}
-                        </div>
-                        <div className={styles.metricDetail}>
-                            {recentWindow.length > 0 ? `${winCount}W - ${lossCount}L in last ${recentWindow.length}` : "Need resolved matches"}
-                        </div>
-                    </div>
-                </article>
-
-                <article className={styles.metricCard}>
-                    <div className={styles.metricIcon}>
-                        <LuClock3 aria-hidden="true" />
-                    </div>
-                    <div>
-                        <div className={styles.metricLabel}>Average duration</div>
-                        <div className={styles.metricValue}>
-                            {averageDuration === null ? "--" : `${Math.floor(averageDuration / 60)}:${String(averageDuration % 60).padStart(2, "0")}`}
-                        </div>
-                        <div className={styles.metricDetail}>
-                            {recentDurationSamples.length > 0 ? `From last ${recentDurationSamples.length} ${currentBracketLabel} captures` : "No duration samples"}
-                        </div>
-                    </div>
-                </article>
-
-                <article className={styles.metricCard}>
-                    <div className={styles.metricIcon}>
-                        {metricFourIcon}
-                    </div>
-                    <div>
-                        <div className={styles.metricLabel}>{metricFourLabel}</div>
-                        <div className={styles.metricValue}>{metricFourValue}</div>
-                        <div className={styles.metricDetail}>{metricFourDetail}</div>
-                    </div>
-                </article>
-            </section>
-
-            <section className={styles.contentGrid}>
-                <article className={styles.panel}>
-                    <div className={styles.panelHeader}>
-                        <div>
-                            <div className={styles.panelEyebrow}>Spotlight</div>
-                            <h3 className={styles.panelTitle}>Latest captured match</h3>
-                        </div>
-                        {latest ? <span className={styles.panelTag}>{latest.modeLabel}</span> : null}
-                    </div>
-
-                    {latest ? (
-                        <>
-                            <div className={styles.spotlightHighlights}>
-                                <span className={`${styles.resultBadge} ${resultBadgeClass}`}>
-                                    {formatResultLabel(latest.result)}
+                    <div className={styles.heroRail}>
+                        <article className={styles.signalCard}>
+                            <div className={styles.signalTop}>
+                                <span className={styles.signalLabel}>Latest capture</span>
+                                <span className={`${styles.signalBadge} ${latest ? styles.signalLive : styles.signalIdle}`}>
+                                    {latest ? "LIVE" : "IDLE"}
                                 </span>
-                                <span className={styles.highlightChip}>{ownerName}</span>
-                                <span className={styles.highlightChip}>{latest.durationLabel}</span>
-                                <span className={styles.highlightChip}>{latest.modeLabel}</span>
                             </div>
+                            <div className={styles.signalValue}>{latest?.mapName ?? "Waiting for first match"}</div>
+                            <div className={styles.signalMeta}>
+                                <span>{latest?.modeLabel ?? "No bracket yet"}</span>
+                                <span>{latest?.timestampLabel ?? "No capture time"}</span>
+                            </div>
+                            <div className={styles.signalSubMeta}>
+                                <span>{ownerName}</span>
+                                <span>{latest?.durationLabel ?? "--"}</span>
+                            </div>
+                        </article>
 
-                            <div className={styles.spotlightGrid}>
-                                <div className={styles.spotlightCard}>
-                                    <span className={styles.spotlightLabel}>Map</span>
-                                    <span className={styles.spotlightValue}>{latest.mapName}</span>
-                                </div>
-                                <div className={styles.spotlightCard}>
-                                    <span className={styles.spotlightLabel}>Verdict</span>
-                                    <span className={styles.spotlightValue}>{verdictInsight}</span>
-                                </div>
-                                <div className={styles.spotlightCard}>
-                                    <span className={styles.spotlightLabel}>MMR delta</span>
-                                    <span className={`${styles.spotlightValue} ${latestDeltaTone}`}>{latest.deltaLabel}</span>
-                                </div>
-                                <div className={styles.spotlightCard}>
-                                    <span className={styles.spotlightLabel}>Captured</span>
-                                    <span className={styles.spotlightValue}>{latest.timestampLabel}</span>
-                                </div>
+                        <article className={styles.signalCard}>
+                            <div className={styles.signalTop}>
+                                <span className={styles.signalLabel}>Match verdict</span>
+                                <span className={`${styles.deltaPill} ${latestDeltaTone}`}>{latestDeltaLabel}</span>
                             </div>
-                        </>
-                    ) : (
-                        <div className={styles.emptyPanel}>
-                            <div className={styles.emptyTitle}>No matches recorded yet</div>
-                            <p className={styles.emptyCopy}>
-                                Start queueing, and this space will turn into a match spotlight with map, result,
-                                rating swing, and jump-off points into history.
-                            </p>
+                            <div className={styles.signalValue}>
+                                {latest ? formatResultLabel(latest.result) : "No verdict yet"}
+                            </div>
+                            <div className={styles.signalInsight}>{verdictInsight}</div>
+                            <div className={styles.signalMeta}>
+                                <span>{currentRating === null ? "Rating unavailable" : `${Math.round(currentRating)} rating`}</span>
+                                <span>
+                                    {seasonRecord?.won !== undefined && seasonRecord?.lost !== undefined
+                                        ? `${seasonRecord.won}W - ${seasonRecord.lost}L season`
+                                        : `${scopedSummaries.length} tracked in ${currentBracketLabel}`}
+                                </span>
+                            </div>
+                        </article>
+                    </div>
+                </section>
+
+                <section className={styles.metricsGrid}>
+                    <article className={styles.metricCard}>
+                        <div className={styles.metricIcon}>
+                            <LuRadar aria-hidden="true" />
                         </div>
-                    )}
-                </article>
-
-                <article className={styles.panel}>
-                    <div className={styles.panelHeader}>
                         <div>
-                            <div className={styles.panelEyebrow}>Momentum</div>
-                            <h3 className={styles.panelTitle}>Recent form</h3>
+                            <div className={styles.metricLabel}>Matches tracked</div>
+                            <div className={styles.metricValue}>{scopedSummaries.length}</div>
+                            <div className={styles.metricDetail}>
+                                {latest ? `${ownerName} in ${currentBracketLabel}` : "Across current desktop history"}
+                            </div>
                         </div>
-                        <button className={styles.inlineAction} type="button" onClick={() => navigate("/data")}>
-                            Open full history
-                        </button>
-                    </div>
+                    </article>
 
-                    <div className={styles.formStrip}>
-                        {recentWindow.length > 0 ? (
-                            recentWindow.map((match) => (
-                                <div
-                                    key={match.id}
-                                    className={`${styles.formPill} ${
-                                        match.result === "win"
-                                            ? styles.formWin
-                                            : match.result === "loss"
-                                              ? styles.formLoss
-                                              : styles.formNeutral
-                                    }`}
-                                >
-                                    <span>{match.result === "win" ? "W" : match.result === "loss" ? "L" : "?"}</span>
-                                    <span>{match.deltaLabel}</span>
+                    <article className={styles.metricCard}>
+                        <div className={styles.metricIcon}>
+                            <LuTrendingUp aria-hidden="true" />
+                        </div>
+                        <div>
+                            <div className={styles.metricLabel}>Recent win rate</div>
+                            <div className={styles.metricValue}>
+                                {recentWinRate === null ? "--" : `${recentWinRate}%`}
+                            </div>
+                            <div className={styles.metricDetail}>
+                                {recentWindow.length > 0 ? `${winCount}W - ${lossCount}L in last ${recentWindow.length}` : "Need resolved matches"}
+                            </div>
+                        </div>
+                    </article>
+
+                    <article className={styles.metricCard}>
+                        <div className={styles.metricIcon}>
+                            <LuClock3 aria-hidden="true" />
+                        </div>
+                        <div>
+                            <div className={styles.metricLabel}>Average duration</div>
+                            <div className={styles.metricValue}>
+                                {averageDuration === null ? "--" : `${Math.floor(averageDuration / 60)}:${String(averageDuration % 60).padStart(2, "0")}`}
+                            </div>
+                            <div className={styles.metricDetail}>
+                                {recentDurationSamples.length > 0 ? `From last ${recentDurationSamples.length} ${currentBracketLabel} captures` : "No duration samples"}
+                            </div>
+                        </div>
+                    </article>
+
+                    <article className={styles.metricCard}>
+                        <div className={styles.metricIcon}>
+                            {metricFourIcon}
+                        </div>
+                        <div>
+                            <div className={styles.metricLabel}>{metricFourLabel}</div>
+                            <div className={styles.metricValue}>{metricFourValue}</div>
+                            <div className={styles.metricDetail}>{metricFourDetail}</div>
+                        </div>
+                    </article>
+                </section>
+
+                <section className={styles.contentGrid}>
+                    <article className={styles.panel}>
+                        <div className={styles.panelHeader}>
+                            <div>
+                                <div className={styles.panelEyebrow}>Spotlight</div>
+                                <h3 className={styles.panelTitle}>Latest captured match</h3>
+                            </div>
+                            {latest ? <span className={styles.panelTag}>{latest.modeLabel}</span> : null}
+                        </div>
+
+                        {latest ? (
+                            <>
+                                <div className={styles.spotlightHighlights}>
+                                    <span className={`${styles.resultBadge} ${resultBadgeClass}`}>
+                                        {formatResultLabel(latest.result)}
+                                    </span>
+                                    <span className={styles.highlightChip}>{ownerName}</span>
+                                    <span className={styles.highlightChip}>{latest.durationLabel}</span>
+                                    <span className={styles.highlightChip}>{latest.modeLabel}</span>
                                 </div>
-                            ))
-                        ) : (
-                            <div className={styles.formEmpty}>Recent form fills in once resolved matches are detected.</div>
-                        )}
-                    </div>
 
-                    <div className={styles.actionStack}>
-                        <button className={styles.commandBtn} type="button" onClick={() => navigate("/data")}>
-                            <span className={styles.commandIcon}>
-                                <LuRadar aria-hidden="true" />
-                            </span>
-                            <span>
-                                <strong>Inspect match history</strong>
-                                <small>Drill into timelines, summaries, and individual outcomes.</small>
-                            </span>
-                        </button>
-                    </div>
-                </article>
-            </section>
+                                <div className={styles.spotlightGrid}>
+                                    <div className={styles.spotlightCard}>
+                                        <span className={styles.spotlightLabel}>Map</span>
+                                        <span className={styles.spotlightValue}>{latest.mapName}</span>
+                                    </div>
+                                    <div className={styles.spotlightCard}>
+                                        <span className={styles.spotlightLabel}>Verdict</span>
+                                        <span className={styles.spotlightValue}>{verdictInsight}</span>
+                                    </div>
+                                    <div className={styles.spotlightCard}>
+                                        <span className={styles.spotlightLabel}>MMR delta</span>
+                                        <span className={`${styles.spotlightValue} ${latestDeltaTone}`}>{latest.deltaLabel}</span>
+                                    </div>
+                                    <div className={styles.spotlightCard}>
+                                        <span className={styles.spotlightLabel}>Captured</span>
+                                        <span className={styles.spotlightValue}>{latest.timestampLabel}</span>
+                                    </div>
+                                </div>
+                            </>
+                        ) : (
+                            <div className={styles.emptyPanel}>
+                                <div className={styles.emptyTitle}>No matches recorded yet</div>
+                                <p className={styles.emptyCopy}>
+                                    Start queueing, and this space will turn into a match spotlight with map, result,
+                                    rating swing, and jump-off points into history.
+                                </p>
+                            </div>
+                        )}
+                    </article>
+
+                    <article className={styles.panel}>
+                        <div className={styles.panelHeader}>
+                            <div>
+                                <div className={styles.panelEyebrow}>Momentum</div>
+                                <h3 className={styles.panelTitle}>Recent form</h3>
+                            </div>
+                            <button className={styles.inlineAction} type="button" onClick={() => navigate("/data")}>
+                                Open full history
+                            </button>
+                        </div>
+
+                        <div className={styles.formStrip}>
+                            {recentWindow.length > 0 ? (
+                                recentWindow.map((match) => (
+                                    <div
+                                        key={match.id}
+                                        className={`${styles.formPill} ${
+                                            match.result === "win"
+                                                ? styles.formWin
+                                                : match.result === "loss"
+                                                  ? styles.formLoss
+                                                  : styles.formNeutral
+                                        }`}
+                                    >
+                                        <span>{match.result === "win" ? "W" : match.result === "loss" ? "L" : "?"}</span>
+                                        <span>{match.deltaLabel}</span>
+                                    </div>
+                                ))
+                            ) : (
+                                <div className={styles.formEmpty}>Recent form fills in once resolved matches are detected.</div>
+                            )}
+                        </div>
+
+                        <div className={styles.actionStack}>
+                            <button className={styles.commandBtn} type="button" onClick={() => navigate("/data")}>
+                                <span className={styles.commandIcon}>
+                                    <LuRadar aria-hidden="true" />
+                                </span>
+                                <span>
+                                    <strong>Inspect match history</strong>
+                                    <small>Drill into timelines, summaries, and individual outcomes.</small>
+                                </span>
+                            </button>
+                        </div>
+                    </article>
+                </section>
+            </div>
         </RouteLayout>
     );
 }

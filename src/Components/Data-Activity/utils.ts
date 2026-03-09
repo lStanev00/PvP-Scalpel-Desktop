@@ -11,6 +11,21 @@ export type MatchMode =
     | "rbg"
     | "unknown";
 
+export const getModeLabel = (mode: MatchMode) =>
+    mode === "solo"
+        ? "Solo Shuffle"
+        : mode === "skirmish"
+          ? "Skirmish"
+          : mode === "rated2"
+            ? "Rated 2v2"
+            : mode === "rated3"
+              ? "Rated 3v3"
+              : mode === "randombg"
+                ? "Random BG"
+                : mode === "rbg"
+                  ? "RBG"
+                  : "Unknown";
+
 export interface MatchFilters {
     mode: MatchMode | "all";
     character: string | "all";
