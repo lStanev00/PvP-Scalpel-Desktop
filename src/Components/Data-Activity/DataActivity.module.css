@@ -62,10 +62,10 @@
     font-size: 10px;
     font-weight: 500;
     letter-spacing: 0.6px;
-    line-height: 1;
     text-align: right;
     text-transform: uppercase;
     color: rgba(160, 170, 190, 0.5);
+    margin-right: 5px;
 }
 
 .filtersInfo {
