@@ -12,7 +12,7 @@ import {
     buildMatchSummary,
     getModeLabel,
     type MatchMode,
-} from "../../Components/Data-Activity/utils";
+} from "../../Components/DataActivity/utils";
 import styles from "./Settings.module.css";
 
 const AUTO_SCOPE_STRATEGY_OPTIONS: Array<{

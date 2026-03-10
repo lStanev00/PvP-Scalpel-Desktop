@@ -1,5 +1,5 @@
 import { startTransition, useEffect, useState } from "react";
-import type { MatchSummary } from "../Components/Data-Activity/utils";
+import type { MatchSummary } from "../Components/DataActivity/utils";
 import useUserContext from "./useUserContext";
 import type { UserContextType } from "../Context-Providers/main-contenxt";
 

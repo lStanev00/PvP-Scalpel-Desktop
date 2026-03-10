@@ -16,7 +16,7 @@ import useCharacterProfile, {
     resolveCharacterBracketSnapshot,
 } from "../../Hooks/useCharacterProfile";
 import RouteLayout from "../../Components/RouteLayout/RouteLayout";
-import { buildMatchSummary } from "../../Components/Data-Activity/utils";
+import { buildMatchSummary } from "../../Components/DataActivity/utils";
 import { openUrl } from "../../Helpers/open";
 import styles from "./Dashboard.module.css";
 

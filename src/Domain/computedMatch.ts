@@ -1,9 +1,9 @@
-import type { MatchPlayer, MatchTimelineEntry } from "../Components/Data-Activity/types";
-import { resolveIntentAttempts } from "../Components/Data-Activity/spellCastResolver";
+import type { MatchPlayer, MatchTimelineEntry } from "../Components/DataActivity/types";
+import { resolveIntentAttempts } from "../Components/DataActivity/spellCastResolver";
 import {
     computeKickTelemetrySnapshot,
     resolveTelemetryVersion,
-} from "../Components/Data-Activity/kickTelemetry";
+} from "../Components/DataActivity/kickTelemetry";
 
 type SpellOutcomeCounts = {
     succeeded: number;

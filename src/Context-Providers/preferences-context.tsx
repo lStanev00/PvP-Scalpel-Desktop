@@ -1,5 +1,5 @@
 import { createContext, ReactNode, useContext, useEffect, useState } from "react";
-import type { MatchMode } from "../Components/Data-Activity/utils";
+import type { MatchMode } from "../Components/DataActivity/utils";
 
 interface PreferencesContextValue {
     minimizeToTray: boolean;
