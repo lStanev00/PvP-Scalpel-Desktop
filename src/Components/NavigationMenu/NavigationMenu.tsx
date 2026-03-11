@@ -1,19 +1,20 @@
 import { useRef, type ReactElement } from "react";
 import { NavLink } from "react-router-dom";
 import {
-    LuDatabase,
+    LuActivity,
     LuFileText,
     LuInfo,
     LuLayoutGrid,
     LuSettings,
-    LuTrendingUp,
+    LuSwords,
 } from "react-icons/lu";
+import { usePreferences } from "../../Context-Providers/preferences-context";
 import styles from "./NavigationMenu.module.css";
 
 const navItems = [
     { label: "Dashboard", to: "/dashboard", icon: <LuLayoutGrid /> },
-    { label: "Match History", to: "/data", icon: <LuDatabase /> },
-    { label: "Analytics", icon: <LuTrendingUp />, disabled: true, status: "Soon" },
+    { label: "Match History", to: "/data", icon: <LuSwords /> },
+    { label: "Analytics", icon: <LuActivity />, disabled: true, status: "Soon" },
     { label: "Logs", to: "/logs", icon: <LuFileText /> },
     { label: "Settings", to: "/settings", icon: <LuSettings /> },
     { label: "About", to: "/about", icon: <LuInfo /> },
@@ -25,6 +26,7 @@ const aboutNavItem = navItems.find(
 );
 
 export default function NavigationMenu() {
+    const { navAlwaysCollapsed } = usePreferences();
     const navRef = useRef<HTMLElement | null>(null);
 
     const blurNavFocus = () => {
@@ -37,7 +39,9 @@ export default function NavigationMenu() {
     return (
         <nav
             ref={navRef}
-            className={styles.nav}
+            className={`${styles.nav} ${
+                navAlwaysCollapsed ? styles.navAlwaysCollapsed : styles.navExpandable
+            }`}
             aria-label="Primary"
             onMouseLeave={blurNavFocus}
         >

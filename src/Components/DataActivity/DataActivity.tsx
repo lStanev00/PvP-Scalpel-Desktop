@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { LuClock3, LuFlame, LuPercent, LuTrendingUp } from "react-icons/lu";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
+import { resolveCachedCharacterProfile } from "../../Hooks/useCharacterProfile";
 import useMatches from "../../Hooks/useMatches";
 import updatePersence from "../../Helpers/updatePresence";
 import { usePreferences } from "../../Context-Providers/preferences-context";
@@ -9,15 +10,33 @@ import FiltersBar from "./FiltersBar";
 import MatchHistoryList from "./MatchHistoryList";
 import MatchDetailsPanel from "./MatchDetailsPanel";
 import {
+    BRACKET_UNKNOWN,
+    buildCharacterOptions,
+    buildScopeOptions,
     buildMatchSummary,
-    type MatchMode,
     filterMatches,
     getDefaultSelectedId,
     getModeLabel,
+    isRatedBracket,
+    resolveStoredCharacterValue,
     type MatchFilters,
+    type MatchScopeMode,
     type MatchSummary,
+    resolveSummaryScopeId,
 } from "./utils";
 import styles from "./DataActivity.module.css";
+
+const CHARACTER_API_SERVER = "eu";
+
+type DataActivityLocationState = {
+    scopedFilters?: {
+        mode?: MatchScopeMode | "all";
+        character?: string | "all";
+        query?: string;
+    };
+    selectedMatchId?: string;
+    openDetails?: boolean;
+};
 
 const formatDurationLabel = (seconds: number) => {
     const total = Math.max(0, Math.round(seconds));
@@ -26,17 +45,17 @@ const formatDurationLabel = (seconds: number) => {
     return `${minutes}:${String(remainingSeconds).padStart(2, "0")}`;
 };
 
-const isRatedMode = (mode: MatchMode) =>
-    mode === "solo" || mode === "rated2" || mode === "rated3" || mode === "rbg";
-
 export default function DataActivity() {
+    const location = useLocation();
     const navigate = useNavigate();
     const matches = useMatches();
     const {
         autoScopeStrategy,
         autoScopeCharacter,
+        setAutoScopeCharacter,
         autoScopeBracket,
         autoScopeRatedPreference,
+        collapseRandomBattlegrounds,
     } = usePreferences();
     const [rpcUpdate, setRpcUpdate] = useState("");
     const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -49,6 +68,7 @@ export default function DataActivity() {
     });
     const listScrollTop = useRef(0);
     const hasInitializedScopedFilters = useRef(false);
+    const handledRouteSelectionKey = useRef<string | null>(null);
 
     useEffect(() => {
         if (matches.length > 0) {
@@ -71,54 +91,50 @@ export default function DataActivity() {
             .sort((a, b) => b.timestampMs - a.timestampMs);
     }, [matches]);
     const modeOptions = useMemo(() => {
-        const order: MatchMode[] = [
-            "skirmish",
-            "solo",
-            "rated2",
-            "rated3",
-            "randombg",
-            "rbg",
-            "unknown",
-        ];
-        const present = new Set(summaries.map((summary) => summary.mode));
-        const options = order
-            .filter((mode) => present.has(mode))
-            .map((mode) => {
-                const label =
-                    mode === "solo"
-                        ? "Solo Shuffle"
-                        : mode === "skirmish"
-                          ? "Skirmish"
-                          : mode === "rated2"
-                            ? "Rated 2v2"
-                            : mode === "rated3"
-                              ? "Rated 3v3"
-                              : mode === "randombg"
-                                ? "Random BG"
-                              : mode === "rbg"
-                                ? "RBG"
-                                : "Unknown";
-                return { label, value: mode };
-            });
+        const options = buildScopeOptions(summaries, collapseRandomBattlegrounds);
         return [{ label: "All Modes", value: "all" as const }, ...options];
-    }, [summaries]);
+    }, [summaries, collapseRandomBattlegrounds]);
 
     const characterOptions = useMemo(() => {
-        const ownerName = summaries.find((summary) => summary.owner.isOwner)?.owner.name;
-        const unique = Array.from(new Set(summaries.map((summary) => summary.owner.name)));
-        const sorted = unique.sort((a, b) => a.localeCompare(b));
-        if (ownerName) {
-            const idx = sorted.indexOf(ownerName);
-            if (idx > 0) {
-                sorted.splice(idx, 1);
-                sorted.unshift(ownerName);
-            }
-        }
+        const options = buildCharacterOptions(summaries).map((option) => {
+            const profile = resolveCachedCharacterProfile({
+                server: CHARACTER_API_SERVER,
+                realm: option.realm ?? null,
+                name: option.name ?? null,
+            });
+            return {
+                ...option,
+                label:
+                    option.name && profile?.playerRealm?.name
+                        ? `${option.name} - ${profile.playerRealm.name}`
+                        : option.label,
+                avatarUrl: profile?.media?.avatar ?? profile?.media?.charImg ?? null,
+            };
+        });
+
         return [
             { label: "All Characters", value: "all" as const },
-            ...sorted.map((name) => ({ label: name, value: name })),
+            ...options,
         ];
     }, [summaries]);
+    const characterLabelByValue = useMemo(
+        () => new Map(characterOptions.map((option) => [option.value, option.label] as const)),
+        [characterOptions]
+    );
+
+    const resolvedAutoScopeCharacter = useMemo(
+        () => resolveStoredCharacterValue(autoScopeCharacter, characterOptions),
+        [autoScopeCharacter, characterOptions]
+    );
+
+    useEffect(() => {
+        if (resolvedAutoScopeCharacter === autoScopeCharacter) return;
+        if (resolvedAutoScopeCharacter === "all") {
+            setAutoScopeCharacter("auto");
+            return;
+        }
+        setAutoScopeCharacter(resolvedAutoScopeCharacter);
+    }, [resolvedAutoScopeCharacter, autoScopeCharacter, setAutoScopeCharacter]);
 
     const latestSummary = summaries[0] ?? null;
     const autoScopeResolution = useMemo(() => {
@@ -139,7 +155,7 @@ export default function DataActivity() {
             }
 
             if (autoScopeRatedPreference === "prefer_rated") {
-                const preferred = candidates.find((match) => isRatedMode(match.mode)) ?? null;
+                const preferred = candidates.find((match) => isRatedBracket(match.bracketId)) ?? null;
                 return {
                     match: preferred ?? candidates[0],
                     isLimited: !preferred,
@@ -150,7 +166,9 @@ export default function DataActivity() {
             if (autoScopeRatedPreference === "prefer_non_rated") {
                 const preferred =
                     candidates.find(
-                        (match) => !isRatedMode(match.mode) && match.mode !== "unknown"
+                        (match) =>
+                            !isRatedBracket(match.bracketId) &&
+                            match.bracketId !== BRACKET_UNKNOWN
                     ) ?? null;
                 return {
                     match: preferred ?? candidates[0],
@@ -166,7 +184,10 @@ export default function DataActivity() {
             const result = pickPreferredMatch(summaries);
             return {
                 filters: result.match
-                    ? { character: result.match.owner.name, mode: result.match.mode }
+                    ? {
+                          character: result.match.owner.key,
+                          mode: resolveSummaryScopeId(result.match, collapseRandomBattlegrounds),
+                      }
                     : null,
                 isLimited: result.isLimited,
                 limitedReason: result.limitedReason,
@@ -174,30 +195,40 @@ export default function DataActivity() {
         }
 
         const resolvedCharacter =
-            autoScopeCharacter !== "auto" ? autoScopeCharacter : latestSummary?.owner.name ?? null;
+            resolvedAutoScopeCharacter !== "auto"
+                ? resolvedAutoScopeCharacter
+                : latestSummary?.owner.key ?? null;
         if (!resolvedCharacter) {
             return { filters: null, isLimited: false, limitedReason: null as string | null };
         }
 
         const characterMatches = summaries.filter(
-            (summary) => summary.owner.name === resolvedCharacter
+            (summary) => summary.owner.key === resolvedCharacter
         );
 
         if (autoScopeStrategy === "selected_character_latest_bracket") {
             const result = pickPreferredMatch(characterMatches);
             return {
                 filters: result.match
-                    ? { character: resolvedCharacter, mode: result.match.mode }
+                    ? {
+                          character: resolvedCharacter,
+                          mode: resolveSummaryScopeId(result.match, collapseRandomBattlegrounds),
+                      }
                     : null,
                 isLimited: result.isLimited,
                 limitedReason: result.limitedReason,
             };
         }
 
-        const resolvedMode =
+        const resolvedMode: MatchScopeMode | null =
             autoScopeBracket !== "auto"
                 ? autoScopeBracket
-                : pickPreferredMatch(characterMatches).match?.mode ?? latestSummary?.mode ?? null;
+                : (() => {
+                      const preferred = pickPreferredMatch(characterMatches).match ?? latestSummary;
+                      return preferred
+                          ? resolveSummaryScopeId(preferred, collapseRandomBattlegrounds)
+                          : null;
+                  })();
 
         return {
             filters: resolvedMode
@@ -210,9 +241,10 @@ export default function DataActivity() {
         summaries,
         latestSummary,
         autoScopeStrategy,
-        autoScopeCharacter,
+        resolvedAutoScopeCharacter,
         autoScopeBracket,
         autoScopeRatedPreference,
+        collapseRandomBattlegrounds,
     ]);
     const latestScopedFilters = autoScopeResolution.filters;
 
@@ -237,6 +269,20 @@ export default function DataActivity() {
 
     useEffect(() => {
         if (hasInitializedScopedFilters.current) return;
+
+        const routeState = location.state as DataActivityLocationState | null;
+        const routeScopedFilters = routeState?.scopedFilters;
+        if (routeScopedFilters) {
+            hasInitializedScopedFilters.current = true;
+            setFilters((prev) => ({
+                ...prev,
+                mode: routeScopedFilters.mode ?? "all",
+                character: routeScopedFilters.character ?? "all",
+                query: routeScopedFilters.query ?? "",
+            }));
+            return;
+        }
+
         if (!latestScopedFilters) return;
 
         setFilters((prev) => {
@@ -252,21 +298,46 @@ export default function DataActivity() {
                 character: latestScopedFilters.character,
             };
         });
-    }, [latestScopedFilters]);
+    }, [latestScopedFilters, location.state]);
+
+    const routeState = location.state as DataActivityLocationState | null;
+    const routeSelectionKey = useMemo(() => {
+        if (!routeState?.selectedMatchId) return null;
+        return [
+            routeState.selectedMatchId,
+            routeState.openDetails ? "details" : "list",
+            routeState.scopedFilters?.character ?? "all",
+            routeState.scopedFilters?.mode ?? "all",
+            routeState.scopedFilters?.query ?? "",
+        ].join("|");
+    }, [routeState]);
+    const routeScopedFiltersApplied = useMemo(() => {
+        if (!routeState?.scopedFilters) return true;
+
+        return (
+            filters.mode === (routeState.scopedFilters.mode ?? "all") &&
+            filters.character === (routeState.scopedFilters.character ?? "all") &&
+            filters.query === (routeState.scopedFilters.query ?? "")
+        );
+    }, [filters.character, filters.mode, filters.query, routeState]);
 
     const isAutoLockedContext =
         !!latestScopedFilters &&
         filters.query.trim() === "" &&
         filters.mode === latestScopedFilters.mode &&
         filters.character === latestScopedFilters.character;
+    const latestScopedCharacterLabel = latestScopedFilters
+        ? characterLabelByValue.get(latestScopedFilters.character) ??
+          latestScopedFilters.character
+        : null;
     const autoLockedLabel = latestScopedFilters
         ? isAutoLockedContext
             ? autoScopeResolution.isLimited
                 ? `${autoScopeResolution.limitedReason} Click to clear auto scope and show all matches.`
                 : "Click to clear auto scope and show all matches."
             : autoScopeResolution.isLimited
-              ? `${autoScopeResolution.limitedReason} Click to reapply auto scope for ${latestScopedFilters.character} in ${getModeLabel(latestScopedFilters.mode)}.`
-              : `Click to reapply auto scope for ${latestScopedFilters.character} in ${getModeLabel(latestScopedFilters.mode)}.`
+              ? `${autoScopeResolution.limitedReason} Click to reapply auto scope for ${latestScopedCharacterLabel} in ${getModeLabel(latestScopedFilters.mode)}.`
+              : `Click to reapply auto scope for ${latestScopedCharacterLabel} in ${getModeLabel(latestScopedFilters.mode)}.`
         : null;
 
     useEffect(() => {
@@ -282,7 +353,10 @@ export default function DataActivity() {
             setFilters((prev) => ({ ...prev, character: "all" }));
         }
     }, [characterOptions, filters.character]);
-    const filtered = useMemo(() => filterMatches(summaries, filters), [summaries, filters]);
+    const filtered = useMemo(
+        () => filterMatches(summaries, filters, collapseRandomBattlegrounds),
+        [summaries, filters, collapseRandomBattlegrounds]
+    );
     const historyStats = useMemo(() => {
         const winCount = filtered.filter((match) => match.result === "win").length;
         const lossCount = filtered.filter((match) => match.result === "loss").length;
@@ -353,6 +427,21 @@ export default function DataActivity() {
 
     const selectedMatch =
         filtered.find((match) => match.id === selectedId) ?? filtered[0] ?? null;
+
+    useEffect(() => {
+        if (!routeState?.selectedMatchId || !routeSelectionKey) return;
+        if (!routeScopedFiltersApplied) return;
+        if (handledRouteSelectionKey.current === routeSelectionKey) return;
+
+        const routeSelectedMatch = filtered.find((match) => match.id === routeState.selectedMatchId);
+        if (!routeSelectedMatch) return;
+
+        handledRouteSelectionKey.current = routeSelectionKey;
+        setSelectedId(routeSelectedMatch.id);
+        if (routeState.openDetails) {
+            setView("details");
+        }
+    }, [filtered, routeScopedFiltersApplied, routeSelectionKey, routeState]);
 
     useEffect(() => {
         const ownerName = selectedMatch?.owner.name ?? "";
@@ -527,4 +616,3 @@ export default function DataActivity() {
         </RouteLayout>
     );
 }
-

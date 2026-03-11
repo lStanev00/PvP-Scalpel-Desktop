@@ -22,10 +22,24 @@ interface TeamTableProps {
 
 const fmt = (v?: number | null) => (v != null ? v.toLocaleString() : "-");
 const fmtClass = (c?: string) => (c ? c[0].toUpperCase() + c.slice(1).toLowerCase() : "-");
+const EXTRA_STAT_MIN_WIDTH = 112;
 
-function HeaderHint({ label, tooltip }: { label: string; tooltip: string }) {
+function HeaderHint({
+    label,
+    tooltip,
+    multiline = false,
+}: {
+    label: string;
+    tooltip: string;
+    multiline?: boolean;
+}) {
     return (
-        <span className={styles.ttColHint} data-tooltip={tooltip} tabIndex={0} aria-label={tooltip}>
+        <span
+            className={`${styles.ttColHint} ${multiline ? styles.ttColHintMultiline : ""}`}
+            data-tooltip={tooltip}
+            tabIndex={0}
+            aria-label={tooltip}
+        >
             {label}
         </span>
     );
@@ -81,7 +95,7 @@ export default function TeamTable({
         "minmax(180px, 1.8fr)",
         "72px",
         "minmax(220px, 1fr)",
-        ...extraStatNames.map(() => "minmax(92px, auto)"),
+        ...extraStatNames.map(() => `minmax(${EXTRA_STAT_MIN_WIDTH}px, auto)`),
         ...(showPreMMR ? ["minmax(64px, auto)"] : []),
         ...(showPostMMR ? ["minmax(64px, auto)"] : []),
         ...(showMMRDelta ? ["minmax(64px, auto)"] : []),
@@ -195,15 +209,16 @@ export default function TeamTable({
                                       ? lastMergedColRef
                                       : undefined
                             }
-                            className={[
+                        className={[
                                 styles.ttColStat,
+                                styles.ttMergedCol,
                                 index === 0 ? styles.ttMergedColStart : "",
                                 index === extraStatNames.length - 1 ? styles.ttMergedColEnd : "",
                             ]
                                 .filter(Boolean)
                                 .join(" ")}
                         >
-                            <HeaderHint label={stat} tooltip={stat} />
+                            <HeaderHint label={stat} tooltip={stat} multiline />
                         </span>
                     ))}
                     {showPreMMR ? (

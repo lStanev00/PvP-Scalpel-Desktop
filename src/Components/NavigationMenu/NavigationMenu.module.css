@@ -1,4 +1,7 @@
 .nav {
+    --nav-expanded-width: 240px;
+    --nav-collapsed-link-width: 44px;
+    --nav-expanded-link-width: calc(var(--nav-expanded-width) - 28px);
     width: 72px;
     padding: 18px 14px;
     border-right: 1px solid rgba(255, 255, 255, 0.08);
@@ -11,9 +14,9 @@
     will-change: width;
 }
 
-.nav:hover,
-.nav:focus-within {
-    width: 240px;
+.navExpandable:hover,
+.navExpandable:focus-within {
+    width: var(--nav-expanded-width);
 }
 
 .list {
@@ -34,6 +37,7 @@
     display: flex;
     align-items: center;
     gap: 10px;
+    width: 100%;
     padding: 10px 12px;
     border-radius: 14px;
     border: 1px solid transparent;
@@ -75,16 +79,16 @@
 }
 
 .icon {
-    width: 18px;
-    height: 18px;
+    width: 20px;
+    height: 20px;
     display: grid;
     place-items: center;
-    flex: 0 0 18px;
+    flex: 0 0 20px;
 }
 
 .icon svg {
-    width: 18px;
-    height: 18px;
+    width: 20px;
+    height: 20px;
     fill: none;
     stroke: currentColor;
     stroke-width: 1.6;
@@ -105,8 +109,8 @@
     pointer-events: none;
 }
 
-.nav:hover .label,
-.nav:focus-within .label {
+.navExpandable:hover .label,
+.navExpandable:focus-within .label {
     max-width: 140px;
     opacity: 1;
     transform: translateX(0);
@@ -135,11 +139,53 @@
     pointer-events: none;
 }
 
-.nav:hover .statusPill,
-.nav:focus-within .statusPill {
+.navExpandable:hover .statusPill,
+.navExpandable:focus-within .statusPill {
     max-width: 64px;
     opacity: 1;
     transform: translateX(0);
+}
+
+.navAlwaysCollapsed .link {
+    width: var(--nav-collapsed-link-width);
+    min-width: var(--nav-collapsed-link-width);
+}
+
+.navAlwaysCollapsed .link:hover {
+    width: var(--nav-expanded-link-width);
+    min-width: var(--nav-expanded-link-width);
+    background: rgba(18, 24, 33, 0.96);
+    border-color: rgba(255, 255, 255, 0.14);
+    color: rgba(230, 234, 240, 0.98);
+    box-shadow: 0 14px 28px rgba(6, 10, 18, 0.34);
+    z-index: 2;
+}
+
+.navAlwaysCollapsed .link:hover .label {
+    max-width: 140px;
+    opacity: 1;
+    transform: translateX(0);
+}
+
+.navAlwaysCollapsed .link:hover .statusPill {
+    max-width: 64px;
+    opacity: 1;
+    transform: translateX(0);
+}
+
+.navAlwaysCollapsed .active:hover {
+    background: linear-gradient(120deg, rgba(30, 55, 84, 0.96), rgba(25, 54, 50, 0.94));
+    border-color: rgba(124, 242, 194, 0.4);
+    color: rgba(230, 234, 240, 0.98);
+    box-shadow:
+        0 0 24px rgba(58, 167, 255, 0.22),
+        0 0 10px rgba(124, 242, 194, 0.12);
+}
+
+.navAlwaysCollapsed .disabledLink:hover {
+    background: rgba(18, 24, 33, 0.96);
+    border-color: rgba(255, 255, 255, 0.08);
+    color: rgba(180, 188, 202, 0.72);
 }
 
 .tooltip {
@@ -165,8 +211,9 @@
     z-index: 4;
 }
 
-.nav:not(:hover):not(:focus-within) .link:hover .tooltip,
-.nav:not(:hover):not(:focus-within) .link:focus-visible .tooltip {
+.navAlwaysCollapsed .link:focus-visible .tooltip,
+.navExpandable:not(:hover):not(:focus-within) .link:hover .tooltip,
+.navExpandable:not(:hover):not(:focus-within) .link:focus-visible .tooltip {
     opacity: 1;
     visibility: visible;
     transform: translate(0, -50%);
@@ -193,13 +240,22 @@
         flex-direction: row;
     }
 
-    .label {
+    .navAlwaysCollapsed .link {
+        width: var(--nav-collapsed-link-width);
+        min-width: var(--nav-collapsed-link-width);
+    }
+
+    .navAlwaysCollapsed .link:hover {
+        width: var(--nav-collapsed-link-width);
+    }
+
+    .navExpandable .label {
         max-width: 140px;
         opacity: 1;
         transform: translateX(0);
     }
 
-    .statusPill {
+    .navExpandable .statusPill {
         max-width: 64px;
         opacity: 1;
         transform: translateX(0);

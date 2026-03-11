@@ -32,14 +32,15 @@ import {
     type SpellMetricType,
     type SpellViewMode,
 } from "./spellMetrics.utils";
+import { isBattlegroundBracket, type MatchMode } from "./utils";
 import styles from "./DataActivity.module.css";
 
 interface SpellCastGraphProps {
     timeline: MatchTimelineEntry[];
     players: MatchPlayer[];
+    bracketId?: MatchMode | null;
     gameVersion?: string | null;
     telemetryVersion?: number | null;
-    matchFormat?: string | null;
     spellTotals?: Record<string, unknown> | Record<number, unknown> | null;
     spellTotalsBySource?: Record<string, unknown> | null;
     interruptSpellsBySource?: Record<string, unknown> | null;
@@ -55,20 +56,6 @@ interface SpellCastGraphProps {
 
 const BG_TELEMETRY_SUPPORT_VERSION = 3.1;
 
-const isBattlegroundFormat = (format?: string | null) => {
-    if (!format) return false;
-    const normalized = format.toLowerCase();
-    return (
-        normalized.includes("battleground") ||
-        normalized.includes("random bg") ||
-        normalized.includes("randombg") ||
-        normalized.includes("rated battleground") ||
-        normalized.includes("rbg") ||
-        normalized.includes("epic bg") ||
-        normalized.includes("epic battleground")
-    );
-};
-
 type ActiveTooltipState =
     | { kind: "personal"; spellId: number }
     | { kind: "compare"; playerKey: string }
@@ -83,9 +70,9 @@ const normalizeGuid = (value?: string | null) => {
 export default function SpellCastGraph({
     timeline,
     players,
+    bracketId = null,
     gameVersion,
     telemetryVersion,
-    matchFormat,
     spellTotals,
     spellTotalsBySource,
     interruptSpellsBySource,
@@ -361,7 +348,10 @@ export default function SpellCastGraph({
 
     const activeRows = viewMode === "personal" ? personalModel.rows : compareModel.rows;
     const maxValue = viewMode === "personal" ? personalModel.maxValue : compareModel.maxValue;
-    const isBgMatch = useMemo(() => isBattlegroundFormat(matchFormat), [matchFormat]);
+    const isBgMatch = useMemo(
+        () => (bracketId !== null ? isBattlegroundBracket(bracketId) : false),
+        [bracketId]
+    );
     const isBgTelemetryUnsupported =
         isBgMatch &&
         (telemetryVersion === null ||

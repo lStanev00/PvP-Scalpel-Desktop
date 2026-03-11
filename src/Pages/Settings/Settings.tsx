@@ -1,19 +1,26 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import useUserContext from "../../Hooks/useUserContext";
+import { resolveCachedCharacterProfile } from "../../Hooks/useCharacterProfile";
 import {
     usePreferences,
     type AutoScopeRatedPreference,
     type AutoScopeStrategy,
 } from "../../Context-Providers/preferences-context";
 import useMatches from "../../Hooks/useMatches";
+import CharacterPicker from "../../Components/CharacterPicker/CharacterPicker";
 import RouteLayout from "../../Components/RouteLayout/RouteLayout";
 import {
+    buildCharacterOptions,
+    buildScopeOptions,
     buildMatchSummary,
     getModeLabel,
-    type MatchMode,
+    parseBracketScopeId,
+    resolveStoredCharacterValue,
 } from "../../Components/DataActivity/utils";
 import styles from "./Settings.module.css";
+
+const CHARACTER_API_SERVER = "eu";
 
 const AUTO_SCOPE_STRATEGY_OPTIONS: Array<{
     value: AutoScopeStrategy;
@@ -57,6 +64,8 @@ export default function Settings() {
     const {
         minimizeToTray,
         setMinimizeToTray,
+        navAlwaysCollapsed,
+        setNavAlwaysCollapsed,
         autoScopeStrategy,
         setAutoScopeStrategy,
         autoScopeCharacter,
@@ -65,6 +74,8 @@ export default function Settings() {
         setAutoScopeBracket,
         autoScopeRatedPreference,
         setAutoScopeRatedPreference,
+        collapseRandomBattlegrounds,
+        setCollapseRandomBattlegrounds,
     } = usePreferences();
     const [autoRefresh, setAutoRefresh] = useState(true);
     const [highlightAutoScope, setHighlightAutoScope] = useState(false);
@@ -79,24 +90,33 @@ export default function Settings() {
     );
 
     const characterOptions = useMemo(() => {
-        return Array.from(new Set(summaries.map((summary) => summary.owner.name))).sort((a, b) =>
-            a.localeCompare(b)
-        );
+        return buildCharacterOptions(summaries).map((option) => {
+            const profile = resolveCachedCharacterProfile({
+                server: CHARACTER_API_SERVER,
+                realm: option.realm ?? null,
+                name: option.name ?? null,
+            });
+            return {
+                ...option,
+                label:
+                    option.name && profile?.playerRealm?.name
+                        ? `${option.name} - ${profile.playerRealm.name}`
+                        : option.label,
+                avatarUrl: profile?.media?.avatar ?? profile?.media?.charImg ?? null,
+            };
+        });
     }, [summaries]);
 
+    const resolvedAutoScopeCharacter = useMemo(
+        () => resolveStoredCharacterValue(autoScopeCharacter, characterOptions),
+        [autoScopeCharacter, characterOptions]
+    );
+
     const bracketOptions = useMemo(() => {
-        const order: MatchMode[] = [
-            "randombg",
-            "skirmish",
-            "solo",
-            "rated2",
-            "rated3",
-            "rbg",
-            "unknown",
-        ];
-        const present = new Set(summaries.map((summary) => summary.mode));
-        return order.filter((mode) => present.has(mode));
-    }, [summaries]);
+        return buildScopeOptions(summaries, collapseRandomBattlegrounds).map(
+            (option) => option.value
+        );
+    }, [summaries, collapseRandomBattlegrounds]);
 
     const showCharacterFocus = autoScopeStrategy !== "latest_character_latest_bracket";
     const showBracketFocus = autoScopeStrategy === "selected_character_selected_bracket";
@@ -118,6 +138,19 @@ export default function Settings() {
         const timeout = window.setTimeout(() => setHighlightAutoScope(false), 3000);
         return () => window.clearTimeout(timeout);
     }, [location.state]);
+
+    useEffect(() => {
+        if (resolvedAutoScopeCharacter === autoScopeCharacter) return;
+        if (resolvedAutoScopeCharacter === "all") {
+            setAutoScopeCharacter("auto");
+            return;
+        }
+        setAutoScopeCharacter(resolvedAutoScopeCharacter);
+    }, [
+        resolvedAutoScopeCharacter,
+        autoScopeCharacter,
+        setAutoScopeCharacter,
+    ]);
 
     return (
         <RouteLayout
@@ -161,6 +194,19 @@ export default function Settings() {
                         <span className={styles.toggleTrack} />
                         <span className={styles.toggleText}>
                             Auto-refresh activity {autoRefresh ? "enabled" : "disabled"}
+                        </span>
+                    </label>
+                    <label className={styles.toggle}>
+                        <input
+                            className={styles.toggleInput}
+                            type="checkbox"
+                            checked={navAlwaysCollapsed}
+                            onChange={(event) => setNavAlwaysCollapsed(event.target.checked)}
+                        />
+                        <span className={styles.toggleTrack} />
+                        <span className={styles.toggleText}>
+                            Navigation Tab always collapsed{" "}
+                            {navAlwaysCollapsed ? "enabled" : "disabled"}
                         </span>
                     </label>
                 </div>
@@ -218,31 +264,25 @@ export default function Settings() {
                                         <div className={styles.controlGroup}>
                                             <label
                                                 className={styles.controlLabel}
-                                                htmlFor="auto-scope-character"
+                                                id="auto-scope-character-label"
                                             >
                                                 Character Focus
                                             </label>
-                                            <div className={styles.selectShell}>
-                                                <select
-                                                    id="auto-scope-character"
-                                                    className={styles.select}
-                                                    value={autoScopeCharacter}
-                                                    onChange={(event) =>
-                                                        setAutoScopeCharacter(
-                                                            event.target.value || "auto"
-                                                        )
-                                                    }
-                                                >
-                                                    <option value="auto">
-                                                        Follow latest character
-                                                    </option>
-                                                    {characterOptions.map((character) => (
-                                                        <option key={character} value={character}>
-                                                            {character}
-                                                        </option>
-                                                    ))}
-                                                </select>
-                                            </div>
+                                            <CharacterPicker
+                                                id="auto-scope-character"
+                                                value={resolvedAutoScopeCharacter}
+                                                options={[
+                                                    {
+                                                        label: "Follow latest character",
+                                                        value: "auto",
+                                                    },
+                                                    ...characterOptions,
+                                                ]}
+                                                onChange={(value) =>
+                                                    setAutoScopeCharacter(value || "auto")
+                                                }
+                                                ariaLabelledBy="auto-scope-character-label"
+                                            />
                                         </div>
                                     )}
 
@@ -258,11 +298,14 @@ export default function Settings() {
                                                 <select
                                                     id="auto-scope-bracket"
                                                     className={styles.select}
-                                                    value={autoScopeBracket}
+                                                    value={String(autoScopeBracket)}
                                                     onChange={(event) =>
                                                         setAutoScopeBracket(
-                                                            (event.target.value as MatchMode | "auto") ||
-                                                                "auto"
+                                                            event.target.value === "auto"
+                                                                ? "auto"
+                                                                : (parseBracketScopeId(
+                                                                      event.target.value
+                                                                  ) ?? "auto")
                                                         )
                                                     }
                                                 >
@@ -270,7 +313,7 @@ export default function Settings() {
                                                         Follow latest bracket
                                                     </option>
                                                     {bracketOptions.map((mode) => (
-                                                        <option key={mode} value={mode}>
+                                                        <option key={mode} value={String(mode)}>
                                                             {getModeLabel(mode)}
                                                         </option>
                                                     ))}
@@ -281,6 +324,26 @@ export default function Settings() {
                                 </div>
                             </div>
                         )}
+                    </section>
+
+                    <div className={styles.sectionDivider} />
+
+                    <section className={styles.preferenceSection}>
+                        <label className={styles.toggle}>
+                            <input
+                                className={styles.toggleInput}
+                                type="checkbox"
+                                checked={collapseRandomBattlegrounds}
+                                onChange={(event) =>
+                                    setCollapseRandomBattlegrounds(event.target.checked)
+                                }
+                            />
+                            <span className={styles.toggleTrack} />
+                            <span className={styles.toggleText}>
+                                Combine Random BG and Epic BG for filters and auto scope{" "}
+                                {collapseRandomBattlegrounds ? "enabled" : "disabled"}
+                            </span>
+                        </label>
                     </section>
 
                     <div className={styles.sectionDivider} />

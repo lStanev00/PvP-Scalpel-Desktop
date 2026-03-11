@@ -18,7 +18,7 @@ import {
 import useCharacterProfile, { resolveCharacterProfile } from "../../Hooks/useCharacterProfile";
 import type { KickTelemetrySnapshot } from "./kickTelemetry";
 import type { MatchPlayer } from "./types";
-import type { MatchSummary } from "./utils";
+import { isBattlegroundBracket, type MatchSummary } from "./utils";
 import styles from "./DataActivity.module.css";
 
 const CHARACTER_API_SERVER = "eu";
@@ -54,20 +54,6 @@ const roleLabelMap: Record<string, string> = {
     healer: "Healer",
     tank: "Tank",
     unknown: "Unknown",
-};
-
-const isBattlegroundFormat = (format?: string) => {
-    if (!format) return false;
-    const normalized = format.toLowerCase();
-    return (
-        normalized.includes("battleground") ||
-        normalized.includes("random bg") ||
-        normalized.includes("randombg") ||
-        normalized.includes("rated battleground") ||
-        normalized.includes("rbg") ||
-        normalized.includes("epic bg") ||
-        normalized.includes("epic battleground")
-    );
 };
 
 const resolveMediaUrl = (value?: string) => {
@@ -166,10 +152,11 @@ export default function MatchSummaryHeader({
     const outputTeamTotal = isHealer ? teamHealing : teamDamage;
     const contributionPct = outputTeamTotal > 0 ? (outputTotal / outputTeamTotal) * 100 : 0;
 
-    const succeeded = Math.max(0, kickTelemetrySnapshot.succeeded ?? 0);
+    const kickSupported = kickTelemetrySnapshot.isSupported;
+    const confirmedInterrupts = Math.max(0, kickTelemetrySnapshot.confirmedInterrupts ?? 0);
     const kickTotal = Math.max(0, kickTelemetrySnapshot.intentAttempts);
-    const kickPct = kickTotal > 0 ? (succeeded / kickTotal) * 100 : 0;
-    const failedFromAlignment = Math.max(0, kickTotal - succeeded);
+    const kickPct = kickSupported && kickTotal > 0 ? (confirmedInterrupts / kickTotal) * 100 : 0;
+    const missedKicks = Math.max(0, kickTelemetrySnapshot.missedKicks ?? 0);
     const averageReactionMs = null;
 
     const ownerClassColor = getClassColor(owner?.class) ?? "#8a94a6";
@@ -190,7 +177,7 @@ export default function MatchSummaryHeader({
     const classMedia = resolveMediaUrl(getClassMedia(owner?.class) ?? getSpecMedia(owner?.spec));
     const ownerAvatar = profile?.media?.avatar ?? profile?.media?.charImg ?? null;
     const roleLabel = roleLabelMap[role] ?? "Unknown";
-    const isBattleground = isBattlegroundFormat(match.raw.matchDetails?.format);
+    const isBattleground = isBattlegroundBracket(match.bracketId);
     const kdRatio = ownerDeaths === 0 ? ownerKills : ownerKills / ownerDeaths;
     const kdRatioValue = kdRatio.toFixed(kdRatio % 1 === 0 ? 0 : 2);
 
@@ -279,10 +266,20 @@ export default function MatchSummaryHeader({
                     <div className={styles.mdRingWrap}>
                         <MiniRing
                             percent={kickPct}
-                            color={kickPct >= 60 ? "#22c55e" : kickPct >= 30 ? "#f5a85b" : "#ef4444"}
+                            color={
+                                kickSupported && kickTotal > 0
+                                    ? kickPct >= 60
+                                        ? "#22c55e"
+                                        : kickPct >= 30
+                                          ? "#f5a85b"
+                                          : "#ef4444"
+                                    : "rgba(255,255,255,0.22)"
+                            }
                             size={56}
                         />
-                        <span className={styles.mdRingValue}>{succeeded}/{kickTotal}</span>
+                        <span className={styles.mdRingValue}>
+                            {kickSupported && kickTotal > 0 ? `${confirmedInterrupts}/${kickTotal}` : "?"}
+                        </span>
                     </div>
                     <span className={styles.mdRingLabel}>Kicks</span>
                 </div>
@@ -310,12 +307,12 @@ export default function MatchSummaryHeader({
                 <StatCard
                     icon={<LuZap size={14} />}
                     label="Kick Eff."
-                    value={kickTotal > 0 ? `${Math.round(kickPct)}%` : "--"}
+                    value={kickSupported && kickTotal > 0 ? `${Math.round(kickPct)}%` : "--"}
                     sub={
-                        kickTotal > 0
+                        kickSupported && kickTotal > 0
                             ? averageReactionMs !== null
                                 ? `${averageReactionMs}ms avg`
-                                : `${succeeded} landed · ${failedFromAlignment} missed`
+                                : `${confirmedInterrupts} confirmed · ${missedKicks} missed`
                             : undefined
                     }
                     accent={
@@ -323,7 +320,7 @@ export default function MatchSummaryHeader({
                             ? "#22c55e"
                             : kickPct >= 30
                               ? "#f5a85b"
-                              : kickTotal > 0
+                              : kickSupported && kickTotal > 0
                                 ? "#ef4444"
                                 : undefined
                     }
@@ -348,8 +345,8 @@ export default function MatchSummaryHeader({
                 <div className={`${styles.mdExpandedLayer} ${isExpanded ? styles.mdExpandedOpen : ""}`}>
                 <div className={styles.mdExpandedGrid}>
                     <div className={styles.mdExpandedItem}>
-                        <span className={styles.mdExpandedLabel}>Failed Kicks</span>
-                        <span className={styles.mdExpandedValue}>{failedFromAlignment}</span>
+                        <span className={styles.mdExpandedLabel}>Missed Kicks</span>
+                        <span className={styles.mdExpandedValue}>{kickSupported ? missedKicks : "--"}</span>
                     </div>
                     <div className={styles.mdExpandedItem}>
                         <span className={styles.mdExpandedLabel}>Total Attempts</span>

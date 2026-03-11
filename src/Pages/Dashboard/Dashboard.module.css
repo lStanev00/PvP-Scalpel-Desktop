@@ -7,6 +7,7 @@
 }
 
 .hero,
+.devWarning,
 .metricsGrid,
 .contentGrid {
     position: relative;
@@ -16,7 +17,7 @@
 .hero {
     position: relative;
     display: grid;
-    grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
+    grid-template-columns: minmax(0, 1.28fr) minmax(340px, 0.72fr);
     gap: 18px;
     border-radius: 26px;
     border: 1px solid rgba(255, 255, 255, 0.08);
@@ -25,7 +26,7 @@
         radial-gradient(circle at 100% 0%, rgba(124, 242, 194, 0.12), transparent 35%),
         linear-gradient(135deg, rgba(10, 18, 30, 0.96), rgba(9, 15, 24, 0.92));
     box-shadow: 0 28px 60px rgba(4, 8, 14, 0.45);
-    padding: 20px;
+    padding: 24px;
     overflow: hidden;
 }
 
@@ -44,7 +45,10 @@
     position: relative;
     z-index: 1;
     display: grid;
-    gap: 14px;
+    align-content: start;
+    justify-items: start;
+    gap: 10px;
+    padding-top: 8px;
 }
 
 .eyebrow,
@@ -72,21 +76,23 @@
 
 .heroIdentity {
     display: grid;
-    gap: 6px;
+    gap: 0;
+    width: 100%;
+    max-width: 640px;
 }
 
 .identityVisual {
     display: grid;
     grid-template-columns: auto 1fr;
-    align-items: center;
-    gap: 14px;
+    align-items: start;
+    gap: 18px;
 }
 
 .identityAvatar,
 .identityFallback {
-    width: 60px;
-    height: 60px;
-    border-radius: 20px;
+    width: 88px;
+    height: 88px;
+    border-radius: 24px;
     border: 1px solid rgba(255, 255, 255, 0.12);
     box-shadow: 0 14px 28px rgba(4, 10, 18, 0.3);
 }
@@ -101,67 +107,30 @@
     place-items: center;
     background: linear-gradient(135deg, rgba(58, 167, 255, 0.3), rgba(124, 242, 194, 0.22));
     color: rgba(230, 234, 240, 0.96);
-    font-size: 28px;
+    font-size: 36px;
     font-weight: 850;
     text-transform: uppercase;
 }
 
 .identityText {
     display: grid;
-    gap: 4px;
+    gap: 8px;
+    padding-top: 6px;
 }
 
 .identityPrimary {
-    font-size: 17px;
-    font-weight: 760;
-    letter-spacing: 0.2px;
+    font-size: clamp(30px, 3vw, 42px);
+    line-height: 0.96;
+    font-weight: 800;
+    letter-spacing: -0.04em;
 }
 
 .identityMeta {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px 14px;
+    gap: 10px 16px;
     color: rgba(138, 148, 166, 0.95);
-    font-size: 12px;
-}
-
-.workflowBtn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-    min-height: 46px;
-    padding: 0 18px;
-    border: 1px solid rgba(124, 242, 194, 0.2);
-    background: linear-gradient(90deg, rgba(58, 167, 255, 0.9), rgba(124, 242, 194, 0.7));
-    color: rgba(245, 248, 252, 0.98);
-    border-radius: 16px;
-    cursor: pointer;
-    font-weight: 760;
-    letter-spacing: 0.3px;
-    box-shadow: 0 12px 26px rgba(5, 12, 20, 0.28);
-    transition:
-        transform 160ms ease,
-        box-shadow 160ms ease,
-        filter 160ms ease;
-}
-
-.workflowBtn:hover:not(:disabled) {
-    transform: translateY(-1px);
-    box-shadow: 0 16px 32px rgba(5, 12, 20, 0.34);
-    filter: brightness(1.03);
-}
-
-.workflowBtn:disabled {
-    opacity: 0.55;
-    cursor: not-allowed;
-    box-shadow: none;
-}
-
-.workflowBtn svg {
-    width: 16px;
-    height: 16px;
-    stroke: currentColor;
+    font-size: 14px;
 }
 
 .identityGuild {
@@ -169,38 +138,13 @@
     align-items: center;
     gap: 8px;
     color: rgba(124, 242, 194, 0.94);
-    font-size: 12px;
+    font-size: 13px;
 }
 
 .identityGuild svg {
     width: 14px;
     height: 14px;
     stroke: currentColor;
-}
-
-.heroActions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-}
-
-.inlineAction {
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    background: rgba(255, 255, 255, 0.04);
-    color: rgba(230, 234, 240, 0.92);
-    border-radius: 14px;
-    padding: 12px 14px;
-    cursor: pointer;
-    transition:
-        background 160ms ease,
-        border-color 160ms ease,
-        transform 160ms ease;
-}
-
-.inlineAction:hover {
-    background: rgba(255, 255, 255, 0.08);
-    border-color: rgba(255, 255, 255, 0.18);
-    transform: translateY(-1px);
 }
 
 .heroRail {
@@ -227,12 +171,20 @@
     gap: 8px;
 }
 
+.signalCardLimited {
+    border-color: rgba(245, 168, 91, 0.22);
+}
+
 .signalTop,
 .panelHeader {
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
     gap: 12px;
+}
+
+.signalTop {
+    align-items: center;
 }
 
 .signalLabel {
@@ -245,13 +197,16 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    min-height: 36px;
     min-width: 52px;
-    padding: 6px 10px;
+    padding: 0 14px;
     border-radius: 999px;
     font-size: 11px;
-    letter-spacing: 0.9px;
+    font-weight: 700;
+    letter-spacing: 0.55px;
     text-transform: uppercase;
     border: 1px solid rgba(255, 255, 255, 0.1);
+    white-space: nowrap;
 }
 
 .signalLive {
@@ -304,6 +259,85 @@
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 14px;
+}
+
+.devWarning {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    border-radius: 16px;
+    border: 1px solid rgba(245, 168, 91, 0.24);
+    background: linear-gradient(135deg, rgba(245, 168, 91, 0.12), rgba(245, 168, 91, 0.04));
+    box-shadow: 0 16px 28px rgba(68, 46, 18, 0.16);
+}
+
+.devWarningBody {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+}
+
+.devWarningIcon {
+    width: 34px;
+    height: 34px;
+    border-radius: 12px;
+    display: grid;
+    place-items: center;
+    background: rgba(245, 168, 91, 0.16);
+    color: rgba(255, 223, 171, 0.98);
+    border: 1px solid rgba(245, 168, 91, 0.22);
+}
+
+.devWarningIcon svg {
+    width: 18px;
+    height: 18px;
+    stroke: currentColor;
+}
+
+.devWarningText {
+    color: rgba(255, 231, 194, 0.9);
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.devWarningAction {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 38px;
+    padding: 0 14px;
+    border-radius: 999px;
+    border: 1px solid rgba(245, 168, 91, 0.28);
+    background: rgba(245, 168, 91, 0.14);
+    color: rgba(255, 236, 205, 0.98);
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    transition:
+        background 160ms ease,
+        border-color 160ms ease,
+        transform 160ms ease;
+    white-space: nowrap;
+}
+
+.devWarningAction:hover {
+    background: rgba(245, 168, 91, 0.2);
+    border-color: rgba(245, 168, 91, 0.4);
+    transform: translateY(-1px);
+}
+
+.devWarningAction:focus-visible {
+    outline: 2px solid rgba(255, 223, 171, 0.72);
+    outline-offset: 2px;
+}
+
+.devWarningAction svg {
+    width: 15px;
+    height: 15px;
+    flex: 0 0 auto;
 }
 
 .metricCard {
@@ -370,7 +404,8 @@
 
 .panelTag {
     color: rgba(230, 234, 240, 0.88);
-    background: rgba(255, 255, 255, 0.04);
+    background: rgba(255, 255, 255, 0.045);
+    border-color: rgba(255, 255, 255, 0.12);
 }
 
 .spotlightGrid {
@@ -478,6 +513,39 @@
     border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
+.formBubble {
+    justify-content: center;
+    width: 56px;
+    min-width: 56px;
+    height: 56px;
+    min-height: 56px;
+    padding: 0;
+    border-radius: 999px;
+    font-size: 16px;
+    font-weight: 800;
+    letter-spacing: 0;
+}
+
+.formBubbleButton {
+    appearance: none;
+    cursor: pointer;
+    transition:
+        transform 160ms ease,
+        box-shadow 160ms ease,
+        border-color 160ms ease;
+}
+
+.formBubbleButton:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 12px 20px rgba(5, 10, 16, 0.22);
+}
+
+.formBubbleButton:focus-visible {
+    outline: none;
+    border-color: rgba(124, 242, 194, 0.48);
+    box-shadow: 0 0 0 3px rgba(58, 167, 255, 0.18);
+}
+
 .formWin {
     background: rgba(58, 210, 159, 0.1);
     color: rgba(124, 242, 194, 0.98);
@@ -500,62 +568,69 @@
     color: rgba(138, 148, 166, 0.95);
 }
 
-.actionStack {
+.movementGraph {
     display: grid;
-    gap: 10px;
-}
-
-.commandBtn {
-    display: grid;
-    grid-template-columns: auto 1fr;
     gap: 12px;
-    align-items: start;
-    text-align: left;
-    padding: 14px;
-    border-radius: 18px;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    background: rgba(255, 255, 255, 0.04);
-    cursor: pointer;
-    transition:
-        background 160ms ease,
-        border-color 160ms ease,
-        transform 160ms ease;
 }
 
-.commandBtn:hover {
-    background: rgba(255, 255, 255, 0.07);
-    border-color: rgba(124, 242, 194, 0.18);
-    transform: translateY(-1px);
+.movementGraphMeta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
 }
 
-.commandIcon {
-    width: 36px;
-    height: 36px;
-    border-radius: 12px;
-    display: grid;
-    place-items: center;
-    background: rgba(58, 167, 255, 0.14);
-    color: rgba(230, 234, 240, 0.92);
+.movementGraphLabel {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.7px;
+    color: rgba(138, 148, 166, 0.92);
 }
 
-.commandIcon svg {
-    width: 16px;
-    height: 16px;
-    stroke: currentColor;
-}
-
-.commandBtn strong {
-    display: block;
-    font-size: 14px;
+.movementGraphNet {
+    font-size: 13px;
     font-weight: 760;
+    font-variant-numeric: tabular-nums;
 }
 
-.commandBtn small {
+.movementGraphSvg {
+    width: 100%;
+    height: 148px;
     display: block;
-    margin-top: 4px;
-    color: rgba(138, 148, 166, 0.95);
-    line-height: 1.5;
-    font-size: 12px;
+    overflow: visible;
+}
+
+.movementGraphBaseline {
+    stroke: rgba(255, 255, 255, 0.1);
+    stroke-width: 1;
+    stroke-dasharray: 4 4;
+}
+
+.movementGraphArea {
+    fill: rgba(58, 167, 255, 0.1);
+}
+
+.movementGraphLine {
+    fill: none;
+    stroke: rgba(124, 242, 194, 0.94);
+    stroke-width: 3;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.movementGraphPoint {
+    fill: rgba(12, 20, 32, 0.98);
+    stroke: rgba(124, 242, 194, 0.98);
+    stroke-width: 2;
+}
+
+.movementGraphPointLabel {
+    fill: rgba(230, 234, 240, 0.86);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.2px;
+    font-family: var(--mono);
 }
 
 .metricGood {
@@ -634,17 +709,20 @@
         padding: 18px;
     }
 
-    .heroActions {
-        flex-direction: column;
-    }
-
-    .workflowBtn {
-        width: 100%;
-    }
-
     .identityVisual {
         grid-template-columns: 1fr;
         justify-items: start;
+    }
+
+    .identityAvatar,
+    .identityFallback {
+        width: 72px;
+        height: 72px;
+        border-radius: 20px;
+    }
+
+    .identityPrimary {
+        font-size: 28px;
     }
 
     .metricsGrid,
@@ -652,11 +730,21 @@
         grid-template-columns: 1fr;
     }
 
+    .devWarning {
+        grid-template-columns: 1fr;
+        align-items: start;
+    }
+
+    .devWarningBody {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
     .metricCard {
         grid-template-columns: 1fr;
     }
 
-    .commandBtn {
-        grid-template-columns: 1fr;
+    .movementGraphMeta {
+        align-items: flex-start;
     }
 }

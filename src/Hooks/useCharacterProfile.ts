@@ -1,9 +1,16 @@
 import { startTransition, useEffect, useState } from "react";
-import type { MatchSummary } from "../Components/DataActivity/utils";
+import {
+    BRACKET_BATTLEGROUND_BLITZ,
+    BRACKET_RATED_ARENA_2V2,
+    BRACKET_RATED_ARENA_3V3,
+    BRACKET_RATED_BATTLEGROUND,
+    BRACKET_SOLO_SHUFFLE,
+    type MatchSummary,
+} from "../Components/DataActivity/utils";
 import useUserContext from "./useUserContext";
 import type { UserContextType } from "../Context-Providers/main-contenxt";
 
-const PROFILE_CACHE_TTL_MS = 30 * 60 * 1000;
+const PROFILE_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 const PROFILE_CACHE_PREFIX = "character_profile:v1:";
 
 type RatingStats = {
@@ -80,6 +87,11 @@ const slugifyToken = (value?: string | null) =>
 
 const makeCacheKey = ({ server, realm, name }: ProfileArgs) =>
     `${PROFILE_CACHE_PREFIX}${slugifyToken(server)}:${slugifyToken(realm)}:${slugifyToken(name)}`;
+
+const resolveProfileArgs = ({ server, realm, name }: ProfileArgs): ResolvedProfileArgs | null => {
+    if (!server || !realm || !name) return null;
+    return { server, realm, name };
+};
 
 const readStoredProfile = (key: string): StoredProfile | null => {
     const fromMemory = memoryCache.get(key);
@@ -169,6 +181,22 @@ const fetchCharacterProfile = async (
     return request;
 };
 
+export const isCharacterProfileCacheFresh = ({ server, realm, name }: ProfileArgs) => {
+    const resolved = resolveProfileArgs({ server, realm, name });
+    if (!resolved) return false;
+    const key = makeCacheKey(resolved);
+    return !!readStoredProfile(key);
+};
+
+export const prefetchCharacterProfile = (
+    { server, realm, name }: ProfileArgs,
+    httpFetch: HttpFetch,
+): Promise<CharacterProfiles> => {
+    const resolved = resolveProfileArgs({ server, realm, name });
+    if (!resolved) return Promise.resolve([]);
+    return fetchCharacterProfile(resolved, httpFetch);
+};
+
 type ProfileMatchArgs = {
     name?: string | null;
     realm?: string | null;
@@ -199,6 +227,25 @@ export const resolveCharacterProfile = (
     return exact ?? profiles[0] ?? null;
 };
 
+export const getCachedCharacterProfiles = ({
+    server,
+    realm,
+    name,
+}: ProfileArgs): CharacterProfiles => {
+    if (!server || !realm || !name) return [];
+    const key = makeCacheKey({ server, realm, name });
+    return readStoredProfile(key)?.data ?? [];
+};
+
+export const resolveCachedCharacterProfile = ({
+    server,
+    realm,
+    name,
+}: ProfileArgs): CharacterProfile | null => {
+    const profiles = getCachedCharacterProfiles({ server, realm, name });
+    return resolveCharacterProfile(profiles, { server, realm, name });
+};
+
 const resolveSpecBracketKey = (
     prefix: string,
     match: MatchSummary,
@@ -225,17 +272,17 @@ export const resolveCharacterBracketSnapshot = (
     const ratingEntries = profile.rating;
     const exactKeys: string[] = [];
 
-    if (match.mode === "solo") {
+    if (match.bracketId === BRACKET_SOLO_SHUFFLE) {
         const key = resolveSpecBracketKey("shuffle", match, profile);
         if (key) exactKeys.push(key);
         exactKeys.push("shuffle");
-    } else if (match.mode === "rated2") {
+    } else if (match.bracketId === BRACKET_RATED_ARENA_2V2) {
         exactKeys.push("2v2");
-    } else if (match.mode === "rated3") {
+    } else if (match.bracketId === BRACKET_RATED_ARENA_3V3) {
         exactKeys.push("3v3");
-    } else if (match.mode === "rbg") {
+    } else if (match.bracketId === BRACKET_RATED_BATTLEGROUND) {
         exactKeys.push("rbg");
-    } else if (match.modeLabel.toLowerCase().includes("blitz")) {
+    } else if (match.bracketId === BRACKET_BATTLEGROUND_BLITZ) {
         const key = resolveSpecBracketKey("blitz", match, profile);
         if (key) exactKeys.push(key);
         exactKeys.push("blitz");
@@ -256,19 +303,20 @@ export default function useCharacterProfile({ server, realm, name }: ProfileArgs
     const { httpFetch } = useUserContext();
 
     useEffect(() => {
-        if (!server || !realm || !name) {
+        const resolved = resolveProfileArgs({ server, realm, name });
+        if (!resolved) {
             setProfile([]);
             return;
         }
 
-        const key = makeCacheKey({ server, realm, name });
+        const key = makeCacheKey(resolved);
         const cached = readStoredProfile(key);
         if (cached) {
             setProfile(cached.data);
         }
 
         let active = true;
-        fetchCharacterProfile({ server, realm, name }, httpFetch).then((result) => {
+        fetchCharacterProfile(resolved, httpFetch).then((result) => {
             if (!active) return;
             startTransition(() => {
                 setProfile(result);
