@@ -21,6 +21,7 @@ import {
     buildCompareModel,
     buildPersonalModel,
     collectSpellIdsForFetch,
+    collectInterruptBackedSpellIds,
     findOwnerPlayer,
     getPlayerGuid,
     parseInterruptSpellsBySource,
@@ -143,6 +144,10 @@ export default function SpellCastGraph({
         () => parseInterruptSpellsBySource(interruptSpellsBySource),
         [interruptSpellsBySource]
     );
+    const interruptBackedSpellIds = useMemo(
+        () => collectInterruptBackedSpellIds(parsedInterruptsBySource),
+        [parsedInterruptsBySource]
+    );
 
     const usedSpellIds = useMemo(() => {
         return collectSpellIdsForFetch(
@@ -175,7 +180,13 @@ export default function SpellCastGraph({
                 if (!res.ok || !res.data || cancelled) return;
                 const payload = extractSpellPayload(res.data);
                 setSpellCache((prev) => {
-                    const next = upsertGameSpells(prev, gameKey, payload, missing);
+                    const next = upsertGameSpells(
+                        prev,
+                        gameKey,
+                        payload,
+                        missing,
+                        interruptBackedSpellIds
+                    );
                     saveSpellMetaCache(next);
                     return next;
                 });
@@ -192,7 +203,7 @@ export default function SpellCastGraph({
         return () => {
             cancelled = true;
         };
-    }, [gameMap, gameKey, httpFetch, usedSpellIds]);
+    }, [gameMap, gameKey, httpFetch, interruptBackedSpellIds, usedSpellIds]);
 
     const personalModel = useMemo(
         () =>
@@ -204,6 +215,7 @@ export default function SpellCastGraph({
                 spellTotals: parsedSpellTotals,
                 spellTotalsBySource: parsedSpellTotalsBySource,
                 interruptsBySource: parsedInterruptsBySource,
+                interruptBackedSpellIds,
             }),
         [
             metric,
@@ -213,6 +225,7 @@ export default function SpellCastGraph({
             parsedSpellTotals,
             parsedSpellTotalsBySource,
             parsedInterruptsBySource,
+            interruptBackedSpellIds,
         ]
     );
 
@@ -225,8 +238,17 @@ export default function SpellCastGraph({
                 spellMetaById: gameMap,
                 spellTotalsBySource: parsedSpellTotalsBySource,
                 interruptsBySource: parsedInterruptsBySource,
+                interruptBackedSpellIds,
             }),
-        [metric, players, attemptCounts, gameMap, parsedSpellTotalsBySource, parsedInterruptsBySource]
+        [
+            metric,
+            players,
+            attemptCounts,
+            gameMap,
+            parsedSpellTotalsBySource,
+            parsedInterruptsBySource,
+            interruptBackedSpellIds,
+        ]
     );
 
     const resolveIconUrl = (icon?: string) => {
@@ -257,7 +279,30 @@ export default function SpellCastGraph({
         return map;
     }, [metric, personalModel.rows]);
 
+    const isBgMatch = useMemo(
+        () => (bracketId !== null ? isBattlegroundBracket(bracketId) : false),
+        [bracketId]
+    );
+    const isBgTelemetryUnsupported =
+        isBgMatch &&
+        (telemetryVersion === null ||
+            telemetryVersion === undefined ||
+            !Number.isFinite(telemetryVersion) ||
+            telemetryVersion < BG_TELEMETRY_SUPPORT_VERSION);
+
     const compareTooltipMap = useMemo(() => {
+        const hasIndexedPlayerDataForMetric =
+            isBgMatch &&
+            !isBgTelemetryUnsupported &&
+            compareModel.rows.some((row) => row.spells.length > 0);
+
+        const missingBgPlayerDataLabel =
+            metric === "damage"
+                ? "There's no captured damage data for this player."
+                : metric === "healing"
+                  ? "There's no captured healing data for this player."
+                  : "There's no captured interrupts data for this player.";
+
         const map = new Map<string, SpellMetricsTooltipPayload>();
         compareModel.rows.forEach((row) => {
             map.set(row.key, {
@@ -267,13 +312,15 @@ export default function SpellCastGraph({
                 totalValue: row.value.toLocaleString(),
                 rows: toPlayerTooltipRows(row.spells, resolveIconUrl),
                 emptyLabel:
-                    metric === "interrupts"
-                        ? "No interrupted enemy spells captured for this player."
-                        : "Per-player spell breakdown is not available in this telemetry payload.",
+                    isBgMatch && !isBgTelemetryUnsupported && hasIndexedPlayerDataForMetric
+                        ? missingBgPlayerDataLabel
+                        : metric === "interrupts"
+                          ? "No interrupted enemy spells captured for this player."
+                          : "Per-player spell breakdown is not available in this telemetry payload.",
             });
         });
         return map;
-    }, [compareModel.rows, metric]);
+    }, [compareModel.rows, isBgMatch, isBgTelemetryUnsupported, metric]);
 
     const activeAnchorKey = useMemo(() => {
         if (!activeTooltip) return null;
@@ -348,16 +395,6 @@ export default function SpellCastGraph({
 
     const activeRows = viewMode === "personal" ? personalModel.rows : compareModel.rows;
     const maxValue = viewMode === "personal" ? personalModel.maxValue : compareModel.maxValue;
-    const isBgMatch = useMemo(
-        () => (bracketId !== null ? isBattlegroundBracket(bracketId) : false),
-        [bracketId]
-    );
-    const isBgTelemetryUnsupported =
-        isBgMatch &&
-        (telemetryVersion === null ||
-            telemetryVersion === undefined ||
-            !Number.isFinite(telemetryVersion) ||
-            telemetryVersion < BG_TELEMETRY_SUPPORT_VERSION);
 
     useEffect(() => {
         if (!isBgTelemetryUnsupported) return;

@@ -139,10 +139,6 @@ export default function SpellMetricsTooltip({ payload, position, tooltipRef }: S
                     visibility: position ? "visible" : "hidden",
                 }}
             >
-                <header className={styles["spell-tooltip__header"]}>
-                    <h3 className={styles["spell-tooltip__title"]}>{payload.title}</h3>
-                </header>
-
                 <section className={styles["spell-tooltip__impact"]}>
                     <span className={styles["spell-tooltip__impact-value"]}>{payload.totalValue}</span>
                     <span className={styles["spell-tooltip__impact-label"]}>{payload.subtitle}</span>

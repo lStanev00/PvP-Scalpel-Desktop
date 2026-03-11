@@ -255,11 +255,22 @@ const getSpellValueFromEntry = (entry: ParsedSpellTotalEntry, metric: SpellMetri
     return entry.interrupts ?? 0;
 };
 
+export const collectInterruptBackedSpellIds = (interruptsBySource: ParsedInterruptsBySource) => {
+    const ids = new Set<number>();
+    interruptsBySource.forEach((sourceRows) => {
+        sourceRows.forEach((count, spellId) => {
+            if (count > 0) ids.add(spellId);
+        });
+    });
+    return ids;
+};
+
 const buildSpellMetricRows = (
     spellValues: Map<number, number>,
     attemptCounts: Map<number, AttemptCounts>,
     spellMetaById: Record<string, GameSpellEntry | null>,
-    metric: SpellMetricType
+    metric: SpellMetricType,
+    interruptBackedSpellIds: Set<number>
 ): SpellMetricRow[] => {
     const rawRows = Array.from(spellValues.entries())
         .map(([spellId, value]): SpellMetricRow | null => {
@@ -267,10 +278,11 @@ const buildSpellMetricRows = (
             const meta = spellMetaById[String(spellId)];
             const attempts = attemptCounts.get(spellId) ?? { ...zeroAttempts, spellId };
             const totalAttempts = attempts.succeeded + attempts.failed + attempts.interrupted;
-            const isInterruptMetric = metric === "interrupts";
+            const canUseUnknownFallback =
+                metric === "interrupts" || interruptBackedSpellIds.has(spellId);
 
             if (!isRenderableSpellMeta(meta)) {
-                if (!isInterruptMetric) return null;
+                if (!canUseUnknownFallback) return null;
                 return {
                     spellId,
                     name: "Unknown Spell",
@@ -288,7 +300,7 @@ const buildSpellMetricRows = (
             }
 
             if (!meta) {
-                if (!isInterruptMetric) return null;
+                if (!canUseUnknownFallback) return null;
                 return {
                     spellId,
                     name: "Unknown Spell",
@@ -307,7 +319,7 @@ const buildSpellMetricRows = (
 
             const metaName = typeof meta.name === "string" ? meta.name : null;
             if (!metaName || !metaName.trim()) {
-                if (!isInterruptMetric) return null;
+                if (!canUseUnknownFallback) return null;
                 return {
                     spellId,
                     name: "Unknown Spell",
@@ -429,6 +441,7 @@ export const buildPersonalModel = ({
     spellTotals,
     spellTotalsBySource,
     interruptsBySource,
+    interruptBackedSpellIds,
 }: {
     metric: SpellMetricType;
     ownerGuid: string | null;
@@ -437,6 +450,7 @@ export const buildPersonalModel = ({
     spellTotals: ParsedSpellTotals;
     spellTotalsBySource: ParsedSpellTotalsBySource;
     interruptsBySource: ParsedInterruptsBySource;
+    interruptBackedSpellIds: Set<number>;
 }): PersonalModel => {
     const sourceSpellValues =
         metric === "interrupts"
@@ -451,7 +465,8 @@ export const buildPersonalModel = ({
         useFallback ? fallbackSpellValues : sourceSpellValues,
         attemptCounts,
         spellMetaById,
-        metric
+        metric,
+        interruptBackedSpellIds
     );
 
     return {
@@ -468,6 +483,7 @@ export const buildCompareModel = ({
     spellMetaById,
     spellTotalsBySource,
     interruptsBySource,
+    interruptBackedSpellIds,
 }: {
     metric: SpellMetricType;
     players: MatchPlayer[];
@@ -475,6 +491,7 @@ export const buildCompareModel = ({
     spellMetaById: Record<string, GameSpellEntry | null>;
     spellTotalsBySource: ParsedSpellTotalsBySource;
     interruptsBySource: ParsedInterruptsBySource;
+    interruptBackedSpellIds: Set<number>;
 }): CompareModel => {
     const playerRows = players
         .map((player, index): ComparePlayerRow | null => {
@@ -487,7 +504,13 @@ export const buildCompareModel = ({
                     ? getInterruptSpellValues(guid, interruptsBySource)
                     : getSourceSpellValues(guid, metric, spellTotalsBySource);
 
-            const spells = buildSpellMetricRows(spellValues, attemptCounts, spellMetaById, metric);
+            const spells = buildSpellMetricRows(
+                spellValues,
+                attemptCounts,
+                spellMetaById,
+                metric,
+                interruptBackedSpellIds
+            );
 
 
             return {

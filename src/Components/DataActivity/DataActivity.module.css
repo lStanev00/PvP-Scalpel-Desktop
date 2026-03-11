@@ -1863,6 +1863,7 @@
     overflow-y: auto;
     overflow-x: hidden;
     padding-right: 6px;
+    padding-left: 2px;
     scrollbar-width: thin;
     scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
 }
@@ -1941,7 +1942,7 @@
     gap: 16px;
     align-items: center;
     position: relative;
-    padding: var(--spell-row-padding, 4px 0);
+    padding: var(--spell-row-padding, 4px 12px);
     border-radius: 10px;
     transition: background 140ms ease;
 }
