@@ -36,35 +36,10 @@
     color: rgba(138, 148, 166, 0.95);
 }
 
-.actions {
-    display: flex;
-    gap: 10px;
-    -webkit-app-region: no-drag;
-}
-
-.actionBtn {
-    border-radius: 12px;
-    padding: 8px 12px;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    background: rgba(255, 255, 255, 0.05);
-    cursor: pointer;
-    font-size: 12px;
-    letter-spacing: 0.4px;
-    transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
-    -webkit-app-region: no-drag;
-}
-
-.actionBtn:hover {
-    background: rgba(255, 255, 255, 0.08);
-    border-color: rgba(255, 255, 255, 0.18);
-}
-
 .status {
     display: flex;
     align-items: center;
     gap: 8px;
-    padding-left: 12px;
-    border-left: 1px solid rgba(255, 255, 255, 0.08);
     min-width: 0;
     -webkit-app-region: no-drag;
 }
@@ -90,6 +65,8 @@
     display: flex;
     align-items: center;
     gap: 12px;
+    margin-left: auto;
+    min-width: 0;
 }
 
 .windowControls {
@@ -137,22 +114,67 @@
 
 @media (max-width: 900px) {
     .header {
-        flex-wrap: wrap;
+        align-items: flex-start;
     }
 
-    .status {
-        border-left: 0;
-        padding-left: 0;
+    .brand {
+        max-width: calc(100% - 220px);
     }
 
     .right {
-        width: 100%;
-        justify-content: space-between;
-        flex-wrap: wrap;
+        flex: 0 0 auto;
+        justify-content: flex-end;
+        gap: 10px;
     }
 
     .windowControls {
-        border-left: 0;
-        padding-left: 0;
+        padding-left: 8px;
+    }
+
+    .statusText {
+        max-width: 110px;
+    }
+}
+
+@media (max-width: 620px) {
+    .header {
+        padding: 12px 14px;
+        gap: 10px;
+    }
+
+    .brand {
+        max-width: calc(100% - 170px);
+        gap: 10px;
+    }
+
+    .logo {
+        width: 36px;
+        height: 36px;
+    }
+
+    .name {
+        font-size: 14px;
+    }
+
+    .sub {
+        font-size: 11px;
+    }
+
+    .right {
+        gap: 8px;
+    }
+
+    .statusText {
+        max-width: 84px;
+    }
+
+    .windowControls {
+        gap: 4px;
+        padding-left: 6px;
+    }
+
+    .winBtn {
+        min-width: 26px;
+        padding: 5px 7px;
     }
 }

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { LuTriangleAlert } from "react-icons/lu";
+import { LuCircleHelp, LuTriangleAlert } from "react-icons/lu";
 import useUserContext from "../../Hooks/useUserContext";
 import { getClassColor, getClassMedia, getSpecMedia } from "../../Domain/CombatDomainContext";
 import {
@@ -21,6 +21,7 @@ import {
     buildCompareModel,
     buildPersonalModel,
     collectSpellIdsForFetch,
+    collectInterruptBackedSpellIds,
     findOwnerPlayer,
     getPlayerGuid,
     parseInterruptSpellsBySource,
@@ -32,14 +33,15 @@ import {
     type SpellMetricType,
     type SpellViewMode,
 } from "./spellMetrics.utils";
+import { isBattlegroundBracket, type MatchMode } from "./utils";
 import styles from "./DataActivity.module.css";
 
 interface SpellCastGraphProps {
     timeline: MatchTimelineEntry[];
     players: MatchPlayer[];
+    bracketId?: MatchMode | null;
     gameVersion?: string | null;
     telemetryVersion?: number | null;
-    matchFormat?: string | null;
     spellTotals?: Record<string, unknown> | Record<number, unknown> | null;
     spellTotalsBySource?: Record<string, unknown> | null;
     interruptSpellsBySource?: Record<string, unknown> | null;
@@ -55,20 +57,6 @@ interface SpellCastGraphProps {
 
 const BG_TELEMETRY_SUPPORT_VERSION = 3.1;
 
-const isBattlegroundFormat = (format?: string | null) => {
-    if (!format) return false;
-    const normalized = format.toLowerCase();
-    return (
-        normalized.includes("battleground") ||
-        normalized.includes("random bg") ||
-        normalized.includes("randombg") ||
-        normalized.includes("rated battleground") ||
-        normalized.includes("rbg") ||
-        normalized.includes("epic bg") ||
-        normalized.includes("epic battleground")
-    );
-};
-
 type ActiveTooltipState =
     | { kind: "personal"; spellId: number }
     | { kind: "compare"; playerKey: string }
@@ -83,9 +71,9 @@ const normalizeGuid = (value?: string | null) => {
 export default function SpellCastGraph({
     timeline,
     players,
+    bracketId = null,
     gameVersion,
     telemetryVersion,
-    matchFormat,
     spellTotals,
     spellTotalsBySource,
     interruptSpellsBySource,
@@ -156,6 +144,10 @@ export default function SpellCastGraph({
         () => parseInterruptSpellsBySource(interruptSpellsBySource),
         [interruptSpellsBySource]
     );
+    const interruptBackedSpellIds = useMemo(
+        () => collectInterruptBackedSpellIds(parsedInterruptsBySource),
+        [parsedInterruptsBySource]
+    );
 
     const usedSpellIds = useMemo(() => {
         return collectSpellIdsForFetch(
@@ -188,7 +180,13 @@ export default function SpellCastGraph({
                 if (!res.ok || !res.data || cancelled) return;
                 const payload = extractSpellPayload(res.data);
                 setSpellCache((prev) => {
-                    const next = upsertGameSpells(prev, gameKey, payload, missing);
+                    const next = upsertGameSpells(
+                        prev,
+                        gameKey,
+                        payload,
+                        missing,
+                        interruptBackedSpellIds
+                    );
                     saveSpellMetaCache(next);
                     return next;
                 });
@@ -205,7 +203,7 @@ export default function SpellCastGraph({
         return () => {
             cancelled = true;
         };
-    }, [gameMap, gameKey, httpFetch, usedSpellIds]);
+    }, [gameMap, gameKey, httpFetch, interruptBackedSpellIds, usedSpellIds]);
 
     const personalModel = useMemo(
         () =>
@@ -217,6 +215,7 @@ export default function SpellCastGraph({
                 spellTotals: parsedSpellTotals,
                 spellTotalsBySource: parsedSpellTotalsBySource,
                 interruptsBySource: parsedInterruptsBySource,
+                interruptBackedSpellIds,
             }),
         [
             metric,
@@ -226,6 +225,7 @@ export default function SpellCastGraph({
             parsedSpellTotals,
             parsedSpellTotalsBySource,
             parsedInterruptsBySource,
+            interruptBackedSpellIds,
         ]
     );
 
@@ -238,8 +238,17 @@ export default function SpellCastGraph({
                 spellMetaById: gameMap,
                 spellTotalsBySource: parsedSpellTotalsBySource,
                 interruptsBySource: parsedInterruptsBySource,
+                interruptBackedSpellIds,
             }),
-        [metric, players, attemptCounts, gameMap, parsedSpellTotalsBySource, parsedInterruptsBySource]
+        [
+            metric,
+            players,
+            attemptCounts,
+            gameMap,
+            parsedSpellTotalsBySource,
+            parsedInterruptsBySource,
+            interruptBackedSpellIds,
+        ]
     );
 
     const resolveIconUrl = (icon?: string) => {
@@ -270,7 +279,30 @@ export default function SpellCastGraph({
         return map;
     }, [metric, personalModel.rows]);
 
+    const isBgMatch = useMemo(
+        () => (bracketId !== null ? isBattlegroundBracket(bracketId) : false),
+        [bracketId]
+    );
+    const isBgTelemetryUnsupported =
+        isBgMatch &&
+        (telemetryVersion === null ||
+            telemetryVersion === undefined ||
+            !Number.isFinite(telemetryVersion) ||
+            telemetryVersion < BG_TELEMETRY_SUPPORT_VERSION);
+
     const compareTooltipMap = useMemo(() => {
+        const hasIndexedPlayerDataForMetric =
+            isBgMatch &&
+            !isBgTelemetryUnsupported &&
+            compareModel.rows.some((row) => row.spells.length > 0);
+
+        const missingBgPlayerDataLabel =
+            metric === "damage"
+                ? "There's no captured damage data for this player."
+                : metric === "healing"
+                  ? "There's no captured healing data for this player."
+                  : "There's no captured interrupts data for this player.";
+
         const map = new Map<string, SpellMetricsTooltipPayload>();
         compareModel.rows.forEach((row) => {
             map.set(row.key, {
@@ -280,13 +312,15 @@ export default function SpellCastGraph({
                 totalValue: row.value.toLocaleString(),
                 rows: toPlayerTooltipRows(row.spells, resolveIconUrl),
                 emptyLabel:
-                    metric === "interrupts"
-                        ? "No interrupted enemy spells captured for this player."
-                        : "Per-player spell breakdown is not available in this telemetry payload.",
+                    isBgMatch && !isBgTelemetryUnsupported && hasIndexedPlayerDataForMetric
+                        ? missingBgPlayerDataLabel
+                        : metric === "interrupts"
+                          ? "No interrupted enemy spells captured for this player."
+                          : "Per-player spell breakdown is not available in this telemetry payload.",
             });
         });
         return map;
-    }, [compareModel.rows, metric]);
+    }, [compareModel.rows, isBgMatch, isBgTelemetryUnsupported, metric]);
 
     const activeAnchorKey = useMemo(() => {
         if (!activeTooltip) return null;
@@ -361,13 +395,6 @@ export default function SpellCastGraph({
 
     const activeRows = viewMode === "personal" ? personalModel.rows : compareModel.rows;
     const maxValue = viewMode === "personal" ? personalModel.maxValue : compareModel.maxValue;
-    const isBgMatch = useMemo(() => isBattlegroundFormat(matchFormat), [matchFormat]);
-    const isBgTelemetryUnsupported =
-        isBgMatch &&
-        (telemetryVersion === null ||
-            telemetryVersion === undefined ||
-            !Number.isFinite(telemetryVersion) ||
-            telemetryVersion < BG_TELEMETRY_SUPPORT_VERSION);
 
     useEffect(() => {
         if (!isBgTelemetryUnsupported) return;
@@ -568,12 +595,25 @@ export default function SpellCastGraph({
                                             alt=""
                                             loading="lazy"
                                         />
+                                    ) : row.isUnknownMeta ? (
+                                        <div
+                                            className={`${styles["spell-row__icon-fallback"]} ${styles.spellRowIconUnknown}`}
+                                            aria-hidden="true"
+                                        >
+                                            <LuCircleHelp />
+                                        </div>
                                     ) : (
                                         <div className={styles["spell-row__icon-fallback"]}>
                                             {row.name.slice(0, 1).toUpperCase()}
                                         </div>
                                     )}
-                                    <span className={styles["spell-row__name"]}>{row.name}</span>
+                                    <span
+                                        className={`${styles["spell-row__name"]} ${
+                                            row.isUnknownMeta ? styles.spellRowNameUnknown : ""
+                                        }`}
+                                    >
+                                        {row.name}
+                                    </span>
                                     <div className={styles["spell-row__bar-container"]}>
                                         <div
                                             className={`${styles["spell-row__bar"]} ${

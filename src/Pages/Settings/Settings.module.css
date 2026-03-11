@@ -4,6 +4,10 @@
     gap: 14px;
 }
 
+.panelWide {
+    grid-column: 1 / -1;
+}
+
 .panel {
     border-radius: var(--r20);
     background: rgba(18, 24, 33, 0.62);
@@ -14,9 +18,35 @@
     gap: 12px;
 }
 
+.panelHeader {
+    display: grid;
+    gap: 5px;
+}
+
 .panelTitle {
     font-weight: 850;
-    letter-spacing: 0.2px;
+    font-size: 15px;
+    letter-spacing: 0.24px;
+}
+
+.autoScopePanel {
+    gap: 20px;
+    padding: 18px 18px 16px;
+    background:
+        linear-gradient(180deg, rgba(19, 25, 35, 0.82), rgba(15, 20, 29, 0.64)),
+        rgba(18, 24, 33, 0.62);
+}
+
+.autoScopePanelHighlighted {
+    animation: autoScopePanelHighlight 3000ms ease;
+}
+
+.panelBody {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.45;
+    max-width: 58ch;
+    color: rgba(230, 234, 240, 0.66);
 }
 
 .kv {
@@ -94,8 +124,376 @@
     color: rgba(230, 234, 240, 0.9);
 }
 
+.autoScopeHero {
+    display: grid;
+    gap: 14px;
+}
+
+.heroHeader {
+    display: grid;
+    gap: 5px;
+}
+
+.sectionLabel {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.24px;
+    color: rgba(232, 237, 245, 0.9);
+}
+
+.strategySelector {
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0;
+    padding: 4px;
+    border-radius: 14px;
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.032), rgba(255, 255, 255, 0.01)),
+        rgba(8, 12, 18, 0.82);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.035),
+        inset 0 -1px 0 rgba(255, 255, 255, 0.02);
+    overflow: hidden;
+}
+
+.strategySelector::before {
+    content: "";
+    position: absolute;
+    left: 4px;
+    right: 4px;
+    top: 0;
+    height: 1px;
+    background: linear-gradient(
+        90deg,
+        rgba(255, 255, 255, 0),
+        rgba(255, 255, 255, 0.12) 16%,
+        rgba(255, 255, 255, 0.12) 84%,
+        rgba(255, 255, 255, 0)
+    );
+    pointer-events: none;
+}
+
+.strategyOption {
+    position: relative;
+    display: grid;
+    gap: 5px;
+    min-width: 0;
+    padding: 14px 14px 13px;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    color: rgba(232, 236, 243, 0.9);
+    text-align: left;
+    cursor: pointer;
+    transition:
+        color 160ms ease,
+        border-color 180ms ease,
+        background 180ms ease,
+        box-shadow 180ms ease;
+}
+
+.strategyOption + .strategyOption::before {
+    content: "";
+    position: absolute;
+    left: -1px;
+    top: 12px;
+    bottom: 12px;
+    width: 1px;
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.strategyOption:hover {
+    color: rgba(245, 247, 252, 0.98);
+    background: rgba(255, 255, 255, 0.035);
+}
+
+.strategyOption:focus-visible {
+    outline: 2px solid rgba(124, 242, 194, 0.24);
+    outline-offset: 2px;
+}
+
+.strategyOptionActive {
+    color: rgba(245, 247, 252, 0.98);
+    background:
+        linear-gradient(180deg, rgba(58, 167, 255, 0.14), rgba(124, 242, 194, 0.05)),
+        rgba(16, 24, 36, 0.98);
+    box-shadow:
+        inset 0 0 0 1px rgba(92, 195, 255, 0.32),
+        inset 0 1px 0 rgba(255, 255, 255, 0.06),
+        0 8px 22px rgba(0, 0, 0, 0.22);
+}
+
+.strategyOptionActive::after {
+    content: "";
+    position: absolute;
+    left: 14px;
+    right: 14px;
+    top: 0;
+    height: 2px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, rgba(58, 167, 255, 0.85), rgba(124, 242, 194, 0.72));
+}
+
+.strategyOptionLabel {
+    font-size: 12px;
+    font-weight: 760;
+    line-height: 1.3;
+    color: rgba(245, 247, 252, 0.97);
+}
+
+.strategyOptionDescription {
+    max-width: 24ch;
+    font-size: 10.5px;
+    line-height: 1.42;
+    color: rgba(201, 209, 223, 0.64);
+}
+
+.focusRules {
+    display: grid;
+    gap: 9px;
+    padding-top: 2px;
+}
+
+.secondaryControls {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+    align-items: start;
+}
+
+.controlGroup {
+    display: grid;
+    gap: 6px;
+}
+
+.controlLabel {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.84px;
+    text-transform: uppercase;
+    color: rgba(160, 170, 190, 0.62);
+}
+
+.controlHint {
+    font-size: 11px;
+    line-height: 1.4;
+    color: rgba(230, 234, 240, 0.56);
+    max-width: 44ch;
+}
+
+.sectionDivider {
+    height: 1px;
+    background: linear-gradient(
+        90deg,
+        rgba(255, 255, 255, 0),
+        rgba(255, 255, 255, 0.08) 14%,
+        rgba(124, 242, 194, 0.08) 50%,
+        rgba(255, 255, 255, 0.08) 86%,
+        rgba(255, 255, 255, 0)
+    );
+}
+
+.preferenceSection {
+    display: grid;
+    gap: 10px;
+}
+
+.preferenceMeta {
+    display: grid;
+    gap: 6px;
+}
+
+.preferenceHint {
+    margin: 0;
+    max-width: 72ch;
+    font-size: 12px;
+    line-height: 1.45;
+    color: rgba(230, 234, 240, 0.56);
+}
+
+.preferenceSegments {
+    display: inline-grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0;
+    width: min(100%, 420px);
+    padding: 3px;
+    border-radius: 12px;
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.024), rgba(255, 255, 255, 0.008)),
+        rgba(9, 13, 20, 0.72);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.preferenceSegment {
+    position: relative;
+    min-width: 0;
+    height: 34px;
+    padding: 0 12px;
+    border: 0;
+    border-radius: 9px;
+    background: transparent;
+    color: rgba(206, 214, 226, 0.74);
+    font-size: 11px;
+    font-weight: 650;
+    letter-spacing: 0.12px;
+    white-space: nowrap;
+    cursor: pointer;
+    transition:
+        color 160ms ease,
+        background 160ms ease,
+        box-shadow 180ms ease;
+}
+
+.preferenceSegment + .preferenceSegment::before {
+    content: "";
+    position: absolute;
+    left: -1px;
+    top: 8px;
+    bottom: 8px;
+    width: 1px;
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.preferenceSegment:hover {
+    color: rgba(232, 237, 245, 0.92);
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.preferenceSegment:focus-visible {
+    outline: 2px solid rgba(124, 242, 194, 0.2);
+    outline-offset: 2px;
+}
+
+.preferenceSegmentActive {
+    color: rgba(236, 241, 248, 0.96);
+    background:
+        linear-gradient(180deg, rgba(58, 167, 255, 0.09), rgba(124, 242, 194, 0.035)),
+        rgba(16, 23, 34, 0.96);
+    box-shadow:
+        inset 0 0 0 1px rgba(92, 195, 255, 0.26),
+        inset 0 1px 0 rgba(255, 255, 255, 0.045);
+}
+
+.selectShell {
+    position: relative;
+    display: grid;
+    align-items: center;
+}
+
+.selectShell::after {
+    content: "";
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    width: 0;
+    height: 0;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-top: 5px solid rgba(160, 170, 190, 0.42);
+    transform: translateY(-50%);
+    pointer-events: none;
+    transition: border-top-color 180ms ease;
+}
+
+.selectShell:focus-within::after {
+    border-top-color: rgba(124, 242, 194, 0.58);
+}
+
+.select {
+    width: 100%;
+    min-width: 0;
+    height: 42px;
+    padding: 0 40px 0 13px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.028), rgba(255, 255, 255, 0.012)),
+        rgba(11, 15, 22, 0.82);
+    color: rgba(230, 234, 240, 0.95);
+    font-size: 13px;
+    appearance: none;
+    transition:
+        border-color 180ms ease,
+        background 180ms ease,
+        box-shadow 180ms ease;
+}
+
+.select:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.select:hover {
+    border-color: rgba(255, 255, 255, 0.15);
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.018)),
+        rgba(13, 18, 27, 0.9);
+}
+
+.select:focus-visible {
+    outline: 2px solid rgba(124, 242, 194, 0.22);
+    outline-offset: 1px;
+    border-color: rgba(58, 210, 159, 0.26);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.035),
+        0 0 0 3px rgba(58, 210, 159, 0.06);
+}
+
 @media (max-width: 980px) {
     .grid {
         grid-template-columns: 1fr;
+    }
+
+    .panelWide {
+        grid-column: auto;
+    }
+
+    .secondaryControls {
+        grid-template-columns: 1fr;
+    }
+
+    .strategySelector {
+        grid-template-columns: 1fr;
+    }
+
+    .strategyOption + .strategyOption::before {
+        left: 14px;
+        right: 14px;
+        top: -1px;
+        bottom: auto;
+        width: auto;
+        height: 1px;
+    }
+
+    .preferenceSegments {
+        width: 100%;
+        grid-template-columns: 1fr;
+    }
+
+    .preferenceSegment + .preferenceSegment::before {
+        left: 10px;
+        right: 10px;
+        top: -1px;
+        bottom: auto;
+        width: auto;
+        height: 1px;
+    }
+}
+
+@keyframes autoScopePanelHighlight {
+    0%,
+    12% {
+        border-color: rgba(124, 242, 194, 0.42);
+        box-shadow:
+            0 0 0 1px rgba(124, 242, 194, 0.18),
+            0 12px 34px rgba(10, 26, 24, 0.24);
+    }
+
+    100% {
+        border-color: rgba(255, 255, 255, 0.1);
+        box-shadow: var(--shadow2);
     }
 }

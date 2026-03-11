@@ -200,6 +200,9 @@ export interface MatchV2 {
         >;
         ownerKicks?: {
             intentAttempts?: number;
+            landed?: number;
+            confirmedInterrupts?: number;
+            missed?: number;
             succeeded?: number;
             failed?: number;
         };

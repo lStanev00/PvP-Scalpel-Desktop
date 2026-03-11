@@ -1,6 +1,7 @@
 import useUserContext from "./Hooks/useUserContext";
 import AppRoutes from "./Components/Router/Router";
 import { useEffect } from "react";
+import CharacterProfilePrefetch from "./Components/CharacterProfilePrefetch";
 
 export default function App() {
     const { httpFetch } = useUserContext();
@@ -9,5 +10,10 @@ export default function App() {
         httpFetch("/verify/me").then(console.info).catch(console.error);
     }, [httpFetch]);
 
-    return <AppRoutes />;
+    return (
+        <>
+            <CharacterProfilePrefetch />
+            <AppRoutes />
+        </>
+    );
 }

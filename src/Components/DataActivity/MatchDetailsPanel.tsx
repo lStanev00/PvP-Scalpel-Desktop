@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { LuInfo } from "react-icons/lu";
 import TeamTable from "./TeamTable";
-import MSSStatsSection from "./MSSStatsSection";
+import MSSStatsSection, { collectMSSStats } from "./MSSStatsSection";
 import SpellCastGraph from "./SpellCastGraph";
 import DebugSpellInspector from "./DebugSpellInspector";
 import MatchSummaryHeader from "./MatchSummaryHeader";
@@ -10,7 +10,11 @@ import {
     resolveTelemetryVersion,
     type KickTelemetrySnapshot,
 } from "./kickTelemetry";
-import type { MatchSummary } from "./utils";
+import {
+    BRACKET_SOLO_SHUFFLE,
+    isRatedBracket,
+    type MatchSummary,
+} from "./utils";
 import type { MatchPlayer, MatchTimelineEntry } from "./types";
 import styles from "./DataActivity.module.css";
 
@@ -55,26 +59,91 @@ type MatchDetailsContent = {
     computedSpellOutcomes: Record<string, { succeeded: number; interrupted: number; failed: number }> | null;
 };
 
+const PLAYER_COL_WIDTH = 180;
+const KD_COL_WIDTH = 72;
+const OUTPUT_COL_WIDTH = 220;
+const EXTRA_STAT_MIN_WIDTH = 112;
+const PRE_POST_COL_WIDTH = 64;
+const RATING_COL_WIDTH = 84;
+const TABLE_FRAME_WIDTH = 68;
+
+const getRequiredMergedTableWidth = ({
+    extraStatNames,
+    showRating,
+    players,
+}: {
+    extraStatNames: string[];
+    showRating: boolean;
+    players: MatchPlayer[];
+}) => {
+    const hasPreMMR = players.some((player) => {
+        const value = player.prematchMMR;
+        return typeof value === "number" && Number.isFinite(value) && value !== 0;
+    });
+    const hasPostMMR = players.some((player) => {
+        const value = player.postmatchMMR;
+        return typeof value === "number" && Number.isFinite(value) && value !== 0;
+    });
+    const hasMMRDelta =
+        players.some((player) => {
+            const value = player.ratingChange;
+            return typeof value === "number" && Number.isFinite(value) && value !== 0;
+        }) ||
+        players.some((player) => {
+            const pre = player.prematchMMR ?? 0;
+            const post = player.postmatchMMR ?? 0;
+            return typeof pre === "number" && typeof post === "number" && post - pre !== 0;
+        });
+
+    const extraStatsWidth = extraStatNames.reduce((sum, stat) => {
+        const labelWidth = stat.length * 7 + 28;
+        return sum + Math.max(EXTRA_STAT_MIN_WIDTH, Math.min(136, labelWidth));
+    }, 0);
+
+    return (
+        TABLE_FRAME_WIDTH +
+        PLAYER_COL_WIDTH +
+        KD_COL_WIDTH +
+        OUTPUT_COL_WIDTH +
+        extraStatsWidth +
+        (hasPreMMR ? PRE_POST_COL_WIDTH : 0) +
+        (hasPostMMR ? PRE_POST_COL_WIDTH : 0) +
+        (hasMMRDelta ? PRE_POST_COL_WIDTH : 0) +
+        (showRating ? RATING_COL_WIDTH : 0)
+    );
+};
+
 export default function MatchDetailsPanel({ match, isLoading, onBack }: MatchDetailsPanelProps) {
     const debugEnabled = import.meta.env.DEV;
     const [highlightedPlayerKey, setHighlightedPlayerKey] = useState<string | null>(null);
+    const detailsBodyRef = useRef<HTMLDivElement | null>(null);
+    const [detailsBodyWidth, setDetailsBodyWidth] = useState(0);
 
     useEffect(() => {
         setHighlightedPlayerKey(null);
+    }, [match?.id]);
+
+    useEffect(() => {
+        const element = detailsBodyRef.current;
+        if (!element || typeof ResizeObserver === "undefined") return;
+
+        const observer = new ResizeObserver((entries) => {
+            const nextWidth = entries[0]?.contentRect.width;
+            if (!nextWidth) return;
+            setDetailsBodyWidth(nextWidth);
+        });
+
+        setDetailsBodyWidth(element.getBoundingClientRect().width);
+        observer.observe(element);
+        return () => observer.disconnect();
     }, [match?.id]);
 
     const content = useMemo<MatchDetailsContent | null>(() => {
         if (!match) return null;
         const players = (match.raw.players ?? []) as MatchPlayer[];
         const timeline = (match.raw.timeline ?? []) as MatchTimelineEntry[];
-        const isSoloShuffle = (match.raw.matchDetails?.format ?? "")
-            .toLowerCase()
-            .includes("solo shuffle");
-        const showRating =
-            match.mode === "solo" ||
-            match.mode === "rated2" ||
-            match.mode === "rated3" ||
-            match.mode === "rbg";
+        const isSoloShuffle = match.bracketId === BRACKET_SOLO_SHUFFLE;
+        const showRating = isRatedBracket(match.bracketId);
         // Blizzard faction index in PvP scoreboards: 0 = Horde, 1 = Alliance.
         const horde = players.filter((p) => p.faction === 0);
         const alliance = players.filter((p) => p.faction === 1);
@@ -115,7 +184,14 @@ export default function MatchDetailsPanel({ match, isLoading, onBack }: MatchDet
                         string,
                         { succeeded?: unknown; interrupted?: unknown; failed?: unknown }
                     >;
-                    ownerKicks?: { intentAttempts?: unknown; succeeded?: unknown; failed?: unknown };
+                    ownerKicks?: {
+                        intentAttempts?: unknown;
+                        landed?: unknown;
+                        confirmedInterrupts?: unknown;
+                        missed?: unknown;
+                        succeeded?: unknown;
+                        failed?: unknown;
+                    };
                 };
             }
         ).computed;
@@ -152,28 +228,49 @@ export default function MatchDetailsPanel({ match, isLoading, onBack }: MatchDet
             Number.isFinite(computedOwnerKicks.intentAttempts)
                 ? Math.max(0, Math.trunc(computedOwnerKicks.intentAttempts))
                 : null;
-        const computedSucceeded =
-            typeof computedOwnerKicks?.succeeded === "number" &&
-            Number.isFinite(computedOwnerKicks.succeeded)
-                ? Math.max(0, Math.trunc(computedOwnerKicks.succeeded))
+        const computedLanded =
+            typeof computedOwnerKicks?.landed === "number" && Number.isFinite(computedOwnerKicks.landed)
+                ? Math.max(0, Math.trunc(computedOwnerKicks.landed))
                 : null;
+        const computedConfirmedInterrupts =
+            typeof computedOwnerKicks?.confirmedInterrupts === "number" &&
+            Number.isFinite(computedOwnerKicks.confirmedInterrupts)
+                ? Math.max(0, Math.trunc(computedOwnerKicks.confirmedInterrupts))
+                : typeof computedOwnerKicks?.succeeded === "number" &&
+                    Number.isFinite(computedOwnerKicks.succeeded)
+                  ? Math.max(0, Math.trunc(computedOwnerKicks.succeeded))
+                  : null;
+        const computedMissed =
+            typeof computedOwnerKicks?.missed === "number" && Number.isFinite(computedOwnerKicks.missed)
+                ? Math.max(0, Math.trunc(computedOwnerKicks.missed))
+                : typeof computedOwnerKicks?.failed === "number" && Number.isFinite(computedOwnerKicks.failed)
+                  ? Math.max(0, Math.trunc(computedOwnerKicks.failed))
+                  : null;
         const resolvedIntentAttempts =
             computedIntentAttempts !== null && computedIntentAttempts > 0
                 ? computedIntentAttempts
                 : baseKickTelemetrySnapshot.intentAttempts;
-        const resolvedSucceeded =
-            computedSucceeded !== null &&
-            (computedSucceeded > 0 || (baseKickTelemetrySnapshot.succeeded ?? 0) <= 0)
-                ? computedSucceeded
-                : baseKickTelemetrySnapshot.succeeded;
+        const resolvedLanded =
+            computedLanded !== null ? computedLanded : baseKickTelemetrySnapshot.landedAttempts;
+        const resolvedConfirmedInterrupts =
+            computedConfirmedInterrupts !== null
+                ? computedConfirmedInterrupts
+                : baseKickTelemetrySnapshot.confirmedInterrupts;
+        const resolvedMissed =
+            computedMissed !== null ? computedMissed : baseKickTelemetrySnapshot.missedKicks;
         const kickTelemetrySnapshot: KickTelemetrySnapshot =
             computedOwnerKicks &&
             typeof computedOwnerKicks === "object" &&
-            computedOwnerKicks !== null
+            computedOwnerKicks !== null &&
+            baseKickTelemetrySnapshot.isSupported
                 ? {
                       ...baseKickTelemetrySnapshot,
                       intentAttempts: resolvedIntentAttempts,
-                      succeeded: resolvedSucceeded,
+                      landedAttempts: resolvedLanded,
+                      succeededAttempts: resolvedLanded,
+                      confirmedInterrupts: resolvedConfirmedInterrupts,
+                      missedKicks: resolvedMissed,
+                      succeeded: resolvedConfirmedInterrupts,
                   }
                 : baseKickTelemetrySnapshot;
         const computedSpellOutcomes =
@@ -276,6 +373,16 @@ export default function MatchDetailsPanel({ match, isLoading, onBack }: MatchDet
         );
     }
 
+    const mssData = collectMSSStats(content.players);
+    const shouldMergeMSS =
+        mssData.statNames.length > 0 &&
+        detailsBodyWidth >=
+            getRequiredMergedTableWidth({
+                extraStatNames: mssData.statNames,
+                showRating: content.showRating,
+                players: content.players,
+            });
+
     return (
         <section className={styles.detailsCard}>
             <MatchSummaryHeader
@@ -284,39 +391,31 @@ export default function MatchDetailsPanel({ match, isLoading, onBack }: MatchDet
                 kickTelemetrySnapshot={content.kickTelemetrySnapshot}
                 onBack={onBack}
             />
-            <div className={styles.detailsBody}>
-                {content.showFactions ? (
-                    <div className={styles.teamGrid}>
-                        <TeamTable
-                            title="Alliance"
-                            players={content.alliance}
-                            showRating={content.showRating}
-                            highlightedPlayerKey={highlightedPlayerKey}
-                            onHoverPlayerKey={setHighlightedPlayerKey}
-                        />
-                        <TeamTable
-                            title="Horde"
-                            players={content.horde}
-                            showRating={content.showRating}
-                            highlightedPlayerKey={highlightedPlayerKey}
-                            onHoverPlayerKey={setHighlightedPlayerKey}
-                        />
-                    </div>
-                ) : (
-                    <TeamTable
-                        title={content.playersTitle}
+            <div className={styles.detailsBody} ref={detailsBodyRef}>
+                <TeamTable
+                    title={content.playersTitle}
+                    players={content.players}
+                    showRating={content.showRating}
+                    showTeams={content.showFactions}
+                    extraStats={
+                        shouldMergeMSS
+                            ? {
+                                  statNames: mssData.statNames,
+                                  valuesByPlayerKey: mssData.valuesByPlayerKey,
+                              }
+                            : null
+                    }
+                    highlightedPlayerKey={highlightedPlayerKey}
+                    onHoverPlayerKey={setHighlightedPlayerKey}
+                />
+
+                {shouldMergeMSS ? null : (
+                    <MSSStatsSection
                         players={content.players}
-                        showRating={content.showRating}
                         highlightedPlayerKey={highlightedPlayerKey}
                         onHoverPlayerKey={setHighlightedPlayerKey}
                     />
                 )}
-
-                <MSSStatsSection
-                    players={content.players}
-                    highlightedPlayerKey={highlightedPlayerKey}
-                    onHoverPlayerKey={setHighlightedPlayerKey}
-                />
                 <div className={styles.spellNote}>
                     <LuInfo className={styles.spellNoteIcon} aria-hidden="true" />
                     <span>
@@ -327,9 +426,9 @@ export default function MatchDetailsPanel({ match, isLoading, onBack }: MatchDet
                 <SpellCastGraph
                     timeline={content.timeline}
                     players={content.players}
+                    bracketId={match.bracketId}
                     gameVersion={content.gameVersion}
                     telemetryVersion={content.telemetryVersion}
-                    matchFormat={content.matchFormat}
                     spellTotals={content.spellTotals}
                     spellTotalsBySource={content.spellTotalsBySource}
                     interruptSpellsBySource={content.interruptSpellsBySource}

@@ -85,7 +85,8 @@ export const upsertGameSpells = (
     cache: SpellMetaCache,
     gameVersionKey: string,
     incoming: GameSpellEntry[] | null,
-    requestedIds: number[]
+    requestedIds: number[],
+    interruptBackedIds: Set<number> = new Set()
 ) => {
     const next: SpellMetaCache = {
         schemaVersion: 2,
@@ -105,12 +106,14 @@ export const upsertGameSpells = (
         });
     }
 
-    // Mark not-returned ids as null to avoid refetch spam.
+    // Persist interrupt-backed unknowns as truthy placeholders, and other misses as null.
     requestedIds.forEach((id) => {
-        if (!returned.has(id)) currentGameMap[String(id)] = null;
+        if (returned.has(id)) return;
+        currentGameMap[String(id)] = interruptBackedIds.has(id)
+            ? { _id: id, name: null, description: null, media: null }
+            : null;
     });
 
     next.byGame[gameVersionKey] = currentGameMap;
     return next;
 };
-

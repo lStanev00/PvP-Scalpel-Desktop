@@ -209,11 +209,8 @@ export default function AppShell() {
     }, []);
 
     const handleMinimize = async () => {
-        if (minimizeToTrayRef.current) {
-            await hideToTray();
-            return;
-        }
         const win = getCurrentWindow();
+        await win.setSkipTaskbar(false).catch(() => undefined);
         await win.minimize().catch(() => undefined);
     };
 

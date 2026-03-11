@@ -1,5 +1,6 @@
 import { createPortal } from "react-dom";
 import type { RefObject } from "react";
+import { LuCircleHelp } from "react-icons/lu";
 import styles from "./DataActivity.module.css";
 import type { SpellMetricRow } from "./spellMetrics.utils";
 
@@ -32,6 +33,7 @@ type PlayerTooltipPayload = {
         spellId: number;
         name: string;
         iconUrl?: string | null;
+        isUnknownMeta?: boolean;
         value: string;
         widthPct: number;
     }>;
@@ -57,6 +59,7 @@ export const toPlayerTooltipRows = (
         spellId: row.spellId,
         name: row.name,
         iconUrl: resolveIconUrl(row.icon),
+        isUnknownMeta: !!row.isUnknownMeta,
         value: row.value.toLocaleString(),
         widthPct: maxValue > 0 ? (row.value / maxValue) * 100 : 0,
     }));
@@ -136,10 +139,6 @@ export default function SpellMetricsTooltip({ payload, position, tooltipRef }: S
                     visibility: position ? "visible" : "hidden",
                 }}
             >
-                <header className={styles["spell-tooltip__header"]}>
-                    <h3 className={styles["spell-tooltip__title"]}>{payload.title}</h3>
-                </header>
-
                 <section className={styles["spell-tooltip__impact"]}>
                     <span className={styles["spell-tooltip__impact-value"]}>{payload.totalValue}</span>
                     <span className={styles["spell-tooltip__impact-label"]}>{payload.subtitle}</span>
@@ -157,12 +156,23 @@ export default function SpellMetricsTooltip({ payload, position, tooltipRef }: S
                                             alt=""
                                             loading="lazy"
                                         />
+                                    ) : row.isUnknownMeta ? (
+                                        <span
+                                            className={`${styles.playerTooltipFallback} ${styles.playerTooltipFallbackUnknown}`}
+                                            aria-hidden="true"
+                                        >
+                                            <LuCircleHelp />
+                                        </span>
                                     ) : (
                                         <span className={styles.playerTooltipFallback}>
                                             {row.name.slice(0, 1).toUpperCase()}
                                         </span>
                                     )}
-                                    <span>{row.name}</span>
+                                    <span
+                                        className={row.isUnknownMeta ? styles.playerTooltipNameUnknown : undefined}
+                                    >
+                                        {row.name}
+                                    </span>
                                 </div>
                                 <div className={styles.playerTooltipBar}>
                                     <span

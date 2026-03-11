@@ -358,8 +358,10 @@ export default function DebugSpellInspector({
                 castEvents: 0,
                 rawEvents: filteredEvents.length,
                 attemptCount: 0,
+                landedAttempts: 0,
                 outcomeOnlyAttempts: 0,
-                succeededAttempts: 0,
+                confirmedInterrupts: null,
+                missedKicks: null,
                 interruptedAttempts: 0,
                 executedInterruptOutcomes: 0,
                 failedAttempts: 0,
@@ -378,12 +380,14 @@ export default function DebugSpellInspector({
 
         const castEvents = kickTelemetrySnapshot.castEvents;
         const attemptCount = kickTelemetrySnapshot.intentAttempts;
+        const landedAttempts = kickTelemetrySnapshot.landedAttempts;
         const outcomeOnlyAttempts = kickTelemetrySnapshot.outcomeOnlyAttempts;
-        const succeededAttempts = kickTelemetrySnapshot.succeededAttempts;
+        const confirmedInterrupts = kickTelemetrySnapshot.confirmedInterrupts;
+        const missedKicks = kickTelemetrySnapshot.missedKicks;
         const interruptedAttempts = kickTelemetrySnapshot.interruptedAttempts;
         const failedAttempts = kickTelemetrySnapshot.failedAttempts;
         const unresolvedAttempts = kickTelemetrySnapshot.unresolvedAttempts;
-        const executedInterruptOutcomes = succeededAttempts + interruptedAttempts;
+        const executedInterruptOutcomes = landedAttempts + interruptedAttempts;
         const issued = kickTelemetrySnapshot.issued ?? fallbackIssued;
         const succeeded = kickTelemetrySnapshot.succeeded ?? fallbackSucceeded;
 
@@ -391,16 +395,19 @@ export default function DebugSpellInspector({
         const intentVsSucceeded = succeeded === null ? null : attemptCount - succeeded;
         const castsVsIssued = issued === null ? null : castEvents - issued;
         const executedVsIssued = issued === null ? null : executedInterruptOutcomes - issued;
-        const successVsSucceeded = succeeded === null ? null : succeededAttempts - succeeded;
-        const suggestedMissedKicks = Math.max(0, attemptCount - succeededAttempts);
-        const estimatedBadKicks = Math.max(0, attemptCount - succeededAttempts);
+        const successVsSucceeded = succeeded === null ? null : landedAttempts - succeeded;
+        const suggestedMissedKicks =
+            typeof missedKicks === "number" && Number.isFinite(missedKicks) ? missedKicks : 0;
+        const estimatedBadKicks = suggestedMissedKicks;
 
         return {
             castEvents,
             rawEvents: filteredEvents.length,
             attemptCount,
+            landedAttempts,
             outcomeOnlyAttempts,
-            succeededAttempts,
+            confirmedInterrupts,
+            missedKicks,
             interruptedAttempts,
             executedInterruptOutcomes,
             failedAttempts,
@@ -573,7 +580,11 @@ export default function DebugSpellInspector({
                         <span>{kickValidation.succeeded ?? "--"}</span>
                     </div>
                     <div className={styles.debugValidationRow}>
-                        <span>Estimated bad kicks (intent attempts - succeeded attempts)</span>
+                        <span>Confirmed interrupts (owner per-source)</span>
+                        <span>{kickValidation.confirmedInterrupts ?? "--"}</span>
+                    </div>
+                    <div className={styles.debugValidationRow}>
+                        <span>Estimated bad kicks (landed kicks - confirmed interrupts)</span>
                         <span>{kickValidation.estimatedBadKicks}</span>
                     </div>
                     <div className={styles.debugValidationRow}>
@@ -585,7 +596,7 @@ export default function DebugSpellInspector({
                         </span>
                     </div>
                     <div className={styles.debugValidationRow}>
-                        <span>Executed outcomes (SUCCEEDED/INTERRUPTED) - interrupts[0]</span>
+                        <span>Landed/failed interrupt outcomes (SUCCEEDED/INTERRUPTED) - interrupts[0]</span>
                         <span>
                             {kickValidation.executedVsIssued === null
                                 ? "--"
@@ -601,7 +612,7 @@ export default function DebugSpellInspector({
                         </span>
                     </div>
                     <div className={styles.debugValidationRow}>
-                        <span>Succeeded attempts - interrupts[1]</span>
+                        <span>Landed kick casts - interrupts[1]</span>
                         <span>
                             {kickValidation.successVsSucceeded === null
                                 ? "--"
@@ -617,19 +628,21 @@ export default function DebugSpellInspector({
                         </span>
                     </div>
                     <div className={styles.debugValidationRow}>
-                        <span>Suggested missed kicks (cast events - succeeded)</span>
+                        <span>Suggested missed kicks (landed kicks - confirmed interrupts)</span>
                         <span>{kickValidation.suggestedMissedKicks}</span>
                     </div>
                     <div className={styles.debugValidationRow}>
-                        <span>Attempt outcomes (success / interrupted / failed / unresolved)</span>
+                        <span>Kick outcomes (landed / confirmed / interrupted / failed / unresolved)</span>
                         <span>
-                            {kickValidation.succeededAttempts} / {kickValidation.interruptedAttempts} /{" "}
-                            {kickValidation.failedAttempts} / {kickValidation.unresolvedAttempts}
+                            {kickValidation.landedAttempts} / {kickValidation.confirmedInterrupts ?? "--"} /{" "}
+                            {kickValidation.interruptedAttempts} / {kickValidation.failedAttempts} /{" "}
+                            {kickValidation.unresolvedAttempts}
                         </span>
                     </div>
                     <div className={styles.debugValidationHint}>
-                        Calculation uses the owner-local timeline stream and only kick spell IDs from
-                        `PvP_Scalpel_InteruptSpells`.
+                        {kickTelemetrySnapshot?.isSupported
+                            ? "Calculation uses landed kick casts from the owner timeline and confirms interrupts from owner per-source interrupt data."
+                            : "Kick outcome confirmation is gated off for legacy telemetry versions; debug rows below only show raw cast diagnostics."}
                     </div>
                 </div>
             ) : null}

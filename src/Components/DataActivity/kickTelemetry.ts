@@ -138,14 +138,18 @@ export type KickTelemetrySnapshot = {
     matchId: string;
     telemetryVersion: number | null;
     isLegacyMatch: boolean;
+    isSupported: boolean;
     intentAttempts: number;
     castEvents: number;
     outcomeOnlyAttempts: number;
+    landedAttempts: number;
     succeededAttempts: number;
     interruptedAttempts: number;
     failedAttempts: number;
     unresolvedAttempts: number;
     issued: number | null;
+    confirmedInterrupts: number | null;
+    missedKicks: number | null;
     succeeded: number | null;
 };
 
@@ -168,15 +172,22 @@ export const computeKickTelemetrySnapshot = ({
 }): KickTelemetrySnapshot => {
     const kickSet = new Set(kickSpellIds.filter((value) => Number.isFinite(value) && value > 0));
     const { rawEvents, attempts } = resolveIntentAttempts(timeline);
+    const isLegacyMatch =
+        telemetryVersion !== null && telemetryVersion < INTERRUPT_TRACKING_VERSION;
+    const isSupported =
+        telemetryVersion !== null &&
+        Number.isFinite(telemetryVersion) &&
+        telemetryVersion >= INTERRUPT_TRACKING_VERSION;
 
     const kickAttemptsRaw = attempts.filter((attempt) => kickSet.has(attempt.spellId));
     const collapsedKickAttempts = collapseKickAttempts(kickAttemptsRaw);
     const attemptsWithIntent = collapsedKickAttempts.filter(hasIntentSignal);
 
     const intentAttempts = attemptsWithIntent.length;
-    const succeededAttempts = attemptsWithIntent.filter(
+    const landedAttempts = attemptsWithIntent.filter(
         (attempt) => attempt.resolvedOutcome === "succeeded"
     ).length;
+    const succeededAttempts = landedAttempts;
     const interruptedAttempts = attemptsWithIntent.filter(
         (attempt) => attempt.resolvedOutcome === "interrupted"
     ).length;
@@ -194,37 +205,34 @@ export const computeKickTelemetrySnapshot = ({
     }
 
     const { issued, succeeded } = parseInterruptTuple(owner);
-    const succeededFromSource = parseSucceededFromInterruptSpellsBySource(
-        interruptSpellsBySource,
-        owner
-    );
-    const normalizedSucceeded =
-        succeededFromSource !== null && (succeeded === null || (succeeded === 0 && succeededFromSource > 0))
-            ? succeededFromSource
-            : succeeded;
-    const resolvedSucceededFallback =
-        normalizedSucceeded === null || (normalizedSucceeded === 0 && intentAttempts > 0 && succeededAttempts > 0)
-            ? succeededAttempts
-            : normalizedSucceeded;
-    const clampedSucceeded =
-        resolvedSucceededFallback === null
+    const rawConfirmedInterrupts = isSupported
+        ? parseSucceededFromInterruptSpellsBySource(interruptSpellsBySource, owner) ?? 0
+        : null;
+    const clampedConfirmedInterrupts =
+        rawConfirmedInterrupts === null
             ? null
-            : Math.max(0, Math.min(intentAttempts, Math.trunc(resolvedSucceededFallback)));
-    const isLegacyMatch =
-        telemetryVersion !== null && telemetryVersion < INTERRUPT_TRACKING_VERSION;
+            : Math.max(0, Math.min(landedAttempts, Math.trunc(rawConfirmedInterrupts)));
+    const missedKicks =
+        clampedConfirmedInterrupts === null
+            ? null
+            : Math.max(0, landedAttempts - clampedConfirmedInterrupts);
 
     return {
         matchId,
         telemetryVersion,
         isLegacyMatch,
+        isSupported,
         intentAttempts,
         castEvents,
         outcomeOnlyAttempts,
+        landedAttempts,
         succeededAttempts,
         interruptedAttempts,
         failedAttempts,
         unresolvedAttempts,
         issued,
-        succeeded: clampedSucceeded,
+        confirmedInterrupts: clampedConfirmedInterrupts,
+        missedKicks,
+        succeeded: isSupported ? clampedConfirmedInterrupts : succeeded,
     };
 };

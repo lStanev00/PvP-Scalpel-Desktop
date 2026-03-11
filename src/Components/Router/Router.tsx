@@ -1,7 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { GuestRoute, UserRoute } from "./Guards";
 import AppShell from "../AppShell/AppShell";
-import DataActivity from "../Data-Activity/DataActivity";
+import DataActivity from "../DataActivity/DataActivity";
 import Login from "../Login/Login";
 import Dashboard from "../../Pages/Dashboard/Dashboard";
 import Logs from "../../Pages/Logs/Logs";

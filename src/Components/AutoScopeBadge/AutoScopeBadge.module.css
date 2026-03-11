@@ -1,0 +1,187 @@
+.root {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    min-height: 36px;
+    font-size: 12px;
+    line-height: 1.35;
+    outline: none;
+}
+
+.rootDashboard {
+    justify-self: end;
+}
+
+.badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex: 0 0 auto;
+    justify-content: center;
+    height: 36px;
+    padding: 0 12px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.55px;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition:
+        transform 160ms ease,
+        box-shadow 160ms ease,
+        border-color 160ms ease,
+        background 160ms ease,
+        color 160ms ease,
+        opacity 160ms ease;
+}
+
+.badgeActive {
+    background: rgba(58, 210, 159, 0.12);
+    border: 1px solid rgba(58, 210, 159, 0.24);
+    color: rgba(182, 249, 222, 0.96);
+}
+
+.badgeActive:hover {
+    background: rgba(58, 210, 159, 0.18);
+    border-color: rgba(58, 210, 159, 0.34);
+    box-shadow: 0 10px 24px rgba(24, 92, 72, 0.16);
+    transform: translateY(-1px);
+}
+
+.badgeInactive {
+    background: rgba(81, 177, 255, 0.12);
+    border: 1px solid rgba(81, 177, 255, 0.28);
+    color: rgba(189, 228, 255, 0.98);
+    box-shadow: 0 0 0 0 rgba(81, 177, 255, 0);
+}
+
+.badgeInactive:hover:not(:disabled) {
+    background: rgba(81, 177, 255, 0.18);
+    border-color: rgba(98, 197, 255, 0.42);
+    box-shadow: 0 10px 24px rgba(30, 100, 160, 0.18);
+    transform: translateY(-1px);
+}
+
+.badgeLimited {
+    background: rgba(245, 168, 91, 0.12);
+    border: 1px solid rgba(245, 168, 91, 0.26);
+    color: rgba(255, 223, 171, 0.96);
+}
+
+.badgeLimited:hover:not(:disabled) {
+    background: rgba(245, 168, 91, 0.18);
+    border-color: rgba(245, 181, 104, 0.38);
+    box-shadow: 0 10px 24px rgba(112, 76, 28, 0.18);
+    transform: translateY(-1px);
+}
+
+.badgeInactive:focus-visible {
+    outline: 2px solid rgba(124, 242, 194, 0.55);
+    outline-offset: 2px;
+}
+
+.badgeAnimating {
+    animation: autoScopePulse 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.badge:active {
+    transform: scale(0.96);
+}
+
+.icon {
+    width: 12px;
+    height: 12px;
+    flex: 0 0 auto;
+    color: currentColor;
+}
+
+.tooltip {
+    position: absolute;
+    right: calc(100% + 10px);
+    top: 50%;
+    transform: translateY(-50%) translateX(6px);
+    min-width: 280px;
+    max-width: min(420px, 48vw);
+    padding: 9px 12px;
+    border-radius: 10px;
+    border: 1px solid rgba(58, 210, 159, 0.16);
+    background:
+        linear-gradient(90deg, rgba(58, 210, 159, 0.08), rgba(58, 210, 159, 0.01) 28%, rgba(12, 16, 24, 0.88) 100%),
+        rgba(12, 16, 24, 0.96);
+    color: rgba(230, 234, 240, 0.72);
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.28);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 140ms ease, transform 140ms ease;
+    z-index: 5;
+    display: grid;
+    gap: 8px;
+}
+
+.tooltipDashboard {
+    max-width: min(360px, 40vw);
+}
+
+.tooltipLimited {
+    border: 1px solid rgba(245, 168, 91, 0.18);
+    background:
+        linear-gradient(90deg, rgba(245, 168, 91, 0.1), rgba(245, 168, 91, 0.02) 28%, rgba(12, 16, 24, 0.88) 100%),
+        rgba(12, 16, 24, 0.96);
+    color: rgba(242, 223, 191, 0.76);
+}
+
+.hint {
+    justify-self: end;
+    font-size: 10px;
+    line-height: 1;
+    color: rgba(160, 170, 190, 0.72);
+    white-space: nowrap;
+}
+
+.root:hover .tooltip,
+.root:focus-visible .tooltip,
+.root:focus-within .tooltip {
+    opacity: 1;
+    transform: translateY(-50%) translateX(0);
+}
+
+.root:focus-visible .badge,
+.root:focus-within .badge {
+    box-shadow: 0 0 0 2px rgba(124, 242, 194, 0.24);
+}
+
+@media (max-width: 620px) {
+    .badge {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .tooltip {
+        position: static;
+        transform: none;
+        min-width: 0;
+        max-width: none;
+        opacity: 1;
+        pointer-events: auto;
+        box-shadow: none;
+    }
+}
+
+@keyframes autoScopePulse {
+    0% {
+        transform: scale(1);
+        box-shadow: 0 0 0 0 rgba(81, 177, 255, 0);
+    }
+
+    50% {
+        transform: scale(0.95);
+        box-shadow: 0 0 0 6px rgba(81, 177, 255, 0.14);
+    }
+
+    100% {
+        transform: scale(1);
+        box-shadow: 0 0 0 0 rgba(81, 177, 255, 0);
+    }
+}

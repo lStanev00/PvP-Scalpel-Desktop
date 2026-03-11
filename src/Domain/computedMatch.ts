@@ -1,9 +1,9 @@
-import type { MatchPlayer, MatchTimelineEntry } from "../Components/Data-Activity/types";
-import { resolveIntentAttempts } from "../Components/Data-Activity/spellCastResolver";
+import type { MatchPlayer, MatchTimelineEntry } from "../Components/DataActivity/types";
+import { resolveIntentAttempts } from "../Components/DataActivity/spellCastResolver";
 import {
     computeKickTelemetrySnapshot,
     resolveTelemetryVersion,
-} from "../Components/Data-Activity/kickTelemetry";
+} from "../Components/DataActivity/kickTelemetry";
 
 type SpellOutcomeCounts = {
     succeeded: number;
@@ -13,8 +13,11 @@ type SpellOutcomeCounts = {
 
 type OwnerKickSummary = {
     intentAttempts: number;
-    succeeded: number;
-    failed: number;
+    landed?: number;
+    confirmedInterrupts?: number;
+    missed?: number;
+    succeeded?: number;
+    failed?: number;
 };
 
 export type MatchComputed = {
@@ -80,18 +83,27 @@ export const buildMatchComputed = (rawMatch: unknown, kickSpellIds: number[]): M
 
     const issuedFallback = toSafeCount(kickSnapshot.issued);
     const rawIntentAttempts = toSafeCount(kickSnapshot.intentAttempts);
-    const intentAttempts =
-        rawIntentAttempts > 0 ? rawIntentAttempts : issuedFallback;
-    const succeeded = toSafeCount(kickSnapshot.succeeded);
-    const failed = Math.max(0, intentAttempts - succeeded);
+    const intentAttempts = rawIntentAttempts > 0 ? rawIntentAttempts : issuedFallback;
+    const landed = toSafeCount(kickSnapshot.landedAttempts);
+    const confirmedInterrupts = toSafeCount(kickSnapshot.confirmedInterrupts);
+    const missed = toSafeCount(kickSnapshot.missedKicks);
+
+    const ownerKicks: OwnerKickSummary = kickSnapshot.isSupported
+        ? {
+              intentAttempts,
+              landed,
+              confirmedInterrupts,
+              missed,
+              succeeded: confirmedInterrupts,
+              failed: missed,
+          }
+        : {
+              intentAttempts,
+          };
 
     return {
         spellOutcomesBySpellId,
-        ownerKicks: {
-            intentAttempts,
-            succeeded,
-            failed,
-        },
+        ownerKicks,
     };
 };
 

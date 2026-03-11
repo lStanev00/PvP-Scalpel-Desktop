@@ -145,6 +145,12 @@ const deriveDurationSeconds = (value: unknown) => {
     return null;
 };
 
+const readTelemetryVersion = (value: unknown) => {
+    if (!isPlainObject(value)) return Number.NaN;
+    const telemetryVersion = value.telemetryVersion;
+    return typeof telemetryVersion === "number" ? telemetryVersion : Number(telemetryVersion);
+};
+
 const extractLuaTable = (content: string, key: string) => {
     const idx = content.indexOf(key);
     if (idx === -1) return null;
@@ -638,21 +644,44 @@ export const MatchesProvider = ({ children }: { children: ReactNode }) => {
                                 computedDurationByKey.set(key, existingDuration);
                             }
 
+                            const rawSource = rawByMatchKey.get(key);
+                            let patched: Record<string, unknown> | null = null;
+
                             const hasDuration =
                                 typeof entry.durationSeconds === "number" &&
                                 Number.isFinite(entry.durationSeconds) &&
                                 entry.durationSeconds > 0;
-                            if (hasDuration) return entry;
-
-                            const rawSource = rawByMatchKey.get(key);
                             const derivedDuration = deriveDurationSeconds(rawSource);
-                            if (derivedDuration === null) return entry;
+                            if (!hasDuration && derivedDuration !== null) {
+                                patched = {
+                                    ...(patched ?? entry),
+                                    durationSeconds: derivedDuration,
+                                };
+                                computedDurationByKey.set(key, derivedDuration);
+                            }
 
-                            const patched = {
-                                ...entry,
-                                durationSeconds: derivedDuration,
-                            };
-                            computedDurationByKey.set(key, derivedDuration);
+                            const telemetryVersion = readTelemetryVersion(rawSource);
+                            if (
+                                rawSource &&
+                                Number.isFinite(telemetryVersion) &&
+                                telemetryVersion >= 3
+                            ) {
+                                const recomputed = buildMatchComputed(rawSource, interruptSpellIds);
+                                if (recomputed) {
+                                    const currentComputed = isPlainObject((patched ?? entry).computed)
+                                        ? (patched ?? entry).computed
+                                        : null;
+                                    const nextComputed = recomputed as unknown as Record<string, unknown>;
+                                    if (JSON.stringify(currentComputed) !== JSON.stringify(nextComputed)) {
+                                        patched = {
+                                            ...(patched ?? entry),
+                                            computed: recomputed as unknown,
+                                        };
+                                    }
+                                }
+                            }
+
+                            if (!patched) return entry;
                             computedBackfill.push(patched);
                             return patched;
                         });
@@ -663,7 +692,7 @@ export const MatchesProvider = ({ children }: { children: ReactNode }) => {
                                 matches: computedBackfill,
                             }).catch(() => undefined);
                             invoke("push_log", {
-                                message: `Computed duration backfilled (${computedBackfill.length})`,
+                                message: `Computed matches backfilled (${computedBackfill.length})`,
                             }).catch(() => undefined);
                         }
 
