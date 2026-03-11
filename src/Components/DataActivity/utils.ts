@@ -1,42 +1,78 @@
+import {
+    BRACKET_ARENA_SKIRMISH,
+    BRACKET_BATTLEGROUND_BLITZ,
+    BRACKET_BRAWL,
+    BRACKET_RANDOM_BATTLEGROUND_GROUP,
+    BRACKET_RATED_ARENA,
+    BRACKET_RATED_ARENA_2V2,
+    BRACKET_RATED_ARENA_3V3,
+    BRACKET_RATED_BATTLEGROUND,
+    BRACKET_SOLO_SHUFFLE,
+    BRACKET_UNKNOWN,
+    buildVisibleBracketScopeIds,
+    collapseBracketId,
+    getBracketLabel,
+    getBracketLabelForFormat,
+    isBattlegroundBracket,
+    isRatedBracket,
+    matchesBracketScope,
+    parseBracketScopeId,
+    parseBracketId,
+    resolveBracketIdFromFormat,
+    type BracketId,
+    type BracketScopeId,
+} from "../../Domain/matchBrackets";
 import type { MatchWithId } from "../../Interfaces/matches";
+import { buildCharacterKey, formatRealmLabel } from "./playerIdentity";
 import type { MatchPlayer, MatchTimelineEntry } from "./types";
 
 export type MatchResult = "win" | "loss" | "neutral";
-export type MatchMode =
-    | "solo"
-    | "skirmish"
-    | "rated2"
-    | "rated3"
-    | "randombg"
-    | "rbg"
-    | "unknown";
+export type MatchMode = BracketId;
+export type MatchScopeMode = BracketScopeId;
 
-export const getModeLabel = (mode: MatchMode) =>
-    mode === "solo"
-        ? "Solo Shuffle"
-        : mode === "skirmish"
-          ? "Skirmish"
-          : mode === "rated2"
-            ? "Rated 2v2"
-            : mode === "rated3"
-              ? "Rated 3v3"
-              : mode === "randombg"
-                ? "Random BG"
-                : mode === "rbg"
-                  ? "RBG"
-                  : "Unknown";
+export {
+    BRACKET_ARENA_SKIRMISH,
+    BRACKET_BATTLEGROUND_BLITZ,
+    BRACKET_BRAWL,
+    BRACKET_RANDOM_BATTLEGROUND_GROUP,
+    BRACKET_RATED_ARENA,
+    BRACKET_RATED_ARENA_2V2,
+    BRACKET_RATED_ARENA_3V3,
+    BRACKET_RATED_BATTLEGROUND,
+    BRACKET_SOLO_SHUFFLE,
+    BRACKET_UNKNOWN,
+    collapseBracketId,
+    getBracketLabel as getModeLabel,
+    isBattlegroundBracket,
+    isRatedBracket,
+    matchesBracketScope,
+    parseBracketScopeId,
+    parseBracketId,
+    resolveBracketIdFromFormat,
+};
 
 export interface MatchFilters {
-    mode: MatchMode | "all";
+    mode: MatchScopeMode | "all";
     character: string | "all";
     query: string;
+}
+
+export interface CharacterOption {
+    value: string | "all" | "auto";
+    label: string;
+    name?: string;
+    realm?: string | null;
+    avatarUrl?: string | null;
+    isOwner?: boolean;
 }
 
 export interface MatchSummary {
     id: string;
     result: MatchResult;
     mode: MatchMode;
+    bracketId: MatchMode;
     modeLabel: string;
+    bracketLabel: string;
     mapName: string;
     timestamp: string;
     timestampLabel: string;
@@ -46,7 +82,9 @@ export interface MatchSummary {
     delta: number | null;
     deltaLabel: string;
     owner: {
+        key: string;
         name: string;
+        realm?: string;
         spec?: string;
         class?: string;
         isOwner: boolean;
@@ -86,18 +124,18 @@ const formatDuration = (seconds?: number | null) => {
     return `${mins}:${String(secs).padStart(2, "0")}`;
 };
 
-const getMode = (format?: string): { key: MatchMode; label: string } => {
-    const raw = (format ?? "").toLowerCase();
-    if (raw.includes("solo shuffle")) return { key: "solo", label: "Solo Shuffle" };
-    if (raw.includes("skirmish")) return { key: "skirmish", label: "Skirmish" };
-    if (raw.includes("random battleground")) return { key: "randombg", label: "Random BG" };
-    if (raw.includes("rbg") || raw.includes("rated battleground")) {
-        return { key: "rbg", label: "RBG" };
-    }
-    if (raw.includes("3v3")) return { key: "rated3", label: "Rated 3v3" };
-    if (raw.includes("2v2")) return { key: "rated2", label: "Rated 2v2" };
-    if (format) return { key: "unknown", label: format };
-    return { key: "unknown", label: "Unknown" };
+export const buildCharacterLabel = (name?: string | null, realm?: string | null) => {
+    const trimmedName = (name ?? "").trim();
+    if (!trimmedName) return "Unknown";
+    const realmLabel = formatRealmLabel(realm);
+    return realmLabel ? `${trimmedName} - ${realmLabel}` : trimmedName;
+};
+
+const resolveMatchBracket = (match: MatchWithId) => {
+    const stored = parseBracketId((match as MatchWithId & { bracketId?: unknown }).bracketId);
+    const bracketId = stored ?? resolveBracketIdFromFormat(match.matchDetails?.format);
+    const label = getBracketLabelForFormat(match.matchDetails?.format, stored);
+    return { bracketId, label };
 };
 
 const getOwner = (players: MatchPlayer[]) => {
@@ -175,16 +213,21 @@ const getResult = (delta: number | null, match: MatchWithId) => {
 export const buildMatchSummary = (match: MatchWithId): MatchSummary => {
     const players = (match.players ?? []) as MatchPlayer[];
     const owner = getOwner(players);
-    const { key, label } = getMode(match.matchDetails?.format);
+    const { bracketId, label } = resolveMatchBracket(match);
     const delta = getDelta(match, owner);
     const result = getResult(delta, match);
     const duration = getDurationSeconds(match);
+    const ownerName = owner?.name ?? "Unknown";
+    const ownerRealm = owner?.realm ?? undefined;
+    const ownerKey = buildCharacterKey(ownerName, ownerRealm) ?? `char::${ownerName.toLowerCase()}`;
 
     return {
         id: match.id,
         result,
-        mode: key,
+        mode: bracketId,
+        bracketId,
         modeLabel: label,
+        bracketLabel: label,
         mapName: match.matchDetails?.mapName ?? "Unknown map",
         timestamp: match.matchDetails?.timestamp ?? "",
         timestampLabel: match.matchDetails?.timestamp
@@ -198,7 +241,9 @@ export const buildMatchSummary = (match: MatchWithId): MatchSummary => {
         delta,
         deltaLabel: delta === null ? "--" : `${delta > 0 ? "+" : ""}${delta}`,
         owner: {
-            name: owner?.name ?? "Unknown",
+            key: ownerKey,
+            name: ownerName,
+            realm: ownerRealm,
             spec: owner?.spec ?? undefined,
             class: owner?.class ?? undefined,
             isOwner: !!owner?.isOwner,
@@ -208,15 +253,25 @@ export const buildMatchSummary = (match: MatchWithId): MatchSummary => {
     };
 };
 
-export const filterMatches = (matches: MatchSummary[], filters: MatchFilters) => {
+export const filterMatches = (
+    matches: MatchSummary[],
+    filters: MatchFilters,
+    collapseRandomBattlegrounds: boolean,
+) => {
     const query = filters.query.trim().toLowerCase();
 
     return matches.filter((match) => {
-        if (filters.mode !== "all" && match.mode !== filters.mode) return false;
-        if (filters.character !== "all" && match.owner.name !== filters.character) return false;
+        if (
+            filters.mode !== "all" &&
+            !matchesBracketScope(match.bracketId, filters.mode, collapseRandomBattlegrounds)
+        ) {
+            return false;
+        }
+        if (filters.character !== "all" && match.owner.key !== filters.character) return false;
         if (query) {
             const haystack = [
                 match.owner.name,
+                buildCharacterLabel(match.owner.name, match.owner.realm),
                 match.mapName,
                 match.modeLabel,
                 match.timestamp,
@@ -227,6 +282,76 @@ export const filterMatches = (matches: MatchSummary[], filters: MatchFilters) =>
         }
         return true;
     });
+};
+
+export const buildScopeOptions = (
+    summaries: MatchSummary[],
+    collapseRandomBattlegrounds: boolean,
+) => {
+    const visible = buildVisibleBracketScopeIds(
+        summaries.map((summary) => summary.bracketId),
+        collapseRandomBattlegrounds,
+    );
+
+    return visible.map((bracketId) => ({
+        label: getBracketLabel(bracketId),
+        value: bracketId,
+    }));
+};
+
+export const resolveSummaryScopeId = (
+    summary: MatchSummary,
+    collapseRandomBattlegrounds: boolean,
+) => collapseBracketId(summary.bracketId, collapseRandomBattlegrounds);
+
+export const isSummaryRated = (summary: MatchSummary) => isRatedBracket(summary.bracketId);
+
+export const isSummaryBattleground = (summary: MatchSummary) =>
+    isBattlegroundBracket(summary.bracketId);
+
+export const isSummarySoloShuffle = (summary: MatchSummary) =>
+    summary.bracketId === BRACKET_SOLO_SHUFFLE;
+
+export const buildCharacterOptions = (summaries: MatchSummary[]): CharacterOption[] => {
+    const ownerKey = summaries.find((summary) => summary.owner.isOwner)?.owner.key;
+    const deduped = new Map<string, CharacterOption>();
+
+    summaries.forEach((summary) => {
+        if (deduped.has(summary.owner.key)) return;
+        deduped.set(summary.owner.key, {
+            value: summary.owner.key,
+            label: buildCharacterLabel(summary.owner.name, summary.owner.realm),
+            name: summary.owner.name,
+            realm: summary.owner.realm ?? null,
+            isOwner: summary.owner.isOwner,
+        });
+    });
+
+    const options = Array.from(deduped.values()).sort((a, b) => {
+        if (a.value === ownerKey) return -1;
+        if (b.value === ownerKey) return 1;
+        const byName = (a.name ?? "").localeCompare(b.name ?? "");
+        if (byName !== 0) return byName;
+        return (a.realm ?? "").localeCompare(b.realm ?? "");
+    });
+
+    return options;
+};
+
+export const resolveStoredCharacterValue = (
+    storedValue: string | "auto" | "all",
+    options: CharacterOption[],
+): string | "auto" | "all" => {
+    if (storedValue === "auto" || storedValue === "all") return storedValue;
+    if (options.length === 0) return storedValue;
+    if (options.some((option) => option.value === storedValue)) return storedValue;
+
+    const exactNameMatches = options.filter((option) => option.name === storedValue);
+    if (exactNameMatches.length === 1) {
+        return exactNameMatches[0].value;
+    }
+
+    return storedValue === "all" ? "all" : "auto";
 };
 
 export const getDefaultSelectedId = (selectedId: string | null, matches: MatchSummary[]) => {
