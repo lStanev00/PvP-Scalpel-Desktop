@@ -116,6 +116,7 @@ const readTelemetryVersion = (value: unknown) => {
     return typeof telemetryVersion === "number" ? telemetryVersion : Number(telemetryVersion);
 };
 
+<<<<<<< HEAD
 const buildMatchWithId = async (
     parsedMatch: unknown,
     interruptSpellIds: number[]
@@ -181,6 +182,8 @@ const mergeLoadedMatchCorpus = (base: MatchWithId[], overlay: MatchWithId[]) => 
     return Array.from(merged.values());
 };
 
+=======
+>>>>>>> 4445079 (consumption of the new addon version)
 const splitTopLevelLuaEntries = (table: string) => {
     const trimmed = table.trim();
     if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) return [];
@@ -496,10 +499,13 @@ export const MatchesProvider = ({ children }: { children: ReactNode }) => {
     useEffect(() => {
         let timeout: ReturnType<typeof setTimeout> | null = null;
         let activeRunId = 0;
+<<<<<<< HEAD
         const commitMatches = (nextMatches: MatchWithId[]) => {
             matchesRef.current = nextMatches;
             setMatches(nextMatches);
         };
+=======
+>>>>>>> 4445079 (consumption of the new addon version)
         const hydrateFromComputedStore = async () => {
             const persistedComputedMatches = await invoke<unknown[]>("load_all_computed_matches").catch(
                 () => []
@@ -514,7 +520,49 @@ export const MatchesProvider = ({ children }: { children: ReactNode }) => {
 
             for (const parsedMatch of computedForMerge) {
                 try {
+<<<<<<< HEAD
                     results.push(await buildMatchWithId(parsedMatch, []));
+=======
+                    const derivedDuration = deriveDurationSeconds(parsedMatch);
+                    const normalizedParsedMatch =
+                        derivedDuration !== null && isPlainObject(parsedMatch)
+                            ? ({
+                                  ...parsedMatch,
+                                  durationSeconds: derivedDuration,
+                              } as unknown)
+                            : parsedMatch;
+
+                    const id = await invoke<string>("identify_match", {
+                        obj: normalizedParsedMatch,
+                    });
+
+                    const telemetryVersion =
+                        typeof (normalizedParsedMatch as { telemetryVersion?: unknown })
+                            .telemetryVersion === "number"
+                            ? ((normalizedParsedMatch as { telemetryVersion?: number }).telemetryVersion as number)
+                            : Number.NaN;
+                    const isTelemetryV2Plus =
+                        typeof normalizedParsedMatch === "object" &&
+                        normalizedParsedMatch !== null &&
+                        Number.isFinite(telemetryVersion) &&
+                        telemetryVersion >= 2;
+
+                    if (isTelemetryV2Plus) {
+                        validateMatchV2Plus(normalizedParsedMatch);
+                    } else {
+                        validateMatchV1(normalizedParsedMatch);
+                    }
+
+                    results.push({
+                        id,
+                        ...(isTelemetryV2Plus
+                            ? ((telemetryVersion >= 4
+                                  ? (normalizedParsedMatch as MatchV4)
+                                  : (normalizedParsedMatch as MatchV2)) as MatchV2 | MatchV4)
+                            : (normalizedParsedMatch as Match)),
+                        interruptSpellIds: [],
+                    });
+>>>>>>> 4445079 (consumption of the new addon version)
                 } catch {
                     failedCount += 1;
                 }
@@ -849,6 +897,16 @@ export const MatchesProvider = ({ children }: { children: ReactNode }) => {
                         rawCount: parsedMatches.length,
                         computedCount: normalizedComputedForMerge.length,
                     });
+<<<<<<< HEAD
+=======
+                    setMatches([]);
+                    if (lastLoggedCount.current !== 0) {
+                        lastLoggedCount.current = 0;
+                        invoke("push_log", {
+                            message: "Match data updated (0 matches)",
+                        }).catch(() => undefined);
+                    }
+>>>>>>> 4445079 (consumption of the new addon version)
                     lastParseErrorMessage.current = null;
                     return;
                 }
@@ -876,6 +934,7 @@ export const MatchesProvider = ({ children }: { children: ReactNode }) => {
                                       durationSeconds: effectiveDuration,
                                   } as unknown)
                                 : parsedMatch;
+<<<<<<< HEAD
                         const builtMatch = await buildMatchWithId(
                             normalizedParsedMatch,
                             interruptSpellIds
@@ -883,6 +942,41 @@ export const MatchesProvider = ({ children }: { children: ReactNode }) => {
 
                         if (logStaleRun(runId, `after-identify-${matchKey ?? "unknown"}`)) return;
                         results.push(builtMatch);
+=======
+                        const id = await invoke<string>("identify_match", {
+                            obj: normalizedParsedMatch,
+                        });
+
+                        if (logStaleRun(runId, `after-identify-${matchKey ?? "unknown"}`)) return;
+
+                        const telemetryVersion =
+                            typeof (normalizedParsedMatch as { telemetryVersion?: unknown })
+                                .telemetryVersion === "number"
+                                ? ((normalizedParsedMatch as { telemetryVersion?: number })
+                                      .telemetryVersion as number)
+                                : Number.NaN;
+                        const isTelemetryV2Plus =
+                            typeof normalizedParsedMatch === "object" &&
+                            normalizedParsedMatch !== null &&
+                            Number.isFinite(telemetryVersion) &&
+                            telemetryVersion >= 2;
+
+                        if (isTelemetryV2Plus) {
+                            validateMatchV2Plus(normalizedParsedMatch);
+                        } else {
+                            validateMatchV1(normalizedParsedMatch);
+                        }
+
+                        results.push({
+                            id,
+                            ...(isTelemetryV2Plus
+                                ? ((telemetryVersion >= 4
+                                      ? (normalizedParsedMatch as MatchV4)
+                                      : (normalizedParsedMatch as MatchV2)) as MatchV2 | MatchV4)
+                                : (normalizedParsedMatch as Match)),
+                            interruptSpellIds,
+                        });
+>>>>>>> 4445079 (consumption of the new addon version)
                     } catch (matchErr) {
                         failedCount += 1;
                         if (import.meta.env.DEV) {
@@ -899,6 +993,7 @@ export const MatchesProvider = ({ children }: { children: ReactNode }) => {
                 });
                 if (logStaleRun(runId, "before-set-matches")) return;
 
+<<<<<<< HEAD
                 if (!results.length) {
                     lastParseErrorMessage.current = null;
                     return;
@@ -918,6 +1013,20 @@ export const MatchesProvider = ({ children }: { children: ReactNode }) => {
                             failedCount > 0
                                 ? `Match data updated (${nextMatches.length} loaded, ${failedCount} failed)`
                                 : `Match data updated (${nextMatches.length} matches)`,
+=======
+                setMatches(results);
+                debugMatches("setMatches committed", {
+                    runId,
+                    results: results.length,
+                });
+                if (lastLoggedCount.current !== results.length || failedCount > 0) {
+                    lastLoggedCount.current = results.length;
+                    invoke("push_log", {
+                        message:
+                            failedCount > 0
+                                ? `Match data updated (${results.length} loaded, ${failedCount} failed)`
+                                : `Match data updated (${results.length} matches)`,
+>>>>>>> 4445079 (consumption of the new addon version)
                     }).catch(() => undefined);
                 }
                 lastParseErrorMessage.current = null;
