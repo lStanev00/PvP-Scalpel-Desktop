@@ -11,11 +11,20 @@ import {
     type KickTelemetrySnapshot,
 } from "./kickTelemetry";
 import {
+    buildSpellOutcomeCounts,
+    resolveLocalSpellModel,
+} from "../../Domain/localSpellModel";
+import {
     BRACKET_SOLO_SHUFFLE,
     isRatedBracket,
     type MatchSummary,
 } from "./utils";
-import type { MatchPlayer, MatchTimelineEntry } from "./types";
+import type { MatchPlayer } from "./types";
+import type {
+    ComputedAnalyticsV2,
+    ComputedOwnerKickSummary,
+    NormalizedLocalSpellModel,
+} from "../../Interfaces/local-spell-model";
 import styles from "./DataActivity.module.css";
 
 interface MatchDetailsPanelProps {
@@ -39,7 +48,7 @@ type SpellTotalEntry = {
 type SpellTotalsMap = Record<string, SpellTotalEntry> | Record<number, SpellTotalEntry>;
 type MatchDetailsContent = {
     players: MatchPlayer[];
-    timeline: MatchTimelineEntry[];
+    localSpellModel: NormalizedLocalSpellModel | null;
     isSoloShuffle: boolean;
     alliance: MatchPlayer[];
     horde: MatchPlayer[];
@@ -141,7 +150,7 @@ export default function MatchDetailsPanel({ match, isLoading, onBack }: MatchDet
     const content = useMemo<MatchDetailsContent | null>(() => {
         if (!match) return null;
         const players = (match.raw.players ?? []) as MatchPlayer[];
-        const timeline = (match.raw.timeline ?? []) as MatchTimelineEntry[];
+        const localSpellModel = resolveLocalSpellModel(match.raw);
         const isSoloShuffle = match.bracketId === BRACKET_SOLO_SHUFFLE;
         const showRating = isRatedBracket(match.bracketId);
         // Blizzard faction index in PvP scoreboards: 0 = Horde, 1 = Alliance.
@@ -177,24 +186,7 @@ export default function MatchDetailsPanel({ match, isLoading, onBack }: MatchDet
         const interruptSpellIds = (
             match.raw as unknown as { interruptSpellIds?: unknown }
         ).interruptSpellIds;
-        const computed = (
-            match.raw as unknown as {
-                computed?: {
-                    spellOutcomesBySpellId?: Record<
-                        string,
-                        { succeeded?: unknown; interrupted?: unknown; failed?: unknown }
-                    >;
-                    ownerKicks?: {
-                        intentAttempts?: unknown;
-                        landed?: unknown;
-                        confirmedInterrupts?: unknown;
-                        missed?: unknown;
-                        succeeded?: unknown;
-                        failed?: unknown;
-                    };
-                };
-            }
-        ).computed;
+        const computed = (match.raw as unknown as { computed?: ComputedAnalyticsV2 }).computed;
         const ownerPlayer = players.find((player) => player.isOwner) ?? null;
         const ownerInterruptTuple = Array.isArray((ownerPlayer as { interrupts?: unknown } | null)?.interrupts)
             ? ((ownerPlayer as { interrupts?: unknown }).interrupts as unknown[])
@@ -215,14 +207,21 @@ export default function MatchDetailsPanel({ match, isLoading, onBack }: MatchDet
         const telemetryVersion = resolveTelemetryVersion(match.raw);
         const baseKickTelemetrySnapshot = computeKickTelemetrySnapshot({
             matchId: match.id,
-            timeline,
+            localSpellModel,
             kickSpellIds: normalizedInterruptSpellIds,
             owner: ownerPlayer,
             telemetryVersion,
             interruptSpellsBySource,
             includeDiagnostics: debugEnabled,
         });
-        const computedOwnerKicks = computed?.ownerKicks;
+        const computedOwnerKicks = computed?.ownerKicks as ComputedOwnerKickSummary | undefined;
+        const computedTotal =
+            typeof computedOwnerKicks?.total === "number" && Number.isFinite(computedOwnerKicks.total)
+                ? Math.max(0, Math.trunc(computedOwnerKicks.total))
+                : typeof computedOwnerKicks?.intentAttempts === "number" &&
+                    Number.isFinite(computedOwnerKicks.intentAttempts)
+                  ? Math.max(0, Math.trunc(computedOwnerKicks.intentAttempts))
+                  : null;
         const computedIntentAttempts =
             typeof computedOwnerKicks?.intentAttempts === "number" &&
             Number.isFinite(computedOwnerKicks.intentAttempts)
@@ -246,10 +245,12 @@ export default function MatchDetailsPanel({ match, isLoading, onBack }: MatchDet
                 : typeof computedOwnerKicks?.failed === "number" && Number.isFinite(computedOwnerKicks.failed)
                   ? Math.max(0, Math.trunc(computedOwnerKicks.failed))
                   : null;
+        const resolvedTotalKickAttempts =
+            computedTotal !== null ? computedTotal : baseKickTelemetrySnapshot.totalKickAttempts;
         const resolvedIntentAttempts =
             computedIntentAttempts !== null && computedIntentAttempts > 0
                 ? computedIntentAttempts
-                : baseKickTelemetrySnapshot.intentAttempts;
+                : resolvedTotalKickAttempts;
         const resolvedLanded =
             computedLanded !== null ? computedLanded : baseKickTelemetrySnapshot.landedAttempts;
         const resolvedConfirmedInterrupts =
@@ -265,6 +266,7 @@ export default function MatchDetailsPanel({ match, isLoading, onBack }: MatchDet
             baseKickTelemetrySnapshot.isSupported
                 ? {
                       ...baseKickTelemetrySnapshot,
+                      totalKickAttempts: resolvedTotalKickAttempts,
                       intentAttempts: resolvedIntentAttempts,
                       landedAttempts: resolvedLanded,
                       succeededAttempts: resolvedLanded,
@@ -273,7 +275,7 @@ export default function MatchDetailsPanel({ match, isLoading, onBack }: MatchDet
                       succeeded: resolvedConfirmedInterrupts,
                   }
                 : baseKickTelemetrySnapshot;
-        const computedSpellOutcomes =
+        const computedSpellOutcomesFromStore =
             computed?.spellOutcomesBySpellId && typeof computed.spellOutcomesBySpellId === "object"
                 ? Object.fromEntries(
                       Object.entries(computed.spellOutcomesBySpellId)
@@ -308,6 +310,12 @@ export default function MatchDetailsPanel({ match, isLoading, onBack }: MatchDet
                           )
                   )
                 : null;
+        const computedSpellOutcomes =
+            computedSpellOutcomesFromStore ??
+            (() => {
+                const derived = buildSpellOutcomeCounts(localSpellModel);
+                return Object.keys(derived).length > 0 ? derived : null;
+            })();
 
         if (import.meta.env.DEV) {
             console.log("[SpellMetrics] payload aggregate keys", {
@@ -322,7 +330,7 @@ export default function MatchDetailsPanel({ match, isLoading, onBack }: MatchDet
 
         return {
             players,
-            timeline,
+            localSpellModel,
             isSoloShuffle,
             alliance,
             horde,
@@ -424,7 +432,7 @@ export default function MatchDetailsPanel({ match, isLoading, onBack }: MatchDet
                     </span>
                 </div>
                 <SpellCastGraph
-                    timeline={content.timeline}
+                    localSpellModel={content.localSpellModel}
                     players={content.players}
                     bracketId={match.bracketId}
                     gameVersion={content.gameVersion}
@@ -446,7 +454,7 @@ export default function MatchDetailsPanel({ match, isLoading, onBack }: MatchDet
                 ) : null}
                 {debugEnabled ? (
                     <DebugSpellInspector
-                        timeline={content.timeline}
+                        localSpellModel={content.localSpellModel}
                         gameVersion={content.gameVersion}
                         kickSpellIds={content.interruptSpellIds}
                         ownerInterruptsIssued={content.ownerInterruptsIssued}

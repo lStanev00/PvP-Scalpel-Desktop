@@ -24,7 +24,8 @@ import {
 } from "../../Domain/matchBrackets";
 import type { MatchWithId } from "../../Interfaces/matches";
 import { buildCharacterKey, formatRealmLabel } from "./playerIdentity";
-import type { MatchPlayer, MatchTimelineEntry } from "./types";
+import type { MatchPlayer } from "./types";
+import { resolveMatchDurationSeconds } from "../../Domain/localSpellModel";
 
 export type MatchResult = "win" | "loss" | "neutral";
 export type MatchMode = BracketId;
@@ -144,21 +145,7 @@ const getOwner = (players: MatchPlayer[]) => {
 };
 
 const getDurationSeconds = (match: MatchWithId) => {
-    const anyMatch = match as MatchWithId & {
-        durationSeconds?: number;
-        soloShuffle?: { duration?: number };
-        timeline?: MatchTimelineEntry[];
-    };
-    if (typeof anyMatch.durationSeconds === "number" && Number.isFinite(anyMatch.durationSeconds)) {
-        return anyMatch.durationSeconds > 0 ? anyMatch.durationSeconds : null;
-    }
-    if (anyMatch.soloShuffle?.duration) return anyMatch.soloShuffle.duration;
-    const timeline = anyMatch.timeline;
-    if (timeline && timeline.length > 0) {
-        const max = Math.max(...timeline.map((e) => e.t || 0));
-        return max > 0 ? max : null;
-    }
-    return null;
+    return resolveMatchDurationSeconds(match);
 };
 
 const getDelta = (match: MatchWithId, owner: MatchPlayer | null) => {

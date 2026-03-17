@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Manager};
 
-const SCHEMA_VERSION: u8 = 1;
+const SCHEMA_VERSION: u8 = 2;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -59,7 +59,7 @@ fn store_path(app: &AppHandle, account: &str) -> Result<PathBuf, String> {
         .app_data_dir()
         .map_err(|e| format!("Unable to resolve app data directory: {e}"))?;
     dir.push("computed_outcomes");
-    dir.push("v1");
+    dir.push("v2");
     fs::create_dir_all(&dir).map_err(|e| format!("Unable to create computed store directory: {e}"))?;
     dir.push(format!("{}.json", sanitize_account(account)));
     Ok(dir)
@@ -216,7 +216,7 @@ pub fn load_all_computed_matches(app: AppHandle) -> Result<Vec<Value>, String> {
         .app_data_dir()
         .map_err(|e| format!("Unable to resolve app data directory: {e}"))?;
     dir.push("computed_outcomes");
-    dir.push("v1");
+    dir.push("v2");
 
     if !dir.exists() {
         return Ok(Vec::new());

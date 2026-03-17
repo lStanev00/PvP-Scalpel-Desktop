@@ -10,13 +10,16 @@ import {
     upsertGameSpells,
     type SpellMetaCache,
 } from "../../Domain/spellMetaCache";
-import type { MatchTimelineEntry } from "./types";
-import { resolveIntentAttempts, type AttemptRecord, type NormalizedEvent } from "./spellCastResolver";
 import type { KickTelemetrySnapshot } from "./kickTelemetry";
+import type {
+    NormalizedLocalSpellAttempt,
+    NormalizedLocalSpellEvent,
+    NormalizedLocalSpellModel,
+} from "../../Interfaces/local-spell-model";
 import styles from "./DataActivity.module.css";
 
 interface DebugSpellInspectorProps {
-    timeline: MatchTimelineEntry[];
+    localSpellModel?: NormalizedLocalSpellModel | null;
     gameVersion?: string | null;
     kickSpellIds?: number[];
     ownerInterruptsIssued?: number | null;
@@ -29,11 +32,11 @@ const KICK_FILTER_VALUE = "__kick_catalog__";
 const DEFAULT_COLLAPSE_WINDOW_SECONDS = 0.08;
 const KICK_COLLAPSE_WINDOW_SECONDS = 0.35;
 
-type CollapsedAttemptRecord = AttemptRecord & {
+type CollapsedAttemptRecord = NormalizedLocalSpellAttempt & {
     sourceAttemptIds: string[];
 };
 
-const OUTCOME_PRIORITY: Record<NonNullable<AttemptRecord["resolvedOutcome"]>, number> = {
+const OUTCOME_PRIORITY: Record<NonNullable<NormalizedLocalSpellAttempt["resolvedOutcome"]>, number> = {
     succeeded: 3,
     interrupted: 2,
     failed: 1,
@@ -49,18 +52,17 @@ const getCastGuidCollapseKey = (castGUID?: string) => {
 
 const mergeAttemptRecords = (
     target: CollapsedAttemptRecord,
-    incoming: AttemptRecord,
+    incoming: NormalizedLocalSpellAttempt,
     sourceId: string
 ): CollapsedAttemptRecord => {
-    const mergedOutcomes = new Set(target.outcomes);
-    incoming.outcomes.forEach((outcome) => mergedOutcomes.add(outcome));
+    const mergedOutcomes = Array.from(new Set([...target.outcomes, ...incoming.outcomes]));
 
     const mergedEvents = [...target.events, ...incoming.events].sort((a, b) =>
         a.t === b.t ? a.index - b.index : a.t - b.t
     );
 
     const outcomeCandidates = [target.resolvedOutcome, incoming.resolvedOutcome].filter(
-        (outcome): outcome is NonNullable<AttemptRecord["resolvedOutcome"]> => !!outcome
+        (outcome): outcome is NonNullable<NormalizedLocalSpellAttempt["resolvedOutcome"]> => !!outcome
     );
     const resolvedOutcome = outcomeCandidates.sort(
         (a, b) => OUTCOME_PRIORITY[b] - OUTCOME_PRIORITY[a]
@@ -78,7 +80,7 @@ const mergeAttemptRecords = (
     };
 };
 
-const collapseAttempts = (input: AttemptRecord[], aggressive: boolean) => {
+const collapseAttempts = (input: NormalizedLocalSpellAttempt[], aggressive: boolean) => {
     const sorted = [...input].sort((a, b) =>
         a.startTime === b.startTime ? a.id.localeCompare(b.id) : a.startTime - b.startTime
     );
@@ -130,10 +132,10 @@ const collapseAttempts = (input: AttemptRecord[], aggressive: boolean) => {
     return { collapsed: sortedCollapsed, sourceToCollapsed };
 };
 
-const formatTime = (value: number) => `${value.toFixed(2)}ms`;
+const formatTime = (value: number) => `${value.toFixed(2)}s`;
 
-const getAttemptExplanation = (attempt: AttemptRecord) => {
-    const outcomes = Array.from(attempt.outcomes);
+const getAttemptExplanation = (attempt: NormalizedLocalSpellAttempt) => {
+    const outcomes = attempt.outcomes;
     if (!attempt.resolvedOutcome) {
         return "START/SENT with no outcome -> unresolved (timeout)";
     }
@@ -159,7 +161,7 @@ const getAttemptExplanation = (attempt: AttemptRecord) => {
     return `Resolved as ${outcome}`;
 };
 
-const getEventStatus = (event: NormalizedEvent, attempt?: AttemptRecord): EventStatus => {
+const getEventStatus = (event: NormalizedLocalSpellEvent, attempt?: NormalizedLocalSpellAttempt): EventStatus => {
     if (!attempt || !attempt.resolvedOutcome) return "unresolved";
     const outcome = event.event.toLowerCase();
     if (outcome === attempt.resolvedOutcome) return "outcome";
@@ -175,7 +177,7 @@ const getEventStatus = (event: NormalizedEvent, attempt?: AttemptRecord): EventS
 };
 
 export default function DebugSpellInspector({
-    timeline,
+    localSpellModel = null,
     gameVersion,
     kickSpellIds,
     ownerInterruptsIssued,
@@ -188,10 +190,17 @@ export default function DebugSpellInspector({
     const [isFetching, setIsFetching] = useState(false);
     const inFlight = useRef<Set<string>>(new Set());
 
-    const { rawEvents, attempts, eventToAttemptId } = useMemo(
-        () => resolveIntentAttempts(timeline),
-        [timeline]
-    );
+    const rawEvents = useMemo(() => localSpellModel?.events ?? [], [localSpellModel]);
+    const attempts = useMemo(() => localSpellModel?.attempts ?? [], [localSpellModel]);
+    const eventToAttemptId = useMemo(() => {
+        const map = new Map<number, string>();
+        attempts.forEach((attempt) => {
+            attempt.events.forEach((event) => {
+                map.set(event.id, attempt.id);
+            });
+        });
+        return map;
+    }, [attempts]);
 
     const spellOptions = useMemo(() => {
         const ids = Array.from(new Set(rawEvents.map((event) => event.spellId)));
@@ -201,6 +210,7 @@ export default function DebugSpellInspector({
     const [selectedFilter, setSelectedFilter] = useState<string>("");
     const [hoveredAttempt, setHoveredAttempt] = useState<string | null>(null);
     const [hoveredEvent, setHoveredEvent] = useState<number | null>(null);
+    const [isJsonExpanded, setIsJsonExpanded] = useState(false);
 
     const kickSpellSet = useMemo(() => {
         const set = new Set<number>();
@@ -325,7 +335,7 @@ export default function DebugSpellInspector({
     const { displayAttempts, sourceAttemptToDisplayAttempt } = useMemo(() => {
         const collapsed = collapseAttempts(filteredAttempts, isKickFilter);
         return {
-            displayAttempts: collapsed.collapsed as (AttemptRecord | CollapsedAttemptRecord)[],
+            displayAttempts: collapsed.collapsed as (NormalizedLocalSpellAttempt | CollapsedAttemptRecord)[],
             sourceAttemptToDisplayAttempt: collapsed.sourceToCollapsed,
         };
     }, [isKickFilter, filteredAttempts]);
@@ -379,7 +389,7 @@ export default function DebugSpellInspector({
         }
 
         const castEvents = kickTelemetrySnapshot.castEvents;
-        const attemptCount = kickTelemetrySnapshot.intentAttempts;
+        const attemptCount = kickTelemetrySnapshot.totalKickAttempts;
         const landedAttempts = kickTelemetrySnapshot.landedAttempts;
         const outcomeOnlyAttempts = kickTelemetrySnapshot.outcomeOnlyAttempts;
         const confirmedInterrupts = kickTelemetrySnapshot.confirmedInterrupts;
@@ -430,6 +440,58 @@ export default function DebugSpellInspector({
         ownerInterruptsSucceeded,
     ]);
 
+    const debugJsonPayload = useMemo(() => {
+        if (!import.meta.env.DEV || !isJsonExpanded) return null;
+
+        return JSON.stringify(
+            {
+                filter: {
+                    selectedFilter,
+                    isKickFilter,
+                    selectedSpell,
+                    selectedSpellName,
+                },
+                localSpellModel: localSpellModel
+                    ? {
+                          schemaVersion: localSpellModel.schemaVersion,
+                          sourceFormat: localSpellModel.sourceFormat,
+                          detailAvailable: localSpellModel.detailAvailable,
+                          failureReason: localSpellModel.failureReason ?? null,
+                          durationSecondsHint: localSpellModel.durationSecondsHint ?? null,
+                          attempts: localSpellModel.attempts,
+                          events: localSpellModel.events,
+                          locEntries: localSpellModel.locEntries,
+                      }
+                    : null,
+                filtered: {
+                    rawEvents: filteredEvents,
+                    attempts: filteredAttempts,
+                    displayAttempts,
+                    eventToAttemptId: Array.from(eventToAttemptId.entries()),
+                    eventToDisplayAttemptId: Array.from(eventToDisplayAttemptId.entries()),
+                },
+                kickValidation,
+                kickTelemetrySnapshot,
+            },
+            null,
+            2
+        );
+    }, [
+        isJsonExpanded,
+        selectedFilter,
+        isKickFilter,
+        selectedSpell,
+        selectedSpellName,
+        localSpellModel,
+        filteredEvents,
+        filteredAttempts,
+        displayAttempts,
+        eventToAttemptId,
+        eventToDisplayAttemptId,
+        kickValidation,
+        kickTelemetrySnapshot,
+    ]);
+
     if (!spellOptions.length) {
         return null;
     }
@@ -440,7 +502,7 @@ export default function DebugSpellInspector({
                 <div>
                     <div className={styles.debugTitle}>Debug Spell Inspector</div>
                     <div className={styles.debugSubtitle}>
-                        Raw events vs intent attempts for a spell filter.
+                        Normalized local spell events vs attempts for a spell filter.
                     </div>
                 </div>
                 <div className={styles.debugSelector}>
@@ -537,7 +599,7 @@ export default function DebugSpellInspector({
                                             {isKickFilter ? `Spell ${attempt.spellId} - ` : ""}
                                             {attempt.grouping === "castGUID"
                                                 ? `castGUID: ${attempt.castGUID ?? "-"}`
-                                                : `fallback window (${attempt.windowMs}ms)`}
+                                                : `normalized window (${attempt.windowMs.toFixed(2)}s)`}
                                         </span>
                                         <span>{attempt.events.length} events</span>
                                     </div>
@@ -558,13 +620,13 @@ export default function DebugSpellInspector({
 
             {kickValidation ? (
                 <div className={styles.debugValidation}>
-                    <div className={styles.debugValidationTitle}>Kick Validation (Owner Timeline)</div>
+                    <div className={styles.debugValidationTitle}>Kick Validation (Normalized Local Spell Data)</div>
                     <div className={styles.debugValidationRow}>
-                        <span>Timeline cast events (SENT + START for kick IDs)</span>
+                        <span>Kick cast events (SENT + START where available)</span>
                         <span>{kickValidation.castEvents}</span>
                     </div>
                     <div className={styles.debugValidationRow}>
-                        <span>Intent attempts (resolver, has SENT/START)</span>
+                        <span>Total kick attempts</span>
                         <span>{kickValidation.attemptCount}</span>
                     </div>
                     <div className={styles.debugValidationRow}>
@@ -584,7 +646,7 @@ export default function DebugSpellInspector({
                         <span>{kickValidation.confirmedInterrupts ?? "--"}</span>
                     </div>
                     <div className={styles.debugValidationRow}>
-                        <span>Estimated bad kicks (landed kicks - confirmed interrupts)</span>
+                        <span>Estimated bad kicks (total kicks - confirmed interrupts)</span>
                         <span>{kickValidation.estimatedBadKicks}</span>
                     </div>
                     <div className={styles.debugValidationRow}>
@@ -596,7 +658,7 @@ export default function DebugSpellInspector({
                         </span>
                     </div>
                     <div className={styles.debugValidationRow}>
-                        <span>Landed/failed interrupt outcomes (SUCCEEDED/INTERRUPTED) - interrupts[0]</span>
+                        <span>Resolved kick outcomes (succeeded/interrupted) - interrupts[0]</span>
                         <span>
                             {kickValidation.executedVsIssued === null
                                 ? "--"
@@ -612,7 +674,7 @@ export default function DebugSpellInspector({
                         </span>
                     </div>
                     <div className={styles.debugValidationRow}>
-                        <span>Landed kick casts - interrupts[1]</span>
+                        <span>Outcome-succeeded kick attempts - interrupts[1]</span>
                         <span>
                             {kickValidation.successVsSucceeded === null
                                 ? "--"
@@ -628,24 +690,37 @@ export default function DebugSpellInspector({
                         </span>
                     </div>
                     <div className={styles.debugValidationRow}>
-                        <span>Suggested missed kicks (landed kicks - confirmed interrupts)</span>
+                        <span>Suggested missed kicks (total kicks - confirmed interrupts)</span>
                         <span>{kickValidation.suggestedMissedKicks}</span>
                     </div>
                     <div className={styles.debugValidationRow}>
-                        <span>Kick outcomes (landed / confirmed / interrupted / failed / unresolved)</span>
+                        <span>Kick outcomes (total / confirmed / interrupted / failed / unresolved)</span>
                         <span>
-                            {kickValidation.landedAttempts} / {kickValidation.confirmedInterrupts ?? "--"} /{" "}
+                            {kickValidation.attemptCount} / {kickValidation.confirmedInterrupts ?? "--"} /{" "}
                             {kickValidation.interruptedAttempts} / {kickValidation.failedAttempts} /{" "}
                             {kickValidation.unresolvedAttempts}
                         </span>
                     </div>
                     <div className={styles.debugValidationHint}>
                         {kickTelemetrySnapshot?.isSupported
-                            ? "Calculation uses landed kick casts from the owner timeline and confirms interrupts from owner per-source interrupt data."
-                            : "Kick outcome confirmation is gated off for legacy telemetry versions; debug rows below only show raw cast diagnostics."}
+                            ? "Calculation uses normalized local kick attempts and confirms interrupts from owner per-source interrupt data."
+                            : "Kick outcome confirmation is gated off for legacy telemetry versions; debug rows below only show local cast diagnostics."}
                     </div>
                 </div>
             ) : null}
+
+            <details
+                className={styles.debugJsonSection}
+                open={isJsonExpanded}
+                onToggle={(event) =>
+                    setIsJsonExpanded((event.currentTarget as HTMLDetailsElement).open)
+                }
+            >
+                <summary className={styles.debugJsonSummary}>Expandable JSON Render</summary>
+                {isJsonExpanded && debugJsonPayload ? (
+                    <pre className={styles.debugJsonPre}>{debugJsonPayload}</pre>
+                ) : null}
+            </details>
         </section>
     );
 }

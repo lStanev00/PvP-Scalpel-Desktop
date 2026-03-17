@@ -2538,6 +2538,41 @@
     color: rgba(230, 234, 240, 0.62);
 }
 
+.debugJsonSection {
+    margin-top: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: var(--r12);
+    background: rgba(12, 16, 24, 0.5);
+    overflow: hidden;
+}
+
+.debugJsonSummary {
+    padding: 10px 12px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 700;
+    color: rgba(230, 234, 240, 0.9);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    list-style: none;
+}
+
+.debugJsonSummary::-webkit-details-marker {
+    display: none;
+}
+
+.debugJsonPre {
+    margin: 0;
+    padding: 0 12px 12px;
+    overflow: auto;
+    font-family: var(--mono);
+    font-size: 11px;
+    line-height: 1.55;
+    color: rgba(230, 234, 240, 0.82);
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
 .detailsEmpty {
     text-align: center;
     padding: 48px 20px;

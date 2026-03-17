@@ -2,70 +2,10 @@ import { createContext, ReactNode, useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import luaJson from "lua-json";
+import { extractLuaRootTable } from "../Domain/luaSavedVariables";
 import { SpellDataBucket } from "../Interfaces/spell-data";
 
 export const SpellDataContext = createContext<SpellDataBucket | null>(null);
-
-const extractLuaTable = (content: string, key: string) => {
-    const idx = content.indexOf(key);
-    if (idx === -1) return null;
-
-    const startEq = content.indexOf("=", idx);
-    if (startEq === -1) return null;
-
-    let i = startEq + 1;
-    while (i < content.length && /\s/.test(content[i])) i += 1;
-    if (content[i] !== "{") return null;
-
-    let depth = 0;
-    let inString = false;
-    let stringChar = "";
-    let escaped = false;
-    const tableStart = i;
-
-    for (; i < content.length; i += 1) {
-        const ch = content[i];
-        const next = content[i + 1];
-
-        if (inString) {
-            if (escaped) {
-                escaped = false;
-                continue;
-            }
-            if (ch === "\\") {
-                escaped = true;
-                continue;
-            }
-            if (ch === stringChar) {
-                inString = false;
-                stringChar = "";
-            }
-            continue;
-        }
-
-        if (ch === "\"" || ch === "'") {
-            inString = true;
-            stringChar = ch;
-            continue;
-        }
-
-        if (ch === "-" && next === "-") {
-            while (i < content.length && content[i] !== "\n") i += 1;
-            continue;
-        }
-
-        if (ch === "{") {
-            depth += 1;
-        } else if (ch === "}") {
-            depth -= 1;
-            if (depth === 0) {
-                return content.slice(tableStart, i + 1);
-            }
-        }
-    }
-
-    return null;
-};
 
 const logSchemaMismatch = (message: string, details?: unknown) => {
     if (import.meta.env.DEV) {
@@ -182,12 +122,12 @@ export const SpellDataProvider = ({ children }: { children: ReactNode }) => {
 
                         if (!fileContent) return;
 
-                        const luaTable = extractLuaTable(fileContent, "PvP_Scalpel_Spell_Data");
-                        if (!luaTable) return;
+                        const luaTableResult = extractLuaRootTable(fileContent, "PvP_Scalpel_Spell_Data");
+                        if (luaTableResult.status !== "ok") return;
 
                         let parsed: unknown;
                         try {
-                            parsed = luaJson.parse("return " + luaTable);
+                            parsed = luaJson.parse("return " + luaTableResult.table);
                         } catch {
                             return;
                         }

@@ -1,3 +1,5 @@
+import type { ComputedAnalyticsV2 } from "./local-spell-model";
+
 // Telemetry v2/v3 types (SavedVariables schema).
 export type TimelineEventType =
     | "SENT"
@@ -64,6 +66,7 @@ export interface MatchDetailsV2 {
     timestamp: string;
     format: string;
     mapName: string;
+    bgGameType?: string;
     build?: BuildInfoSnapshot;
 }
 
@@ -158,7 +161,7 @@ export interface SoloShuffleDataV2 {
 
 export interface MatchV2 {
     matchKey: string;
-    telemetryVersion: 2 | 3;
+    telemetryVersion: 2 | 3 | 3.1;
     durationSeconds?: number;
     winner?: "victory" | "defeat" | "draw";
     matchDetails: MatchDetailsV2;
@@ -189,23 +192,6 @@ export interface MatchV2 {
     }>>;
     interruptSpellsBySource?: Record<string, Record<string, number>>;
     castOutcomes?: unknown[];
-    computed?: {
-        spellOutcomesBySpellId?: Record<
-            string,
-            {
-                succeeded?: number;
-                interrupted?: number;
-                failed?: number;
-            }
-        >;
-        ownerKicks?: {
-            intentAttempts?: number;
-            landed?: number;
-            confirmedInterrupts?: number;
-            missed?: number;
-            succeeded?: number;
-            failed?: number;
-        };
-    };
+    computed?: ComputedAnalyticsV2;
     soloShuffle?: SoloShuffleDataV2;
 }
