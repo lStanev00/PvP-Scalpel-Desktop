@@ -2,9 +2,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { LuInfo } from "react-icons/lu";
 import TeamTable from "./TeamTable";
 import MSSStatsSection, { collectMSSStats } from "./MSSStatsSection";
-import SpellCastGraph from "./SpellCastGraph";
 import DebugSpellInspector from "./DebugSpellInspector";
 import MatchSummaryHeader from "./MatchSummaryHeader";
+import MatchAnalysisWorkspace from "./MatchAnalysisWorkspace";
 import {
     computeKickTelemetrySnapshot,
     resolveTelemetryVersion,
@@ -424,23 +424,18 @@ export default function MatchDetailsPanel({ match, isLoading, onBack }: MatchDet
                         onHoverPlayerKey={setHighlightedPlayerKey}
                     />
                 )}
-                <div className={styles.spellNote}>
-                    <LuInfo className={styles.spellNoteIcon} aria-hidden="true" />
-                    <span>
-                        Spell activity overview. This section shows how abilities were used during the match. Advanced
-                        insights and guidance are still evolving in this module.
-                    </span>
-                </div>
-                <SpellCastGraph
-                    localSpellModel={content.localSpellModel}
+                <MatchAnalysisWorkspace
+                    match={match}
                     players={content.players}
-                    bracketId={match.bracketId}
+                    localSpellModel={content.localSpellModel}
                     gameVersion={content.gameVersion}
                     telemetryVersion={content.telemetryVersion}
                     spellTotals={content.spellTotals}
                     spellTotalsBySource={content.spellTotalsBySource}
                     interruptSpellsBySource={content.interruptSpellsBySource}
                     computedSpellOutcomes={content.computedSpellOutcomes}
+                    kickTelemetrySnapshot={content.kickTelemetrySnapshot}
+                    kickSpellIds={content.interruptSpellIds}
                 />
 
                 {debugEnabled ? (
