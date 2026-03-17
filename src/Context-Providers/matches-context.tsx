@@ -116,6 +116,71 @@ const readTelemetryVersion = (value: unknown) => {
     return typeof telemetryVersion === "number" ? telemetryVersion : Number(telemetryVersion);
 };
 
+const buildMatchWithId = async (
+    parsedMatch: unknown,
+    interruptSpellIds: number[]
+): Promise<MatchWithId> => {
+    const derivedDuration = deriveDurationSeconds(parsedMatch);
+    const normalizedParsedMatch =
+        derivedDuration !== null && isPlainObject(parsedMatch)
+            ? ({
+                  ...parsedMatch,
+                  durationSeconds: derivedDuration,
+              } as unknown)
+            : parsedMatch;
+
+    const id = await invoke<string>("identify_match", {
+        obj: normalizedParsedMatch,
+    });
+
+    const telemetryVersion =
+        typeof (normalizedParsedMatch as { telemetryVersion?: unknown }).telemetryVersion ===
+        "number"
+            ? ((normalizedParsedMatch as { telemetryVersion?: number }).telemetryVersion as number)
+            : Number.NaN;
+    const isTelemetryV2Plus =
+        typeof normalizedParsedMatch === "object" &&
+        normalizedParsedMatch !== null &&
+        Number.isFinite(telemetryVersion) &&
+        telemetryVersion >= 2;
+
+    if (isTelemetryV2Plus) {
+        validateMatchV2Plus(normalizedParsedMatch);
+    } else {
+        validateMatchV1(normalizedParsedMatch);
+    }
+
+    return {
+        id,
+        ...(isTelemetryV2Plus
+            ? ((telemetryVersion >= 4
+                  ? (normalizedParsedMatch as MatchV4)
+                  : (normalizedParsedMatch as MatchV2)) as MatchV2 | MatchV4)
+            : (normalizedParsedMatch as Match)),
+        interruptSpellIds,
+    };
+};
+
+const getLoadedMatchIdentity = (match: MatchWithId) => {
+    const matchKey = extractMatchKey(match);
+    if (matchKey) return `match:${matchKey}`;
+    return `id:${match.id}`;
+};
+
+const mergeLoadedMatchCorpus = (base: MatchWithId[], overlay: MatchWithId[]) => {
+    const merged = new Map<string, MatchWithId>();
+
+    base.forEach((match) => {
+        merged.set(getLoadedMatchIdentity(match), match);
+    });
+
+    overlay.forEach((match) => {
+        merged.set(getLoadedMatchIdentity(match), match);
+    });
+
+    return Array.from(merged.values());
+};
+
 const splitTopLevelLuaEntries = (table: string) => {
     const trimmed = table.trim();
     if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) return [];
@@ -424,12 +489,17 @@ export const MatchesContext = createContext<MatchWithId[] | null>(null);
 
 export const MatchesProvider = ({ children }: { children: ReactNode }) => {
     const [matches, setMatches] = useState<MatchWithId[]>([]);
+    const matchesRef = useRef<MatchWithId[]>([]);
     const lastLoggedCount = useRef<number | null>(null);
     const lastParseErrorMessage = useRef<string | null>(null);
 
     useEffect(() => {
         let timeout: ReturnType<typeof setTimeout> | null = null;
         let activeRunId = 0;
+        const commitMatches = (nextMatches: MatchWithId[]) => {
+            matchesRef.current = nextMatches;
+            setMatches(nextMatches);
+        };
         const hydrateFromComputedStore = async () => {
             const persistedComputedMatches = await invoke<unknown[]>("load_all_computed_matches").catch(
                 () => []
@@ -444,57 +514,20 @@ export const MatchesProvider = ({ children }: { children: ReactNode }) => {
 
             for (const parsedMatch of computedForMerge) {
                 try {
-                    const derivedDuration = deriveDurationSeconds(parsedMatch);
-                    const normalizedParsedMatch =
-                        derivedDuration !== null && isPlainObject(parsedMatch)
-                            ? ({
-                                  ...parsedMatch,
-                                  durationSeconds: derivedDuration,
-                              } as unknown)
-                            : parsedMatch;
-
-                    const id = await invoke<string>("identify_match", {
-                        obj: normalizedParsedMatch,
-                    });
-
-                    const telemetryVersion =
-                        typeof (normalizedParsedMatch as { telemetryVersion?: unknown })
-                            .telemetryVersion === "number"
-                            ? ((normalizedParsedMatch as { telemetryVersion?: number }).telemetryVersion as number)
-                            : Number.NaN;
-                    const isTelemetryV2Plus =
-                        typeof normalizedParsedMatch === "object" &&
-                        normalizedParsedMatch !== null &&
-                        Number.isFinite(telemetryVersion) &&
-                        telemetryVersion >= 2;
-
-                    if (isTelemetryV2Plus) {
-                        validateMatchV2Plus(normalizedParsedMatch);
-                    } else {
-                        validateMatchV1(normalizedParsedMatch);
-                    }
-
-                    results.push({
-                        id,
-                        ...(isTelemetryV2Plus
-                            ? ((telemetryVersion >= 4
-                                  ? (normalizedParsedMatch as MatchV4)
-                                  : (normalizedParsedMatch as MatchV2)) as MatchV2 | MatchV4)
-                            : (normalizedParsedMatch as Match)),
-                        interruptSpellIds: [],
-                    });
+                    results.push(await buildMatchWithId(parsedMatch, []));
                 } catch {
                     failedCount += 1;
                 }
             }
 
             if (!results.length) return;
-            setMatches((prev) => (prev.length > 0 ? prev : results));
+            const mergedResults = mergeLoadedMatchCorpus(results, matchesRef.current);
+            commitMatches(mergedResults);
             invoke("push_log", {
                 message:
                     failedCount > 0
-                        ? `Computed store bootstrap (${results.length} loaded, ${failedCount} failed)`
-                        : `Computed store bootstrap (${results.length} matches)`,
+                        ? `Computed store bootstrap (${mergedResults.length} loaded, ${failedCount} failed)`
+                        : `Computed store bootstrap (${mergedResults.length} matches)`,
             }).catch(() => undefined);
         };
 
@@ -816,13 +849,6 @@ export const MatchesProvider = ({ children }: { children: ReactNode }) => {
                         rawCount: parsedMatches.length,
                         computedCount: normalizedComputedForMerge.length,
                     });
-                    setMatches([]);
-                    if (lastLoggedCount.current !== 0) {
-                        lastLoggedCount.current = 0;
-                        invoke("push_log", {
-                            message: "Match data updated (0 matches)",
-                        }).catch(() => undefined);
-                    }
                     lastParseErrorMessage.current = null;
                     return;
                 }
@@ -850,39 +876,13 @@ export const MatchesProvider = ({ children }: { children: ReactNode }) => {
                                       durationSeconds: effectiveDuration,
                                   } as unknown)
                                 : parsedMatch;
-                        const id = await invoke<string>("identify_match", {
-                            obj: normalizedParsedMatch,
-                        });
+                        const builtMatch = await buildMatchWithId(
+                            normalizedParsedMatch,
+                            interruptSpellIds
+                        );
 
                         if (logStaleRun(runId, `after-identify-${matchKey ?? "unknown"}`)) return;
-
-                        const telemetryVersion =
-                            typeof (normalizedParsedMatch as { telemetryVersion?: unknown })
-                                .telemetryVersion === "number"
-                                ? ((normalizedParsedMatch as { telemetryVersion?: number })
-                                      .telemetryVersion as number)
-                                : Number.NaN;
-                        const isTelemetryV2Plus =
-                            typeof normalizedParsedMatch === "object" &&
-                            normalizedParsedMatch !== null &&
-                            Number.isFinite(telemetryVersion) &&
-                            telemetryVersion >= 2;
-
-                        if (isTelemetryV2Plus) {
-                            validateMatchV2Plus(normalizedParsedMatch);
-                        } else {
-                            validateMatchV1(normalizedParsedMatch);
-                        }
-
-                        results.push({
-                            id,
-                            ...(isTelemetryV2Plus
-                                ? ((telemetryVersion >= 4
-                                      ? (normalizedParsedMatch as MatchV4)
-                                      : (normalizedParsedMatch as MatchV2)) as MatchV2 | MatchV4)
-                                : (normalizedParsedMatch as Match)),
-                            interruptSpellIds,
-                        });
+                        results.push(builtMatch);
                     } catch (matchErr) {
                         failedCount += 1;
                         if (import.meta.env.DEV) {
@@ -899,18 +899,25 @@ export const MatchesProvider = ({ children }: { children: ReactNode }) => {
                 });
                 if (logStaleRun(runId, "before-set-matches")) return;
 
-                setMatches(results);
+                if (!results.length) {
+                    lastParseErrorMessage.current = null;
+                    return;
+                }
+
+                const nextMatches = mergeLoadedMatchCorpus(matchesRef.current, results);
+                commitMatches(nextMatches);
                 debugMatches("setMatches committed", {
                     runId,
-                    results: results.length,
+                    results: nextMatches.length,
+                    refreshed: results.length,
                 });
-                if (lastLoggedCount.current !== results.length || failedCount > 0) {
-                    lastLoggedCount.current = results.length;
+                if (lastLoggedCount.current !== nextMatches.length || failedCount > 0) {
+                    lastLoggedCount.current = nextMatches.length;
                     invoke("push_log", {
                         message:
                             failedCount > 0
-                                ? `Match data updated (${results.length} loaded, ${failedCount} failed)`
-                                : `Match data updated (${results.length} matches)`,
+                                ? `Match data updated (${nextMatches.length} loaded, ${failedCount} failed)`
+                                : `Match data updated (${nextMatches.length} matches)`,
                     }).catch(() => undefined);
                 }
                 lastParseErrorMessage.current = null;

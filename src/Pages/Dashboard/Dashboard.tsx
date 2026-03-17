@@ -894,8 +894,8 @@ export default function Dashboard() {
                             )
                         ) : (
                             <div className={styles.formStrip}>
-                                {recentWindow.length > 0 ? (
-                                    recentWindow.map((match) => (
+                                {recentScopedSummaries.length > 0 ? (
+                                    recentScopedSummaries.map((match) => (
                                         <button
                                             key={match.id}
                                             type="button"
@@ -931,7 +931,7 @@ export default function Dashboard() {
                                     ))
                                 ) : (
                                     <div className={styles.formEmpty}>
-                                        Recent battleground snapshots fill in once resolved matches are detected.
+                                        Recent battleground snapshots fill in once captures are detected.
                                     </div>
                                 )}
                             </div>
