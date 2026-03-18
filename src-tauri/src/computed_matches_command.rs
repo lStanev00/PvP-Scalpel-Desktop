@@ -6,7 +6,8 @@ use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Manager};
 
-const SCHEMA_VERSION: u8 = 1;
+const LEGACY_SCHEMA_VERSION: u8 = 1;
+const SCHEMA_VERSION: u8 = 2;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -18,9 +19,9 @@ struct ComputedMatchesFile {
 }
 
 impl ComputedMatchesFile {
-    fn empty(account: String) -> Self {
+    fn empty(account: String, schema_version: u8) -> Self {
         Self {
-            schema_version: SCHEMA_VERSION,
+            schema_version,
             account,
             updated_at_ms: now_ms(),
             entries: HashMap::new(),
@@ -53,21 +54,50 @@ fn sanitize_account(value: &str) -> String {
     }
 }
 
-fn store_path(app: &AppHandle, account: &str) -> Result<PathBuf, String> {
+fn version_dir(schema_version: u8) -> &'static str {
+    match schema_version {
+        LEGACY_SCHEMA_VERSION => "v1",
+        SCHEMA_VERSION => "v2",
+        _ => "v2",
+    }
+}
+
+fn store_dir(app: &AppHandle, schema_version: u8, create_dir: bool) -> Result<PathBuf, String> {
     let mut dir = app
         .path()
         .app_data_dir()
         .map_err(|e| format!("Unable to resolve app data directory: {e}"))?;
     dir.push("computed_outcomes");
-    dir.push("v1");
-    fs::create_dir_all(&dir).map_err(|e| format!("Unable to create computed store directory: {e}"))?;
+    dir.push(version_dir(schema_version));
+    if create_dir {
+        fs::create_dir_all(&dir)
+            .map_err(|e| format!("Unable to create computed store directory: {e}"))?;
+    }
+    Ok(dir)
+}
+
+fn store_path(
+    app: &AppHandle,
+    account: &str,
+    schema_version: u8,
+    create_dir: bool,
+) -> Result<PathBuf, String> {
+    let mut dir = store_dir(app, schema_version, create_dir)?;
     dir.push(format!("{}.json", sanitize_account(account)));
     Ok(dir)
 }
 
-fn read_store(path: &PathBuf, account: &str) -> Result<ComputedMatchesFile, String> {
+fn read_store(
+    path: &PathBuf,
+    account: &str,
+    schema_version: u8,
+    persist_normalized: bool,
+) -> Result<ComputedMatchesFile, String> {
     if !path.exists() {
-        return Ok(ComputedMatchesFile::empty(account.to_string()));
+        return Ok(ComputedMatchesFile::empty(
+            account.to_string(),
+            schema_version,
+        ));
     }
 
     let content =
@@ -75,7 +105,7 @@ fn read_store(path: &PathBuf, account: &str) -> Result<ComputedMatchesFile, Stri
     let mut parsed: ComputedMatchesFile = serde_json::from_str(&content)
         .map_err(|e| format!("Unable to parse computed store file: {e}"))?;
 
-    if parsed.schema_version != SCHEMA_VERSION {
+    if parsed.schema_version != schema_version {
         return Err(format!(
             "Unsupported computed store schema version: {}",
             parsed.schema_version
@@ -83,21 +113,33 @@ fn read_store(path: &PathBuf, account: &str) -> Result<ComputedMatchesFile, Stri
     }
 
     parsed.account = account.to_string();
-    if normalize_entries_in_place(&mut parsed) {
+    if normalize_entries_in_place(&mut parsed) && persist_normalized {
         write_store_atomic(path, &parsed)?;
     }
     Ok(parsed)
+}
+
+fn read_store_or_empty(
+    path: &PathBuf,
+    account: &str,
+    schema_version: u8,
+    persist_normalized: bool,
+) -> ComputedMatchesFile {
+    read_store(path, account, schema_version, persist_normalized)
+        .unwrap_or_else(|_| ComputedMatchesFile::empty(account.to_string(), schema_version))
 }
 
 fn write_store_atomic(path: &PathBuf, data: &ComputedMatchesFile) -> Result<(), String> {
     let bytes =
         serde_json::to_vec(data).map_err(|e| format!("Unable to serialize computed store: {e}"))?;
     let tmp_path = path.with_extension("tmp");
-    fs::write(&tmp_path, bytes).map_err(|e| format!("Unable to write computed store temp file: {e}"))?;
+    fs::write(&tmp_path, bytes)
+        .map_err(|e| format!("Unable to write computed store temp file: {e}"))?;
     if path.exists() {
         let _ = fs::remove_file(path);
     }
-    fs::rename(&tmp_path, path).map_err(|e| format!("Unable to replace computed store file: {e}"))?;
+    fs::rename(&tmp_path, path)
+        .map_err(|e| format!("Unable to replace computed store file: {e}"))?;
     Ok(())
 }
 
@@ -202,28 +244,72 @@ fn normalize_entries_in_place(file: &mut ComputedMatchesFile) -> bool {
     changed
 }
 
-#[tauri::command]
-pub fn load_computed_matches(app: AppHandle, account: String) -> Result<Vec<Value>, String> {
-    let path = store_path(&app, &account)?;
-    let file = read_store(&path, &account)?;
-    Ok(file.entries.into_values().collect())
+fn merge_entry_maps(target: &mut HashMap<String, Value>, source: HashMap<String, Value>) {
+    source.into_iter().for_each(|(match_key, entry)| {
+        target.insert(match_key, entry);
+    });
 }
 
-#[tauri::command]
-pub fn load_all_computed_matches(app: AppHandle) -> Result<Vec<Value>, String> {
-    let mut dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("Unable to resolve app data directory: {e}"))?;
-    dir.push("computed_outcomes");
-    dir.push("v1");
+fn promote_legacy_entries(
+    app: &AppHandle,
+    account: &str,
+    legacy_entries: &HashMap<String, Value>,
+) -> Result<(), String> {
+    if legacy_entries.is_empty() {
+        return Ok(());
+    }
 
+    let current_path = store_path(app, account, SCHEMA_VERSION, true)?;
+    let mut current = read_store_or_empty(&current_path, account, SCHEMA_VERSION, true);
+    let mut changed = false;
+
+    legacy_entries.iter().for_each(|(match_key, entry)| {
+        if !current.entries.contains_key(match_key) {
+            current.entries.insert(match_key.clone(), entry.clone());
+            changed = true;
+        }
+    });
+
+    if !changed {
+        return Ok(());
+    }
+
+    current.schema_version = SCHEMA_VERSION;
+    current.account = account.to_string();
+    current.updated_at_ms = now_ms();
+    write_store_atomic(&current_path, &current)
+}
+
+fn load_account_store_union(app: &AppHandle, account: &str) -> Result<ComputedMatchesFile, String> {
+    let legacy_path = store_path(app, account, LEGACY_SCHEMA_VERSION, false)?;
+    let legacy = read_store_or_empty(&legacy_path, account, LEGACY_SCHEMA_VERSION, false);
+    if !legacy.entries.is_empty() {
+        let _ = promote_legacy_entries(app, account, &legacy.entries);
+    }
+
+    let current_path = store_path(app, account, SCHEMA_VERSION, true)?;
+    let current = read_store_or_empty(&current_path, account, SCHEMA_VERSION, true);
+
+    let mut merged = ComputedMatchesFile::empty(account.to_string(), SCHEMA_VERSION);
+    merged.updated_at_ms = legacy.updated_at_ms.max(current.updated_at_ms);
+    merge_entry_maps(&mut merged.entries, legacy.entries);
+    merge_entry_maps(&mut merged.entries, current.entries);
+    Ok(merged)
+}
+
+fn read_all_stores(
+    app: &AppHandle,
+    schema_version: u8,
+    persist_normalized: bool,
+) -> Result<Vec<(String, ComputedMatchesFile)>, String> {
+    let dir = store_dir(app, schema_version, false)?;
     if !dir.exists() {
         return Ok(Vec::new());
     }
 
-    let mut out: Vec<Value> = Vec::new();
-    let read_dir = fs::read_dir(&dir).map_err(|e| format!("Unable to read computed store dir: {e}"))?;
+    let mut out = Vec::new();
+    let read_dir =
+        fs::read_dir(&dir).map_err(|e| format!("Unable to read computed store dir: {e}"))?;
 
     for entry in read_dir.flatten() {
         let path = entry.path();
@@ -234,24 +320,51 @@ pub fn load_all_computed_matches(app: AppHandle) -> Result<Vec<Value>, String> {
             continue;
         }
 
-        let content = match fs::read_to_string(&path) {
-            Ok(v) => v,
+        let account = path
+            .file_stem()
+            .and_then(|v| v.to_str())
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty())
+            .unwrap_or_else(|| "unknown".to_string());
+
+        let parsed = match read_store(&path, &account, schema_version, persist_normalized) {
+            Ok(value) => value,
             Err(_) => continue,
         };
-        let mut parsed: ComputedMatchesFile = match serde_json::from_str(&content) {
-            Ok(v) => v,
-            Err(_) => continue,
-        };
-        if parsed.schema_version != SCHEMA_VERSION {
-            continue;
-        }
-        if normalize_entries_in_place(&mut parsed) {
-            let _ = write_store_atomic(&path, &parsed);
-        }
-        out.extend(parsed.entries.into_values());
+
+        out.push((account, parsed));
     }
 
     Ok(out)
+}
+
+#[tauri::command]
+pub fn load_computed_matches(app: AppHandle, account: String) -> Result<Vec<Value>, String> {
+    let file = load_account_store_union(&app, &account)?;
+    Ok(file.entries.into_values().collect())
+}
+
+#[tauri::command]
+pub fn load_all_computed_matches(app: AppHandle) -> Result<Vec<Value>, String> {
+    let mut by_account: HashMap<String, HashMap<String, Value>> = HashMap::new();
+
+    for (account, legacy) in read_all_stores(&app, LEGACY_SCHEMA_VERSION, false)? {
+        if !legacy.entries.is_empty() {
+            let _ = promote_legacy_entries(&app, &account, &legacy.entries);
+        }
+        let bucket = by_account.entry(account).or_default();
+        merge_entry_maps(bucket, legacy.entries);
+    }
+
+    for (account, current) in read_all_stores(&app, SCHEMA_VERSION, true)? {
+        let bucket = by_account.entry(account).or_default();
+        merge_entry_maps(bucket, current.entries);
+    }
+
+    Ok(by_account
+        .into_values()
+        .flat_map(|entries| entries.into_values())
+        .collect())
 }
 
 #[tauri::command]
@@ -264,8 +377,8 @@ pub fn upsert_computed_matches(
         return Ok(());
     }
 
-    let path = store_path(&app, &account)?;
-    let mut file = read_store(&path, &account)?;
+    let path = store_path(&app, &account, SCHEMA_VERSION, true)?;
+    let mut file = read_store_or_empty(&path, &account, SCHEMA_VERSION, true);
 
     matches.into_iter().for_each(|entry| {
         let (normalized, _) = normalize_match_entry(entry);

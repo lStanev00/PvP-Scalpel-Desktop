@@ -11,8 +11,8 @@ import {
     upsertGameSpells,
     type SpellMetaCache,
 } from "../../Domain/spellMetaCache";
-import type { MatchPlayer, MatchTimelineEntry } from "./types";
-import { resolveIntentAttempts } from "./spellCastResolver";
+import { buildSpellOutcomeCounts } from "../../Domain/localSpellModel";
+import type { MatchPlayer } from "./types";
 import SpellMetricsTooltip, {
     toPlayerTooltipRows,
     type SpellMetricsTooltipPayload,
@@ -34,10 +34,11 @@ import {
     type SpellViewMode,
 } from "./spellMetrics.utils";
 import { isBattlegroundBracket, type MatchMode } from "./utils";
+import type { NormalizedLocalSpellModel } from "../../Interfaces/local-spell-model";
 import styles from "./DataActivity.module.css";
 
 interface SpellCastGraphProps {
-    timeline: MatchTimelineEntry[];
+    localSpellModel?: NormalizedLocalSpellModel | null;
     players: MatchPlayer[];
     bracketId?: MatchMode | null;
     gameVersion?: string | null;
@@ -69,7 +70,7 @@ const normalizeGuid = (value?: string | null) => {
 };
 
 export default function SpellCastGraph({
-    timeline,
+    localSpellModel = null,
     players,
     bracketId = null,
     gameVersion,
@@ -116,24 +117,20 @@ export default function SpellCastGraph({
             return map;
         }
 
-        const { resolvedAttempts } = resolveIntentAttempts(timeline);
+        const derivedOutcomes = buildSpellOutcomeCounts(localSpellModel);
         const map = new Map<number, AttemptCounts>();
-        resolvedAttempts.forEach((attempt) => {
-            const outcome = attempt.resolvedOutcome;
-            if (!outcome) return;
-
-            const existing = map.get(attempt.spellId) ?? {
-                spellId: attempt.spellId,
-                succeeded: 0,
-                failed: 0,
-                interrupted: 0,
-            };
-
-            existing[outcome] += 1;
-            map.set(attempt.spellId, existing);
+        Object.entries(derivedOutcomes).forEach(([spellIdRaw, row]) => {
+            const spellId = Number(spellIdRaw);
+            if (!Number.isFinite(spellId) || spellId <= 0) return;
+            map.set(spellId, {
+                spellId,
+                succeeded: Math.max(0, Math.trunc(row.succeeded)),
+                failed: Math.max(0, Math.trunc(row.failed)),
+                interrupted: Math.max(0, Math.trunc(row.interrupted)),
+            });
         });
         return map;
-    }, [computedSpellOutcomes, timeline]);
+    }, [computedSpellOutcomes, localSpellModel]);
 
     const parsedSpellTotals = useMemo(() => parseSpellTotals(spellTotals), [spellTotals]);
     const parsedSpellTotalsBySource = useMemo(

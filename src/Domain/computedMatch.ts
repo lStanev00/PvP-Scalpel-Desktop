@@ -1,29 +1,16 @@
-import type { MatchPlayer, MatchTimelineEntry } from "../Components/DataActivity/types";
-import { resolveIntentAttempts } from "../Components/DataActivity/spellCastResolver";
+import type { MatchPlayer } from "../Components/DataActivity/types";
 import {
     computeKickTelemetrySnapshot,
     resolveTelemetryVersion,
 } from "../Components/DataActivity/kickTelemetry";
+import {
+    buildSpellOutcomeCounts,
+    resolveLocalSpellModel,
+    resolveMatchDurationSeconds,
+} from "./localSpellModel";
+import type { ComputedAnalyticsV2, ComputedOwnerKickSummary } from "../Interfaces/local-spell-model";
 
-type SpellOutcomeCounts = {
-    succeeded: number;
-    interrupted: number;
-    failed: number;
-};
-
-type OwnerKickSummary = {
-    intentAttempts: number;
-    landed?: number;
-    confirmedInterrupts?: number;
-    missed?: number;
-    succeeded?: number;
-    failed?: number;
-};
-
-export type MatchComputed = {
-    spellOutcomesBySpellId: Record<string, SpellOutcomeCounts>;
-    ownerKicks: OwnerKickSummary;
-};
+export type MatchComputed = ComputedAnalyticsV2;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
     typeof value === "object" && value !== null && !Array.isArray(value);
@@ -48,32 +35,13 @@ export const buildMatchComputed = (rawMatch: unknown, kickSpellIds: number[]): M
     if (!isRecord(rawMatch)) return null;
 
     const players = Array.isArray(rawMatch.players) ? (rawMatch.players as MatchPlayer[]) : [];
-    const timeline = Array.isArray(rawMatch.timeline)
-        ? (rawMatch.timeline as MatchTimelineEntry[])
-        : [];
-
-    const { resolvedAttempts } = resolveIntentAttempts(timeline);
-    const spellOutcomesBySpellId: Record<string, SpellOutcomeCounts> = {};
-
-    resolvedAttempts.forEach((attempt) => {
-        const spellKey = String(attempt.spellId);
-        const row = spellOutcomesBySpellId[spellKey] ?? {
-            succeeded: 0,
-            interrupted: 0,
-            failed: 0,
-        };
-
-        if (attempt.resolvedOutcome === "succeeded") row.succeeded += 1;
-        if (attempt.resolvedOutcome === "interrupted") row.interrupted += 1;
-        if (attempt.resolvedOutcome === "failed") row.failed += 1;
-        spellOutcomesBySpellId[spellKey] = row;
-    });
-
+    const localSpellModel = resolveLocalSpellModel(rawMatch);
+    const spellOutcomesBySpellId = buildSpellOutcomeCounts(localSpellModel);
     const owner = players.find((player) => player.isOwner) ?? players[0] ?? null;
     const telemetryVersion = resolveTelemetryVersion(rawMatch);
     const kickSnapshot = computeKickTelemetrySnapshot({
         matchId: extractMatchKey(rawMatch) ?? "unknown",
-        timeline,
+        localSpellModel,
         kickSpellIds,
         owner,
         telemetryVersion,
@@ -81,15 +49,16 @@ export const buildMatchComputed = (rawMatch: unknown, kickSpellIds: number[]): M
         includeDiagnostics: false,
     });
 
+    const totalKickAttempts = toSafeCount(kickSnapshot.totalKickAttempts);
     const issuedFallback = toSafeCount(kickSnapshot.issued);
-    const rawIntentAttempts = toSafeCount(kickSnapshot.intentAttempts);
-    const intentAttempts = rawIntentAttempts > 0 ? rawIntentAttempts : issuedFallback;
+    const intentAttempts = totalKickAttempts > 0 ? totalKickAttempts : issuedFallback;
     const landed = toSafeCount(kickSnapshot.landedAttempts);
     const confirmedInterrupts = toSafeCount(kickSnapshot.confirmedInterrupts);
     const missed = toSafeCount(kickSnapshot.missedKicks);
 
-    const ownerKicks: OwnerKickSummary = kickSnapshot.isSupported
+    const ownerKicks: ComputedOwnerKickSummary = kickSnapshot.isSupported
         ? {
+              total: intentAttempts,
               intentAttempts,
               landed,
               confirmedInterrupts,
@@ -98,61 +67,31 @@ export const buildMatchComputed = (rawMatch: unknown, kickSpellIds: number[]): M
               failed: missed,
           }
         : {
+              total: intentAttempts,
               intentAttempts,
           };
 
     return {
+        schemaVersion: 2,
         spellOutcomesBySpellId,
         ownerKicks,
+        localSpellModel: localSpellModel ?? undefined,
     };
-};
-
-const resolveDurationSeconds = (rawMatch: unknown) => {
-    if (!isRecord(rawMatch)) return null;
-
-    const soloShuffle = rawMatch.soloShuffle;
-    if (isRecord(soloShuffle)) {
-        const duration = toSafeCount(soloShuffle.duration);
-        if (duration > 0) return duration;
-    }
-
-    if (Array.isArray(rawMatch.timeline) && rawMatch.timeline.length > 0) {
-        const maxTime = rawMatch.timeline.reduce((max, entry) => {
-            if (!isRecord(entry)) return max;
-            const t = typeof entry.t === "number" && Number.isFinite(entry.t) ? entry.t : 0;
-            return t > max ? t : max;
-        }, 0);
-        if (maxTime > 0) return Math.max(0, Math.round(maxTime));
-    }
-
-    const matchDetails = rawMatch.matchDetails;
-    if (isRecord(matchDetails)) {
-        const rawLength = matchDetails.matchLength ?? matchDetails.duration;
-        if (typeof rawLength === "number" && Number.isFinite(rawLength) && rawLength > 0) {
-            return Math.max(0, Math.round(rawLength));
-        }
-        if (typeof rawLength === "string") {
-            const trimmed = rawLength.trim();
-            if (/^\d+:\d{2}$/.test(trimmed)) {
-                const [mins, secs] = trimmed.split(":").map((part) => Number(part));
-                if (Number.isFinite(mins) && Number.isFinite(secs)) {
-                    return Math.max(0, Math.round(mins * 60 + secs));
-                }
-            }
-            if (Number.isFinite(Number(trimmed)) && Number(trimmed) > 0) {
-                return Math.max(0, Math.round(Number(trimmed)));
-            }
-        }
-    }
-
-    return null;
 };
 
 export const toStoredComputedMatch = (rawMatch: unknown, computed: MatchComputed) => {
     const cloned = JSON.parse(JSON.stringify(rawMatch ?? {})) as Record<string, unknown>;
-    const durationSeconds = resolveDurationSeconds(rawMatch);
+    const durationSeconds = resolveMatchDurationSeconds(rawMatch);
+    const canStripV4Payload =
+        isRecord(computed.localSpellModel) &&
+        computed.localSpellModel.detailAvailable === true;
     delete cloned.timeline;
     delete cloned.castRecords;
+    delete cloned.castOutcomes;
+    if (canStripV4Payload) {
+        delete cloned.localSpellCapture;
+        delete cloned.localLossOfControl;
+    }
 
     if (isRecord(cloned.soloShuffle)) {
         const soloShuffle = cloned.soloShuffle as Record<string, unknown>;

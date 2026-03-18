@@ -2,8 +2,10 @@ import { createContext, ReactNode, useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import luaJson from "lua-json";
-import { Match, MatchV2, MatchWithId } from "../Interfaces/matches";
+import { Match, MatchV2, MatchV4, MatchWithId } from "../Interfaces/matches";
 import { buildMatchComputed, extractMatchKey, toStoredComputedMatch } from "../Domain/computedMatch";
+import { extractLuaRootTable } from "../Domain/luaSavedVariables";
+import { resolveMatchDurationSeconds } from "../Domain/localSpellModel";
 
 const logSchemaMismatch = (message: string, details?: unknown) => {
     if (import.meta.env.DEV) {
@@ -13,6 +15,18 @@ const logSchemaMismatch = (message: string, details?: unknown) => {
 
 const isPlainObject = (value: unknown): value is Record<string, unknown> =>
     typeof value === "object" && value !== null && !Array.isArray(value);
+
+const MATCH_UPDATE_DEBOUNCE_MS = 750;
+const MATCH_RETRY_DELAYS_MS = [250, 500, 1000, 1500] as const;
+
+const debugMatches = (message: string, details?: unknown) => {
+    if (!import.meta.env.DEV) return;
+    if (details === undefined) {
+        console.log(`[matches] ${message}`);
+        return;
+    }
+    console.log(`[matches] ${message}`, details);
+};
 
 const coerceMatchesArray = (value: unknown): unknown[] => {
     if (Array.isArray(value)) return value;
@@ -93,56 +107,7 @@ const mergeMatchesByKey = (primary: unknown[], overlay: unknown[]) => {
 };
 
 const deriveDurationSeconds = (value: unknown) => {
-    if (!isPlainObject(value)) return null;
-
-    const direct = value.durationSeconds;
-    if (typeof direct === "number" && Number.isFinite(direct) && direct > 0) {
-        return Math.max(0, Math.round(direct));
-    }
-
-    const soloShuffle = value.soloShuffle;
-    if (isPlainObject(soloShuffle)) {
-        const duration = soloShuffle.duration;
-        if (typeof duration === "number" && Number.isFinite(duration) && duration > 0) {
-            return Math.max(0, Math.round(duration));
-        }
-    }
-
-    const matchDetails = value.matchDetails;
-    if (isPlainObject(matchDetails)) {
-        const rawLength = matchDetails.matchLength ?? matchDetails.duration;
-        if (typeof rawLength === "number" && Number.isFinite(rawLength) && rawLength > 0) {
-            return Math.max(0, Math.round(rawLength));
-        }
-        if (typeof rawLength === "string") {
-            const trimmed = rawLength.trim();
-            if (/^\d+:\d{2}$/.test(trimmed)) {
-                const [mins, secs] = trimmed.split(":").map((part) => Number(part));
-                if (Number.isFinite(mins) && Number.isFinite(secs)) {
-                    return Math.max(0, Math.round(mins * 60 + secs));
-                }
-            }
-            const numeric = Number(trimmed);
-            if (Number.isFinite(numeric) && numeric > 0) {
-                return Math.max(0, Math.round(numeric));
-            }
-        }
-    }
-
-    const timeline = value.timeline;
-    if (Array.isArray(timeline) && timeline.length > 0) {
-        const maxTime = timeline.reduce((max, row) => {
-            if (!isPlainObject(row)) return max;
-            const t = row.t;
-            if (typeof t !== "number" || !Number.isFinite(t)) return max;
-            return t > max ? t : max;
-        }, 0);
-        if (maxTime > 0) {
-            return Math.max(0, Math.round(maxTime));
-        }
-    }
-
-    return null;
+    return resolveMatchDurationSeconds(value);
 };
 
 const readTelemetryVersion = (value: unknown) => {
@@ -151,67 +116,50 @@ const readTelemetryVersion = (value: unknown) => {
     return typeof telemetryVersion === "number" ? telemetryVersion : Number(telemetryVersion);
 };
 
-const extractLuaTable = (content: string, key: string) => {
-    const idx = content.indexOf(key);
-    if (idx === -1) return null;
+const buildMatchWithId = async (
+    parsedMatch: unknown,
+    interruptSpellIds: number[]
+): Promise<MatchWithId> => {
+    const derivedDuration = deriveDurationSeconds(parsedMatch);
+    const normalizedParsedMatch =
+        derivedDuration !== null && isPlainObject(parsedMatch)
+            ? ({
+                  ...parsedMatch,
+                  durationSeconds: derivedDuration,
+              } as unknown)
+            : parsedMatch;
 
-    const startEq = content.indexOf("=", idx);
-    if (startEq === -1) return null;
+    const id = await invoke<string>("identify_match", {
+        obj: normalizedParsedMatch,
+    });
 
-    let i = startEq + 1;
-    while (i < content.length && /\s/.test(content[i])) i += 1;
-    if (content[i] !== "{") return null;
+    const telemetryVersion =
+        typeof (normalizedParsedMatch as { telemetryVersion?: unknown }).telemetryVersion ===
+        "number"
+            ? ((normalizedParsedMatch as { telemetryVersion?: number }).telemetryVersion as number)
+            : Number.NaN;
+    const isTelemetryV2Plus =
+        typeof normalizedParsedMatch === "object" &&
+        normalizedParsedMatch !== null &&
+        Number.isFinite(telemetryVersion) &&
+        telemetryVersion >= 2;
 
-    let depth = 0;
-    let inString = false;
-    let stringChar = "";
-    let escaped = false;
-    const tableStart = i;
-
-    for (; i < content.length; i += 1) {
-        const ch = content[i];
-        const next = content[i + 1];
-
-        if (inString) {
-            if (escaped) {
-                escaped = false;
-                continue;
-            }
-            if (ch === "\\") {
-                escaped = true;
-                continue;
-            }
-            if (ch === stringChar) {
-                inString = false;
-                stringChar = "";
-            }
-            continue;
-        }
-
-        if (ch === "\"" || ch === "'") {
-            inString = true;
-            stringChar = ch;
-            continue;
-        }
-
-        if (ch === "-" && next === "-") {
-            while (i < content.length && content[i] !== "\n") i += 1;
-            continue;
-        }
-
-        if (ch === "{") {
-            depth += 1;
-        } else if (ch === "}") {
-            depth -= 1;
-            if (depth === 0) {
-                return content.slice(tableStart, i + 1);
-            }
-        }
+    if (isTelemetryV2Plus) {
+        validateMatchV2Plus(normalizedParsedMatch);
+    } else {
+        validateMatchV1(normalizedParsedMatch);
     }
 
-    return null;
+    return {
+        id,
+        ...(isTelemetryV2Plus
+            ? ((telemetryVersion >= 4
+                  ? (normalizedParsedMatch as MatchV4)
+                  : (normalizedParsedMatch as MatchV2)) as MatchV2 | MatchV4)
+            : (normalizedParsedMatch as Match)),
+        interruptSpellIds,
+    };
 };
-
 const splitTopLevelLuaEntries = (table: string) => {
     const trimmed = table.trim();
     if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) return [];
@@ -376,6 +324,144 @@ const validateMatchV2Plus = (value: unknown) => {
     if (!Array.isArray(value.players)) {
         logSchemaMismatch("Match v2+ players missing or invalid", value.players);
     }
+
+    if (telemetryVersion >= 4) {
+        const hasRawV4Payload =
+            isPlainObject(value.localSpellCapture) ||
+            Array.isArray(value.localSpellCapture) ||
+            isPlainObject(value.localLossOfControl);
+        const hasPersistedLocalSpellModel =
+            isPlainObject(value.computed) &&
+            isPlainObject((value.computed as Record<string, unknown>).localSpellModel);
+        if (!hasRawV4Payload && !hasPersistedLocalSpellModel) {
+            logSchemaMismatch("Match v4 has no local spell payload or persisted normalized model", value);
+        }
+    }
+};
+
+type MatchReadSuccess = {
+    status: "ok";
+    fileContent: string;
+    parsedMatches: unknown[];
+    interruptSpellIds: number[];
+    gcPendingKeys: Set<string>;
+    recoveredFallbackCount: number;
+};
+
+type MatchReadFailure = {
+    status: "retryable" | "terminal";
+    reason:
+        | "empty_content"
+        | "db_incomplete"
+        | "db_missing"
+        | "db_parse_error"
+        | "db_extract_error";
+};
+
+const waitFor = (ms: number) =>
+    new Promise<void>((resolve) => {
+        setTimeout(resolve, ms);
+    });
+
+const parseNumericIdTable = (content: string, key: string) => {
+    const tableResult = extractLuaRootTable(content, key);
+    if (tableResult.status !== "ok") return [];
+
+    try {
+        return coerceNumericIdArray(luaJson.parse("return " + tableResult.table));
+    } catch {
+        return [];
+    }
+};
+
+const parsePendingGcTable = (content: string) => {
+    const tableResult = extractLuaRootTable(content, "PvP_Scalpel_GC");
+    if (tableResult.status !== "ok") return new Set<string>();
+
+    try {
+        return toPendingMatchKeys(luaJson.parse("return " + tableResult.table));
+    } catch {
+        return new Set<string>();
+    }
+};
+
+const readSavedVariablesSnapshot = async (path: string): Promise<MatchReadSuccess | MatchReadFailure> => {
+    const fileContent = await invoke<string>("read_saved_variables", {
+        path,
+    });
+
+    debugMatches("read_saved_variables completed", {
+        path,
+        contentLength: typeof fileContent === "string" ? fileContent.length : 0,
+    });
+
+    if (!fileContent) {
+        return {
+            status: "terminal",
+            reason: "empty_content",
+        };
+    }
+
+    const dbTableResult = extractLuaRootTable(fileContent, "PvP_Scalpel_DB");
+    if (dbTableResult.status !== "ok") {
+        debugMatches("root table extraction failed", {
+            path,
+            status: dbTableResult.status,
+        });
+        if (dbTableResult.status === "missing") {
+            return {
+                status: "retryable",
+                reason: "db_missing",
+            };
+        }
+
+        if (dbTableResult.status === "incomplete") {
+            return {
+                status: "retryable",
+                reason: "db_incomplete",
+            };
+        }
+
+        return {
+            status: "terminal",
+            reason: "db_extract_error",
+        };
+    }
+
+    let parsedArray: unknown;
+    let recoveredFallbackCount = 0;
+    try {
+        parsedArray = luaJson.parse("return " + dbTableResult.table);
+    } catch (parseErr) {
+        const recoveredMatches = parseMatchesFallback(dbTableResult.table);
+        if (recoveredMatches.length > 0) {
+            parsedArray = recoveredMatches;
+            recoveredFallbackCount = recoveredMatches.length;
+            if (import.meta.env.DEV) {
+                console.warn("[matches] full table parse failed; fallback recovered entries", {
+                    recovered: recoveredMatches.length,
+                    parseErr,
+                });
+            }
+        } else {
+            if (import.meta.env.DEV) {
+                console.error("[matches] lua-json parse failed", parseErr);
+            }
+            return {
+                status: "retryable",
+                reason: "db_parse_error",
+            };
+        }
+    }
+
+    return {
+        status: "ok",
+        fileContent,
+        parsedMatches: coerceMatchesArray(parsedArray),
+        interruptSpellIds: parseNumericIdTable(fileContent, "PvP_Scalpel_InteruptSpells"),
+        gcPendingKeys: parsePendingGcTable(fileContent),
+        recoveredFallbackCount,
+    };
 };
 
 export const MatchesContext = createContext<MatchWithId[] | null>(null);
@@ -383,10 +469,11 @@ export const MatchesContext = createContext<MatchWithId[] | null>(null);
 export const MatchesProvider = ({ children }: { children: ReactNode }) => {
     const [matches, setMatches] = useState<MatchWithId[]>([]);
     const lastLoggedCount = useRef<number | null>(null);
-    const hasParseError = useRef(false);
+    const lastParseErrorMessage = useRef<string | null>(null);
 
     useEffect(() => {
         let timeout: ReturnType<typeof setTimeout> | null = null;
+        let activeRunId = 0;
         const hydrateFromComputedStore = async () => {
             const persistedComputedMatches = await invoke<unknown[]>("load_all_computed_matches").catch(
                 () => []
@@ -401,43 +488,7 @@ export const MatchesProvider = ({ children }: { children: ReactNode }) => {
 
             for (const parsedMatch of computedForMerge) {
                 try {
-                    const derivedDuration = deriveDurationSeconds(parsedMatch);
-                    const normalizedParsedMatch =
-                        derivedDuration !== null && isPlainObject(parsedMatch)
-                            ? ({
-                                  ...parsedMatch,
-                                  durationSeconds: derivedDuration,
-                              } as unknown)
-                            : parsedMatch;
-
-                    const id = await invoke<string>("identify_match", {
-                        obj: normalizedParsedMatch,
-                    });
-
-                    const telemetryVersion =
-                        typeof (normalizedParsedMatch as { telemetryVersion?: unknown })
-                            .telemetryVersion === "number"
-                            ? ((normalizedParsedMatch as { telemetryVersion?: number }).telemetryVersion as number)
-                            : Number.NaN;
-                    const isTelemetryV2Plus =
-                        typeof normalizedParsedMatch === "object" &&
-                        normalizedParsedMatch !== null &&
-                        Number.isFinite(telemetryVersion) &&
-                        telemetryVersion >= 2;
-
-                    if (isTelemetryV2Plus) {
-                        validateMatchV2Plus(normalizedParsedMatch);
-                    } else {
-                        validateMatchV1(normalizedParsedMatch);
-                    }
-
-                    results.push({
-                        id,
-                        ...(isTelemetryV2Plus
-                            ? (normalizedParsedMatch as MatchV2)
-                            : (normalizedParsedMatch as Match)),
-                        interruptSpellIds: [],
-                    });
+                    results.push(await buildMatchWithId(parsedMatch, []));
                 } catch {
                     failedCount += 1;
                 }
@@ -453,345 +504,421 @@ export const MatchesProvider = ({ children }: { children: ReactNode }) => {
             }).catch(() => undefined);
         };
 
+        const isStaleRun = (runId: number) => runId !== activeRunId;
+
+        const logStaleRun = (runId: number, stage: string) => {
+            if (!isStaleRun(runId)) return false;
+            debugMatches("run invalidated", {
+                runId,
+                activeRunId,
+                stage,
+            });
+            return true;
+        };
+
+        const pushTerminalParseMessage = (message: string, details?: unknown) => {
+            if (details !== undefined) {
+                logSchemaMismatch(message, details);
+            } else {
+                logSchemaMismatch(message);
+            }
+            if (lastParseErrorMessage.current === message) return;
+            lastParseErrorMessage.current = message;
+            invoke("push_log", {
+                message,
+            }).catch(() => undefined);
+        };
+
+        const runSavedVariablesUpdate = async (
+            payload: { account: string; path: string; gameState?: string },
+            runId: number
+        ) => {
+            try {
+                invoke("push_log", {
+                    message: `SavedVariables event received (${payload.account || "unknown"})`,
+                }).catch(() => undefined);
+                debugMatches("run started", {
+                    runId,
+                    account: payload.account || "unknown",
+                    gameState: payload.gameState ?? "unknown",
+                    path: payload.path,
+                });
+
+                let snapshot: MatchReadSuccess | null = null;
+
+                for (let attempt = 0; attempt <= MATCH_RETRY_DELAYS_MS.length; attempt += 1) {
+                    if (logStaleRun(runId, `before-read-attempt-${attempt}`)) return;
+
+                    const readResult = await readSavedVariablesSnapshot(payload.path);
+                    if (logStaleRun(runId, `after-read-attempt-${attempt}`)) return;
+
+                    debugMatches("snapshot attempt result", {
+                        runId,
+                        attempt,
+                        status: readResult.status,
+                        reason: readResult.status === "ok" ? null : readResult.reason,
+                    });
+
+                    if (readResult.status === "ok") {
+                        snapshot = readResult;
+                        debugMatches("snapshot ready", {
+                            runId,
+                            parsedMatches: readResult.parsedMatches.length,
+                            interruptSpellIds: readResult.interruptSpellIds.length,
+                            gcPendingKeys: readResult.gcPendingKeys.size,
+                            recoveredFallbackCount: readResult.recoveredFallbackCount,
+                        });
+                        break;
+                    }
+
+                    const isLastAttempt = attempt === MATCH_RETRY_DELAYS_MS.length;
+                    if (!isLastAttempt && readResult.status === "retryable") {
+                        if (
+                            readResult.reason === "db_incomplete" ||
+                            readResult.reason === "db_parse_error"
+                        ) {
+                            debugMatches("retrying transient snapshot failure", {
+                                runId,
+                                attempt,
+                                reason: readResult.reason,
+                                nextDelayMs: MATCH_RETRY_DELAYS_MS[attempt],
+                            });
+                            invoke("push_log", {
+                                message: "SavedVariables write in progress, retrying",
+                            }).catch(() => undefined);
+                        }
+                        await waitFor(MATCH_RETRY_DELAYS_MS[attempt]);
+                        continue;
+                    }
+
+                    if (readResult.reason === "db_incomplete") {
+                        pushTerminalParseMessage("PvP_Scalpel_DB incomplete after retries");
+                        return;
+                    }
+
+                    if (readResult.reason === "db_missing") {
+                        pushTerminalParseMessage("PvP_Scalpel_DB missing after retries");
+                        return;
+                    }
+
+                    if (readResult.reason === "db_parse_error") {
+                        pushTerminalParseMessage("Match parse failed after retries");
+                        return;
+                    }
+
+                    if (readResult.reason === "db_extract_error") {
+                        pushTerminalParseMessage("PvP_Scalpel_DB malformed after retries");
+                        return;
+                    }
+
+                    pushTerminalParseMessage("SavedVariables read returned empty content");
+                    return;
+                }
+
+                if (!snapshot) {
+                    debugMatches("run finished without snapshot", { runId });
+                    return;
+                }
+                if (logStaleRun(runId, "after-snapshot")) return;
+
+                const { parsedMatches, interruptSpellIds, gcPendingKeys, recoveredFallbackCount } =
+                    snapshot;
+
+                if (recoveredFallbackCount > 0) {
+                    invoke("push_log", {
+                        message: `Match parse fallback recovered ${recoveredFallbackCount} entries`,
+                    }).catch(() => undefined);
+                }
+
+                invoke("push_log", {
+                    message: `Parsed ${parsedMatches.length} raw match entries`,
+                }).catch(() => undefined);
+
+                const shouldFinalizeComputed =
+                    payload.gameState === "not_running" || payload.gameState === "just_closed";
+                const accountKey = payload.account?.trim() || "unknown";
+
+                if (import.meta.env.DEV) {
+                    console.log("[matches] computed finalize gate", {
+                        gameState: payload.gameState ?? "unknown",
+                        shouldFinalizeComputed,
+                        pendingCount: gcPendingKeys.size,
+                        parsedMatches: parsedMatches.length,
+                    });
+                }
+
+                if (shouldFinalizeComputed && gcPendingKeys.size > 0) {
+                    const computedEntries = parsedMatches
+                        .filter((entry) => {
+                            const matchKey = extractMatchKey(entry);
+                            return !!matchKey && gcPendingKeys.has(matchKey);
+                        })
+                        .map((entry) => {
+                            const computed = buildMatchComputed(entry, interruptSpellIds);
+                            if (!computed) return null;
+                            return toStoredComputedMatch(entry, computed);
+                        })
+                        .filter((entry): entry is Record<string, unknown> => !!entry);
+
+                    if (import.meta.env.DEV) {
+                        console.log("[matches] computed finalize candidates", {
+                            pendingCount: gcPendingKeys.size,
+                            matchedCount: computedEntries.length,
+                        });
+                    }
+                    debugMatches("computed finalize prepared", {
+                        runId,
+                        pendingCount: gcPendingKeys.size,
+                        matchedCount: computedEntries.length,
+                    });
+
+                    if (computedEntries.length > 0 && !isStaleRun(runId)) {
+                        const persisted = await invoke("upsert_computed_matches", {
+                            account: accountKey,
+                            matches: computedEntries,
+                        })
+                            .then(() => true)
+                            .catch(() => false);
+
+                        debugMatches("computed finalize persisted result", {
+                            runId,
+                            persisted,
+                            count: computedEntries.length,
+                        });
+                        if (logStaleRun(runId, "after-upsert-computed-matches")) return;
+
+                        if (persisted) {
+                            const syncedKeys = computedEntries
+                                .map((entry) =>
+                                    typeof entry.matchKey === "string" ? entry.matchKey.trim() : ""
+                                )
+                                .filter((value): value is string => !!value);
+
+                            if (syncedKeys.length > 0) {
+                                const syncedCount = await invoke<number>("mark_gc_matches_synced", {
+                                    path: payload.path,
+                                    keys: syncedKeys,
+                                }).catch(() => 0);
+
+                                debugMatches("gc sync completed", {
+                                    runId,
+                                    syncedCount,
+                                    keys: syncedKeys,
+                                });
+                                if (logStaleRun(runId, "after-mark-gc-matches-synced")) return;
+
+                                invoke("push_log", {
+                                    message: `GC state updated to synced (${syncedCount})`,
+                                }).catch(() => undefined);
+                            }
+
+                            invoke("push_log", {
+                                message: `Computed matches persisted (${computedEntries.length})`,
+                            }).catch(() => undefined);
+                        }
+                    }
+                }
+
+                const persistedComputedMatches = await invoke<unknown[]>("load_computed_matches", {
+                    account: accountKey,
+                }).catch(() => []);
+
+                debugMatches("loaded persisted computed matches", {
+                    runId,
+                    account: accountKey,
+                    count: Array.isArray(persistedComputedMatches) ? persistedComputedMatches.length : 0,
+                });
+                if (logStaleRun(runId, "after-load-computed-matches")) return;
+
+                const rawByMatchKey = new Map<string, unknown>();
+                parsedMatches.forEach((entry) => {
+                    const key = extractMatchKey(entry);
+                    if (!key) return;
+                    rawByMatchKey.set(key, entry);
+                });
+
+                const computedForMerge = Array.isArray(persistedComputedMatches)
+                    ? persistedComputedMatches
+                    : [];
+                const computedDurationByKey = new Map<string, number>();
+                const computedBackfill: Record<string, unknown>[] = [];
+
+                const normalizedComputedForMerge = computedForMerge.map((entry) => {
+                    if (!isPlainObject(entry)) return entry;
+                    const key = extractMatchKey(entry);
+                    if (!key) return entry;
+
+                    const existingDuration = deriveDurationSeconds(entry);
+                    if (existingDuration !== null) {
+                        computedDurationByKey.set(key, existingDuration);
+                    }
+
+                    const rawSource = rawByMatchKey.get(key);
+                    let patched: Record<string, unknown> | null = null;
+
+                    const hasDuration =
+                        typeof entry.durationSeconds === "number" &&
+                        Number.isFinite(entry.durationSeconds) &&
+                        entry.durationSeconds > 0;
+                    const derivedDuration = deriveDurationSeconds(rawSource);
+                    if (!hasDuration && derivedDuration !== null) {
+                        patched = {
+                            ...(patched ?? entry),
+                            durationSeconds: derivedDuration,
+                        };
+                        computedDurationByKey.set(key, derivedDuration);
+                    }
+
+                    const telemetryVersion = readTelemetryVersion(rawSource);
+                    if (rawSource && Number.isFinite(telemetryVersion) && telemetryVersion >= 3) {
+                        const recomputed = buildMatchComputed(rawSource, interruptSpellIds);
+                        if (recomputed) {
+                            const currentComputed = isPlainObject((patched ?? entry).computed)
+                                ? (patched ?? entry).computed
+                                : null;
+                            const nextComputed = recomputed as unknown as Record<string, unknown>;
+                            if (JSON.stringify(currentComputed) !== JSON.stringify(nextComputed)) {
+                                patched = {
+                                    ...(patched ?? entry),
+                                    computed: recomputed as unknown,
+                                };
+                            }
+                        }
+                    }
+
+                    if (!patched) return entry;
+                    computedBackfill.push(patched);
+                    return patched;
+                });
+
+                if (computedBackfill.length > 0 && !isStaleRun(runId)) {
+                    await invoke("upsert_computed_matches", {
+                        account: accountKey,
+                        matches: computedBackfill,
+                    }).catch(() => undefined);
+
+                    debugMatches("computed backfill persisted", {
+                        runId,
+                        count: computedBackfill.length,
+                    });
+                    if (logStaleRun(runId, "after-upsert-computed-backfill")) return;
+
+                    invoke("push_log", {
+                        message: `Computed matches backfilled (${computedBackfill.length})`,
+                    }).catch(() => undefined);
+                }
+
+                const mergedParsedMatches = mergeMatchesByKey(parsedMatches, normalizedComputedForMerge);
+                debugMatches("merged raw and computed matches", {
+                    runId,
+                    rawCount: parsedMatches.length,
+                    computedCount: normalizedComputedForMerge.length,
+                    mergedCount: mergedParsedMatches.length,
+                });
+
+                if (!mergedParsedMatches.length) {
+                    debugMatches("merged matches empty", {
+                        runId,
+                        rawCount: parsedMatches.length,
+                        computedCount: normalizedComputedForMerge.length,
+                    });
+                    setMatches([]);
+                    if (lastLoggedCount.current !== 0) {
+                        lastLoggedCount.current = 0;
+                        invoke("push_log", {
+                            message: "Match data updated (0 matches)",
+                        }).catch(() => undefined);
+                    }
+                    lastParseErrorMessage.current = null;
+                    return;
+                }
+
+                const results: MatchWithId[] = [];
+                let failedCount = 0;
+
+                for (const parsedMatch of mergedParsedMatches) {
+                    try {
+                        const matchKey = extractMatchKey(parsedMatch);
+                        const fallbackDuration = matchKey ? computedDurationByKey.get(matchKey) : undefined;
+                        const parsedDuration = deriveDurationSeconds(parsedMatch);
+                        const effectiveDuration =
+                            parsedDuration !== null
+                                ? parsedDuration
+                                : typeof fallbackDuration === "number" &&
+                                    Number.isFinite(fallbackDuration) &&
+                                    fallbackDuration > 0
+                                  ? fallbackDuration
+                                  : null;
+                        const normalizedParsedMatch =
+                            effectiveDuration !== null && isPlainObject(parsedMatch)
+                                ? ({
+                                      ...parsedMatch,
+                                      durationSeconds: effectiveDuration,
+                                  } as unknown)
+                                : parsedMatch;
+                        const builtMatch = await buildMatchWithId(
+                            normalizedParsedMatch,
+                            interruptSpellIds
+                        );
+
+                        if (logStaleRun(runId, `after-identify-${matchKey ?? "unknown"}`)) return;
+                        results.push(builtMatch);
+                    } catch (matchErr) {
+                        failedCount += 1;
+                        if (import.meta.env.DEV) {
+                            console.error("[matches] identify/normalize failed for one match", matchErr);
+                        }
+                    }
+                }
+
+                debugMatches("results built", {
+                    runId,
+                    results: results.length,
+                    failedCount,
+                    ids: results.slice(0, 8).map((match) => match.id),
+                });
+                if (logStaleRun(runId, "before-set-matches")) return;
+
+                setMatches(results);
+                debugMatches("setMatches committed", {
+                    runId,
+                    results: results.length,
+                });
+                if (lastLoggedCount.current !== results.length || failedCount > 0) {
+                    lastLoggedCount.current = results.length;
+                    invoke("push_log", {
+                        message:
+                            failedCount > 0
+                                ? `Match data updated (${results.length} loaded, ${failedCount} failed)`
+                                : `Match data updated (${results.length} matches)`,
+                    }).catch(() => undefined);
+                }
+                lastParseErrorMessage.current = null;
+            } catch (err) {
+                if (import.meta.env.DEV) {
+                    console.error("SavedVariables read error:", err);
+                }
+                pushTerminalParseMessage("Match data update failed", err);
+            }
+        };
+
         const unlistenPromise = listen<{ account: string; path: string; gameState?: string }>(
             "savedvars-updated",
             async ({ payload }) => {
                 if (timeout) clearTimeout(timeout);
 
-                timeout = setTimeout(async () => {
-                    try {
-                        invoke("push_log", {
-                            message: `SavedVariables event received (${payload.account || "unknown"})`,
-                        }).catch(() => undefined);
+                activeRunId += 1;
+                const runId = activeRunId;
+                debugMatches("savedvars event queued", {
+                    runId,
+                    account: payload.account || "unknown",
+                    gameState: payload.gameState ?? "unknown",
+                    debounceMs: MATCH_UPDATE_DEBOUNCE_MS,
+                });
 
-                        const fileContent = await invoke<string>("read_saved_variables", {
-                            path: payload.path,
-                        });
-
-                        if (!fileContent) {
-                            invoke("push_log", {
-                                message: "SavedVariables read returned empty content",
-                            }).catch(() => undefined);
-                            return;
-                        }
-
-                        const table = extractLuaTable(fileContent, "PvP_Scalpel_DB");
-                        if (!table) {
-                            logSchemaMismatch("PvP_Scalpel_DB not found or malformed");
-                            invoke("push_log", {
-                                message: "PvP_Scalpel_DB not found or malformed",
-                            }).catch(() => undefined);
-                            return;
-                        }
-
-                        const interruptSpellIds = coerceNumericIdArray(
-                            (() => {
-                                const kickTable = extractLuaTable(fileContent, "PvP_Scalpel_InteruptSpells");
-                                if (!kickTable) return [];
-                                try {
-                                    return luaJson.parse("return " + kickTable);
-                                } catch {
-                                    return [];
-                                }
-                            })()
-                        );
-
-                        let parsedArray: unknown;
-                        try {
-                            parsedArray = luaJson.parse("return " + table);
-                        } catch (parseErr) {
-                            const recoveredMatches = parseMatchesFallback(table);
-                            if (recoveredMatches.length > 0) {
-                                parsedArray = recoveredMatches;
-                                if (import.meta.env.DEV) {
-                                    console.warn(
-                                        "[matches] full table parse failed; fallback recovered entries",
-                                        { recovered: recoveredMatches.length, parseErr }
-                                    );
-                                }
-                                invoke("push_log", {
-                                    message: `Match parse fallback recovered ${recoveredMatches.length} entries`,
-                                }).catch(() => undefined);
-                            } else {
-                            if (import.meta.env.DEV) {
-                                console.error("[matches] lua-json parse failed", parseErr);
-                            }
-                            invoke("push_log", {
-                                message: "Match parse failed (lua-json)",
-                            }).catch(() => undefined);
-                            return;
-                            }
-                        }
-
-                        const parsedMatches = coerceMatchesArray(parsedArray);
-                        if (!parsedMatches.length) {
-                            if (import.meta.env.DEV) {
-                                console.warn("[matches] PvP_Scalpel_DB parsed but has no iterable match entries", {
-                                    parsedType: typeof parsedArray,
-                                    isArray: Array.isArray(parsedArray),
-                                    keys: isPlainObject(parsedArray) ? Object.keys(parsedArray).slice(0, 12) : [],
-                                });
-                            }
-                        }
-
-                        invoke("push_log", {
-                            message: `Parsed ${parsedMatches.length} raw match entries`,
-                        }).catch(() => undefined);
-
-                        const gcPendingKeys = toPendingMatchKeys(
-                            (() => {
-                                const gcTable = extractLuaTable(fileContent, "PvP_Scalpel_GC");
-                                if (!gcTable) return {};
-                                try {
-                                    return luaJson.parse("return " + gcTable);
-                                } catch {
-                                    return {};
-                                }
-                            })()
-                        );
-                        const shouldFinalizeComputed =
-                            payload.gameState === "not_running" || payload.gameState === "just_closed";
-                        const accountKey = payload.account?.trim() || "unknown";
-
-                        if (import.meta.env.DEV) {
-                            console.log("[matches] computed finalize gate", {
-                                gameState: payload.gameState ?? "unknown",
-                                shouldFinalizeComputed,
-                                pendingCount: gcPendingKeys.size,
-                                parsedMatches: parsedMatches.length,
-                            });
-                        }
-
-                        if (shouldFinalizeComputed && gcPendingKeys.size > 0) {
-                            const computedEntries = parsedMatches
-                                .filter((entry) => {
-                                    const matchKey = extractMatchKey(entry);
-                                    return !!matchKey && gcPendingKeys.has(matchKey);
-                                })
-                                .map((entry) => {
-                                    const computed = buildMatchComputed(entry, interruptSpellIds);
-                                    if (!computed) return null;
-                                    return toStoredComputedMatch(entry, computed);
-                                })
-                                .filter((entry): entry is Record<string, unknown> => !!entry);
-
-                            if (import.meta.env.DEV) {
-                                console.log("[matches] computed finalize candidates", {
-                                    pendingCount: gcPendingKeys.size,
-                                    matchedCount: computedEntries.length,
-                                });
-                            }
-
-                            if (computedEntries.length > 0) {
-                                const persisted = await invoke("upsert_computed_matches", {
-                                    account: accountKey,
-                                    matches: computedEntries,
-                                })
-                                    .then(() => true)
-                                    .catch(() => false);
-
-                                if (persisted) {
-                                    const syncedKeys = computedEntries
-                                        .map((entry) =>
-                                            typeof entry.matchKey === "string"
-                                                ? entry.matchKey.trim()
-                                                : ""
-                                        )
-                                        .filter((value): value is string => !!value);
-
-                                    if (syncedKeys.length > 0) {
-                                        const syncedCount = await invoke<number>("mark_gc_matches_synced", {
-                                            path: payload.path,
-                                            keys: syncedKeys,
-                                        }).catch(() => 0);
-
-                                        invoke("push_log", {
-                                            message: `GC state updated to synced (${syncedCount})`,
-                                        }).catch(() => undefined);
-                                    }
-
-                                    invoke("push_log", {
-                                        message: `Computed matches persisted (${computedEntries.length})`,
-                                    }).catch(() => undefined);
-                                }
-                            }
-                        }
-
-                        const persistedComputedMatches = await invoke<unknown[]>("load_computed_matches", {
-                            account: accountKey,
-                        }).catch(() => []);
-
-                        const rawByMatchKey = new Map<string, unknown>();
-                        parsedMatches.forEach((entry) => {
-                            const key = extractMatchKey(entry);
-                            if (!key) return;
-                            rawByMatchKey.set(key, entry);
-                        });
-
-                        const computedForMerge = Array.isArray(persistedComputedMatches)
-                            ? persistedComputedMatches
-                            : [];
-                        const computedDurationByKey = new Map<string, number>();
-                        const computedBackfill: Record<string, unknown>[] = [];
-
-                        const normalizedComputedForMerge = computedForMerge.map((entry) => {
-                            if (!isPlainObject(entry)) return entry;
-                            const key = extractMatchKey(entry);
-                            if (!key) return entry;
-
-                            const existingDuration = deriveDurationSeconds(entry);
-                            if (existingDuration !== null) {
-                                computedDurationByKey.set(key, existingDuration);
-                            }
-
-                            const rawSource = rawByMatchKey.get(key);
-                            let patched: Record<string, unknown> | null = null;
-
-                            const hasDuration =
-                                typeof entry.durationSeconds === "number" &&
-                                Number.isFinite(entry.durationSeconds) &&
-                                entry.durationSeconds > 0;
-                            const derivedDuration = deriveDurationSeconds(rawSource);
-                            if (!hasDuration && derivedDuration !== null) {
-                                patched = {
-                                    ...(patched ?? entry),
-                                    durationSeconds: derivedDuration,
-                                };
-                                computedDurationByKey.set(key, derivedDuration);
-                            }
-
-                            const telemetryVersion = readTelemetryVersion(rawSource);
-                            if (
-                                rawSource &&
-                                Number.isFinite(telemetryVersion) &&
-                                telemetryVersion >= 3
-                            ) {
-                                const recomputed = buildMatchComputed(rawSource, interruptSpellIds);
-                                if (recomputed) {
-                                    const currentComputed = isPlainObject((patched ?? entry).computed)
-                                        ? (patched ?? entry).computed
-                                        : null;
-                                    const nextComputed = recomputed as unknown as Record<string, unknown>;
-                                    if (JSON.stringify(currentComputed) !== JSON.stringify(nextComputed)) {
-                                        patched = {
-                                            ...(patched ?? entry),
-                                            computed: recomputed as unknown,
-                                        };
-                                    }
-                                }
-                            }
-
-                            if (!patched) return entry;
-                            computedBackfill.push(patched);
-                            return patched;
-                        });
-
-                        if (computedBackfill.length > 0) {
-                            await invoke("upsert_computed_matches", {
-                                account: accountKey,
-                                matches: computedBackfill,
-                            }).catch(() => undefined);
-                            invoke("push_log", {
-                                message: `Computed matches backfilled (${computedBackfill.length})`,
-                            }).catch(() => undefined);
-                        }
-
-                        const mergedParsedMatches = mergeMatchesByKey(
-                            parsedMatches,
-                            normalizedComputedForMerge
-                        );
-
-                        if (!mergedParsedMatches.length) {
-                            invoke("push_log", {
-                                message: "Match data found, but entries are empty",
-                            }).catch(() => undefined);
-                            return;
-                        }
-
-                        const results: MatchWithId[] = [];
-                        let failedCount = 0;
-
-                        for (const parsedMatch of mergedParsedMatches) {
-                            try {
-                                const matchKey = extractMatchKey(parsedMatch);
-                                const fallbackDuration =
-                                    matchKey ? computedDurationByKey.get(matchKey) : undefined;
-                                const parsedDuration = deriveDurationSeconds(parsedMatch);
-                                const effectiveDuration =
-                                    parsedDuration !== null
-                                        ? parsedDuration
-                                        : typeof fallbackDuration === "number" &&
-                                            Number.isFinite(fallbackDuration) &&
-                                            fallbackDuration > 0
-                                          ? fallbackDuration
-                                          : null;
-                                const normalizedParsedMatch =
-                                    effectiveDuration !== null && isPlainObject(parsedMatch)
-                                        ? ({
-                                              ...parsedMatch,
-                                              durationSeconds: effectiveDuration,
-                                          } as unknown)
-                                        : parsedMatch;
-                                const id = await invoke<string>("identify_match", {
-                                    obj: normalizedParsedMatch,
-                                });
-
-                                const telemetryVersion =
-                                    typeof (normalizedParsedMatch as { telemetryVersion?: unknown })
-                                        .telemetryVersion === "number"
-                                        ? ((normalizedParsedMatch as { telemetryVersion?: number })
-                                              .telemetryVersion as number)
-                                        : Number.NaN;
-                                const isTelemetryV2Plus =
-                                    typeof normalizedParsedMatch === "object" &&
-                                    normalizedParsedMatch !== null &&
-                                    Number.isFinite(telemetryVersion) &&
-                                    telemetryVersion >= 2;
-
-                                if (isTelemetryV2Plus) {
-                                    validateMatchV2Plus(normalizedParsedMatch);
-                                } else {
-                                    validateMatchV1(normalizedParsedMatch);
-                                }
-
-                                results.push({
-                                    id,
-                                    ...(isTelemetryV2Plus
-                                        ? (normalizedParsedMatch as MatchV2)
-                                        : (normalizedParsedMatch as Match)),
-                                    interruptSpellIds,
-                                });
-                            } catch (matchErr) {
-                                failedCount += 1;
-                                if (import.meta.env.DEV) {
-                                    console.error("[matches] identify/normalize failed for one match", matchErr);
-                                }
-                            }
-                        }
-
-                        setMatches(results);
-                        if (lastLoggedCount.current !== results.length || failedCount > 0) {
-                            lastLoggedCount.current = results.length;
-                            invoke("push_log", {
-                                message:
-                                    failedCount > 0
-                                        ? `Match data updated (${results.length} loaded, ${failedCount} failed)`
-                                        : `Match data updated (${results.length} matches)`,
-                            }).catch(() => undefined);
-                        }
-                        hasParseError.current = false;
-                    } catch (err) {
-                        if (import.meta.env.DEV) {
-                            console.error("SavedVariables read error:", err);
-                        }
-                        if (!hasParseError.current) {
-                            hasParseError.current = true;
-                            invoke("push_log", {
-                                message: "Match data update failed",
-                            }).catch(() => undefined);
-                        }
-                    }
-                }, 350);
+                timeout = setTimeout(() => {
+                    void runSavedVariablesUpdate(payload, runId);
+                }, MATCH_UPDATE_DEBOUNCE_MS);
             }
         );
 
@@ -804,6 +931,7 @@ export const MatchesProvider = ({ children }: { children: ReactNode }) => {
             });
 
         return () => {
+            activeRunId += 1;
             unlistenPromise.then((unlisten) => unlisten());
             if (timeout) clearTimeout(timeout);
         };

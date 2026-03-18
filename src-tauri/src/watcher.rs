@@ -132,14 +132,7 @@ pub fn emit_existing_saved_vars<R: Runtime, E: Emitter<R>>(emitter: &E, root: &P
     found_any
 }
 
-fn is_our_saved_vars(path: &Path) -> bool {
-    matches!(
-        path.file_name().and_then(|n| n.to_str()),
-        Some("PvP_Scalpel.lua")
-    )
-}
-
-pub fn extract_account_name(path: &Path) -> Option<String> {
+fn extract_account_saved_vars_info(path: &Path) -> Option<String> {
     let mut comps = path.components().rev();
 
     comps.next()?; // filename
@@ -147,5 +140,21 @@ pub fn extract_account_name(path: &Path) -> Option<String> {
         return None;
     }
 
-    Some(comps.next()?.as_os_str().to_str()?.to_string())
+    let account = comps.next()?.as_os_str().to_str()?.to_string();
+    if comps.next()?.as_os_str() != "Account" {
+        return None;
+    }
+
+    Some(account)
+}
+
+fn is_our_saved_vars(path: &Path) -> bool {
+    matches!(
+        path.file_name().and_then(|n| n.to_str()),
+        Some("PvP_Scalpel.lua")
+    ) && extract_account_saved_vars_info(path).is_some()
+}
+
+pub fn extract_account_name(path: &Path) -> Option<String> {
+    extract_account_saved_vars_info(path)
 }

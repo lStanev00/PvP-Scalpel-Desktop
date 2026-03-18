@@ -1,5 +1,5 @@
-import { resolveIntentAttempts, type AttemptRecord } from "./spellCastResolver";
-import type { MatchPlayer, MatchTimelineEntry } from "./types";
+import type { MatchPlayer } from "./types";
+import type { NormalizedLocalSpellAttempt, NormalizedLocalSpellModel } from "../../Interfaces/local-spell-model";
 
 export const INTERRUPT_TRACKING_VERSION = 3;
 const KICK_COLLAPSE_WINDOW_SECONDS = 0.35;
@@ -24,15 +24,15 @@ const getCastGuidCollapseKey = (castGUID?: string) => {
     return `${prefix}${tail.slice(0, 4)}${tail.slice(5)}`;
 };
 
-const hasIntentSignal = (attempt: AttemptRecord) =>
+const hasIntentSignal = (attempt: NormalizedLocalSpellAttempt) =>
     attempt.events.some((event) => isIntentSignalEvent(event.event));
 
-const collapseKickAttempts = (input: AttemptRecord[]) => {
+const collapseKickAttempts = (input: NormalizedLocalSpellAttempt[]) => {
     const sorted = [...input].sort((a, b) =>
         a.startTime === b.startTime ? a.id.localeCompare(b.id) : a.startTime - b.startTime
     );
-    const collapsed: AttemptRecord[] = [];
-    let active: AttemptRecord | null = null;
+    const collapsed: NormalizedLocalSpellAttempt[] = [];
+    let active: NormalizedLocalSpellAttempt | null = null;
 
     sorted.forEach((attempt) => {
         if (!active) {
@@ -55,6 +55,7 @@ const collapseKickAttempts = (input: AttemptRecord[]) => {
                 events: [...active.events, ...attempt.events].sort((a, b) =>
                     a.t === b.t ? a.index - b.index : a.t - b.t
                 ),
+                outcomes: Array.from(new Set([...active.outcomes, ...attempt.outcomes])),
                 resolvedOutcome:
                     active.resolvedOutcome === "succeeded" || attempt.resolvedOutcome === "succeeded"
                         ? "succeeded"
@@ -139,6 +140,7 @@ export type KickTelemetrySnapshot = {
     telemetryVersion: number | null;
     isLegacyMatch: boolean;
     isSupported: boolean;
+    totalKickAttempts: number;
     intentAttempts: number;
     castEvents: number;
     outcomeOnlyAttempts: number;
@@ -155,7 +157,7 @@ export type KickTelemetrySnapshot = {
 
 export const computeKickTelemetrySnapshot = ({
     matchId,
-    timeline,
+    localSpellModel,
     kickSpellIds,
     owner,
     telemetryVersion,
@@ -163,7 +165,7 @@ export const computeKickTelemetrySnapshot = ({
     includeDiagnostics = false,
 }: {
     matchId: string;
-    timeline: MatchTimelineEntry[];
+    localSpellModel: NormalizedLocalSpellModel | null;
     kickSpellIds: number[];
     owner: MatchPlayer | null;
     telemetryVersion: number | null;
@@ -171,57 +173,63 @@ export const computeKickTelemetrySnapshot = ({
     includeDiagnostics?: boolean;
 }): KickTelemetrySnapshot => {
     const kickSet = new Set(kickSpellIds.filter((value) => Number.isFinite(value) && value > 0));
-    const { rawEvents, attempts } = resolveIntentAttempts(timeline);
     const isLegacyMatch =
         telemetryVersion !== null && telemetryVersion < INTERRUPT_TRACKING_VERSION;
     const isSupported =
         telemetryVersion !== null &&
         Number.isFinite(telemetryVersion) &&
         telemetryVersion >= INTERRUPT_TRACKING_VERSION;
+    const sourceFormat = localSpellModel?.sourceFormat ?? "legacy-timeline";
+    const allAttempts = localSpellModel?.attempts ?? [];
+    const allEvents = localSpellModel?.events ?? [];
 
-    const kickAttemptsRaw = attempts.filter((attempt) => kickSet.has(attempt.spellId));
+    const kickAttemptsRaw = allAttempts.filter((attempt) => kickSet.has(attempt.spellId));
     const collapsedKickAttempts = collapseKickAttempts(kickAttemptsRaw);
     const attemptsWithIntent = collapsedKickAttempts.filter(hasIntentSignal);
+    const scopedAttempts =
+        sourceFormat === "legacy-timeline" ? attemptsWithIntent : collapsedKickAttempts;
 
-    const intentAttempts = attemptsWithIntent.length;
-    const landedAttempts = attemptsWithIntent.filter(
+    const totalKickAttempts = scopedAttempts.length;
+    const intentAttempts = totalKickAttempts;
+    const landedAttempts = scopedAttempts.filter(
         (attempt) => attempt.resolvedOutcome === "succeeded"
     ).length;
     const succeededAttempts = landedAttempts;
-    const interruptedAttempts = attemptsWithIntent.filter(
+    const interruptedAttempts = scopedAttempts.filter(
         (attempt) => attempt.resolvedOutcome === "interrupted"
     ).length;
-    const failedAttempts = attemptsWithIntent.filter(
+    const failedAttempts = scopedAttempts.filter(
         (attempt) => attempt.resolvedOutcome === "failed"
     ).length;
-    const unresolvedAttempts = attemptsWithIntent.filter((attempt) => !attempt.resolvedOutcome).length;
+    const unresolvedAttempts = scopedAttempts.filter((attempt) => !attempt.resolvedOutcome).length;
     let castEvents = 0;
     let outcomeOnlyAttempts = 0;
 
     if (includeDiagnostics) {
-        const rawKickEvents = rawEvents.filter((event) => kickSet.has(event.spellId));
+        const rawKickEvents = allEvents.filter((event) => kickSet.has(event.spellId));
         castEvents = rawKickEvents.filter((event) => isIntentSignalEvent(event.event)).length;
-        outcomeOnlyAttempts = Math.max(0, collapsedKickAttempts.length - intentAttempts);
+        outcomeOnlyAttempts = Math.max(0, collapsedKickAttempts.length - attemptsWithIntent.length);
     }
 
     const { issued, succeeded } = parseInterruptTuple(owner);
     const rawConfirmedInterrupts = isSupported
-        ? parseSucceededFromInterruptSpellsBySource(interruptSpellsBySource, owner) ?? 0
+        ? parseSucceededFromInterruptSpellsBySource(interruptSpellsBySource, owner) ?? succeeded ?? 0
         : null;
     const clampedConfirmedInterrupts =
         rawConfirmedInterrupts === null
             ? null
-            : Math.max(0, Math.min(landedAttempts, Math.trunc(rawConfirmedInterrupts)));
+            : Math.max(0, Math.min(totalKickAttempts, Math.trunc(rawConfirmedInterrupts)));
     const missedKicks =
         clampedConfirmedInterrupts === null
             ? null
-            : Math.max(0, landedAttempts - clampedConfirmedInterrupts);
+            : Math.max(0, totalKickAttempts - clampedConfirmedInterrupts);
 
     return {
         matchId,
         telemetryVersion,
         isLegacyMatch,
         isSupported,
+        totalKickAttempts,
         intentAttempts,
         castEvents,
         outcomeOnlyAttempts,

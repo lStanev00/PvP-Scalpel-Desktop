@@ -154,7 +154,10 @@ export default function MatchSummaryHeader({
 
     const kickSupported = kickTelemetrySnapshot.isSupported;
     const confirmedInterrupts = Math.max(0, kickTelemetrySnapshot.confirmedInterrupts ?? 0);
-    const kickTotal = Math.max(0, kickTelemetrySnapshot.intentAttempts);
+    const kickTotal = Math.max(
+        0,
+        kickTelemetrySnapshot.totalKickAttempts ?? kickTelemetrySnapshot.intentAttempts
+    );
     const kickPct = kickSupported && kickTotal > 0 ? (confirmedInterrupts / kickTotal) * 100 : 0;
     const missedKicks = Math.max(0, kickTelemetrySnapshot.missedKicks ?? 0);
     const averageReactionMs = null;
@@ -327,7 +330,7 @@ export default function MatchSummaryHeader({
                 />
                 <StatCard
                     icon={<LuTrendingUp size={14} />}
-                    label={showRatingDelta ? "Rating" : "Mode"}
+                    label={showRatingDelta ? "MMR" : "Mode"}
                     value={showRatingDelta ? match.deltaLabel : match.modeLabel}
                     sub={showRatingDelta ? undefined : "Match format"}
                     accent={

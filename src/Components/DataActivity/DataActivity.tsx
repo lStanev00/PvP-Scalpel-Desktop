@@ -38,6 +38,27 @@ type DataActivityLocationState = {
     openDetails?: boolean;
 };
 
+const canHandleDetailsBackNavigation = (eventTarget: EventTarget | null) => {
+    if (!document.hasFocus()) return false;
+    if (!(eventTarget instanceof HTMLElement)) return true;
+
+    const tagName = eventTarget.tagName.toLowerCase();
+    if (
+        tagName === "input" ||
+        tagName === "textarea" ||
+        tagName === "select" ||
+        eventTarget.isContentEditable
+    ) {
+        return false;
+    }
+
+    if (eventTarget.closest("[contenteditable='true']")) {
+        return false;
+    }
+
+    return true;
+};
+
 const formatDurationLabel = (seconds: number) => {
     const total = Math.max(0, Math.round(seconds));
     const minutes = Math.floor(total / 60);
@@ -474,6 +495,12 @@ export default function DataActivity() {
             if (event.key === "Escape") {
                 event.preventDefault();
                 onBackToList();
+                return;
+            }
+
+            if (event.key === "Backspace" && canHandleDetailsBackNavigation(event.target)) {
+                event.preventDefault();
+                onBackToList();
             }
         };
         window.addEventListener("keydown", handler);
@@ -526,7 +553,7 @@ export default function DataActivity() {
                                     <LuTrendingUp />
                                 </span>
                                 <div className={styles.historyStatContent}>
-                                    <span className={styles.historyStatLabel}>Current Rating</span>
+                                    <span className={styles.historyStatLabel}>Current MMR</span>
                                     <span className={styles.historyStatValue}>
                                         {displayedHistoryStats.currentRatingLabel}
                                     </span>
