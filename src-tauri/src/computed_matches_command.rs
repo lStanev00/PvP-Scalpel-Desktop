@@ -6,10 +6,7 @@ use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Manager};
 
-<<<<<<< HEAD
 const LEGACY_SCHEMA_VERSION: u8 = 1;
-=======
->>>>>>> 4445079 (consumption of the new addon version)
 const SCHEMA_VERSION: u8 = 2;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -71,7 +68,6 @@ fn store_dir(app: &AppHandle, schema_version: u8, create_dir: bool) -> Result<Pa
         .app_data_dir()
         .map_err(|e| format!("Unable to resolve app data directory: {e}"))?;
     dir.push("computed_outcomes");
-<<<<<<< HEAD
     dir.push(version_dir(schema_version));
     if create_dir {
         fs::create_dir_all(&dir)
@@ -87,10 +83,6 @@ fn store_path(
     create_dir: bool,
 ) -> Result<PathBuf, String> {
     let mut dir = store_dir(app, schema_version, create_dir)?;
-=======
-    dir.push("v2");
-    fs::create_dir_all(&dir).map_err(|e| format!("Unable to create computed store directory: {e}"))?;
->>>>>>> 4445079 (consumption of the new addon version)
     dir.push(format!("{}.json", sanitize_account(account)));
     Ok(dir)
 }
@@ -258,7 +250,6 @@ fn merge_entry_maps(target: &mut HashMap<String, Value>, source: HashMap<String,
     });
 }
 
-<<<<<<< HEAD
 fn promote_legacy_entries(
     app: &AppHandle,
     account: &str,
@@ -267,16 +258,6 @@ fn promote_legacy_entries(
     if legacy_entries.is_empty() {
         return Ok(());
     }
-=======
-#[tauri::command]
-pub fn load_all_computed_matches(app: AppHandle) -> Result<Vec<Value>, String> {
-    let mut dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("Unable to resolve app data directory: {e}"))?;
-    dir.push("computed_outcomes");
-    dir.push("v2");
->>>>>>> 4445079 (consumption of the new addon version)
 
     let current_path = store_path(app, account, SCHEMA_VERSION, true)?;
     let mut current = read_store_or_empty(&current_path, account, SCHEMA_VERSION, true);

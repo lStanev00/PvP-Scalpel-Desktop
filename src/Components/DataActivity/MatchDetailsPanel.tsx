@@ -2,9 +2,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { LuInfo } from "react-icons/lu";
 import TeamTable from "./TeamTable";
 import MSSStatsSection, { collectMSSStats } from "./MSSStatsSection";
+import SpellCastGraph from "./SpellCastGraph";
 import DebugSpellInspector from "./DebugSpellInspector";
 import MatchSummaryHeader from "./MatchSummaryHeader";
-import MatchAnalysisWorkspace from "./MatchAnalysisWorkspace";
 import {
     computeKickTelemetrySnapshot,
     resolveTelemetryVersion,
@@ -424,10 +424,6 @@ export default function MatchDetailsPanel({ match, isLoading, onBack }: MatchDet
                         onHoverPlayerKey={setHighlightedPlayerKey}
                     />
                 )}
-<<<<<<< HEAD
-                <MatchAnalysisWorkspace
-                    match={match}
-=======
                 <div className={styles.spellNote}>
                     <LuInfo className={styles.spellNoteIcon} aria-hidden="true" />
                     <span>
@@ -437,17 +433,14 @@ export default function MatchDetailsPanel({ match, isLoading, onBack }: MatchDet
                 </div>
                 <SpellCastGraph
                     localSpellModel={content.localSpellModel}
->>>>>>> 4445079 (consumption of the new addon version)
                     players={content.players}
-                    localSpellModel={content.localSpellModel}
+                    bracketId={match.bracketId}
                     gameVersion={content.gameVersion}
                     telemetryVersion={content.telemetryVersion}
                     spellTotals={content.spellTotals}
                     spellTotalsBySource={content.spellTotalsBySource}
                     interruptSpellsBySource={content.interruptSpellsBySource}
                     computedSpellOutcomes={content.computedSpellOutcomes}
-                    kickTelemetrySnapshot={content.kickTelemetrySnapshot}
-                    kickSpellIds={content.interruptSpellIds}
                 />
 
                 {debugEnabled ? (

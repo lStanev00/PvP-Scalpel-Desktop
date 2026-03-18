@@ -116,7 +116,6 @@ const readTelemetryVersion = (value: unknown) => {
     return typeof telemetryVersion === "number" ? telemetryVersion : Number(telemetryVersion);
 };
 
-<<<<<<< HEAD
 const buildMatchWithId = async (
     parsedMatch: unknown,
     interruptSpellIds: number[]
@@ -161,29 +160,6 @@ const buildMatchWithId = async (
         interruptSpellIds,
     };
 };
-
-const getLoadedMatchIdentity = (match: MatchWithId) => {
-    const matchKey = extractMatchKey(match);
-    if (matchKey) return `match:${matchKey}`;
-    return `id:${match.id}`;
-};
-
-const mergeLoadedMatchCorpus = (base: MatchWithId[], overlay: MatchWithId[]) => {
-    const merged = new Map<string, MatchWithId>();
-
-    base.forEach((match) => {
-        merged.set(getLoadedMatchIdentity(match), match);
-    });
-
-    overlay.forEach((match) => {
-        merged.set(getLoadedMatchIdentity(match), match);
-    });
-
-    return Array.from(merged.values());
-};
-
-=======
->>>>>>> 4445079 (consumption of the new addon version)
 const splitTopLevelLuaEntries = (table: string) => {
     const trimmed = table.trim();
     if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) return [];
@@ -492,20 +468,12 @@ export const MatchesContext = createContext<MatchWithId[] | null>(null);
 
 export const MatchesProvider = ({ children }: { children: ReactNode }) => {
     const [matches, setMatches] = useState<MatchWithId[]>([]);
-    const matchesRef = useRef<MatchWithId[]>([]);
     const lastLoggedCount = useRef<number | null>(null);
     const lastParseErrorMessage = useRef<string | null>(null);
 
     useEffect(() => {
         let timeout: ReturnType<typeof setTimeout> | null = null;
         let activeRunId = 0;
-<<<<<<< HEAD
-        const commitMatches = (nextMatches: MatchWithId[]) => {
-            matchesRef.current = nextMatches;
-            setMatches(nextMatches);
-        };
-=======
->>>>>>> 4445079 (consumption of the new addon version)
         const hydrateFromComputedStore = async () => {
             const persistedComputedMatches = await invoke<unknown[]>("load_all_computed_matches").catch(
                 () => []
@@ -520,62 +488,19 @@ export const MatchesProvider = ({ children }: { children: ReactNode }) => {
 
             for (const parsedMatch of computedForMerge) {
                 try {
-<<<<<<< HEAD
                     results.push(await buildMatchWithId(parsedMatch, []));
-=======
-                    const derivedDuration = deriveDurationSeconds(parsedMatch);
-                    const normalizedParsedMatch =
-                        derivedDuration !== null && isPlainObject(parsedMatch)
-                            ? ({
-                                  ...parsedMatch,
-                                  durationSeconds: derivedDuration,
-                              } as unknown)
-                            : parsedMatch;
-
-                    const id = await invoke<string>("identify_match", {
-                        obj: normalizedParsedMatch,
-                    });
-
-                    const telemetryVersion =
-                        typeof (normalizedParsedMatch as { telemetryVersion?: unknown })
-                            .telemetryVersion === "number"
-                            ? ((normalizedParsedMatch as { telemetryVersion?: number }).telemetryVersion as number)
-                            : Number.NaN;
-                    const isTelemetryV2Plus =
-                        typeof normalizedParsedMatch === "object" &&
-                        normalizedParsedMatch !== null &&
-                        Number.isFinite(telemetryVersion) &&
-                        telemetryVersion >= 2;
-
-                    if (isTelemetryV2Plus) {
-                        validateMatchV2Plus(normalizedParsedMatch);
-                    } else {
-                        validateMatchV1(normalizedParsedMatch);
-                    }
-
-                    results.push({
-                        id,
-                        ...(isTelemetryV2Plus
-                            ? ((telemetryVersion >= 4
-                                  ? (normalizedParsedMatch as MatchV4)
-                                  : (normalizedParsedMatch as MatchV2)) as MatchV2 | MatchV4)
-                            : (normalizedParsedMatch as Match)),
-                        interruptSpellIds: [],
-                    });
->>>>>>> 4445079 (consumption of the new addon version)
                 } catch {
                     failedCount += 1;
                 }
             }
 
             if (!results.length) return;
-            const mergedResults = mergeLoadedMatchCorpus(results, matchesRef.current);
-            commitMatches(mergedResults);
+            setMatches((prev) => (prev.length > 0 ? prev : results));
             invoke("push_log", {
                 message:
                     failedCount > 0
-                        ? `Computed store bootstrap (${mergedResults.length} loaded, ${failedCount} failed)`
-                        : `Computed store bootstrap (${mergedResults.length} matches)`,
+                        ? `Computed store bootstrap (${results.length} loaded, ${failedCount} failed)`
+                        : `Computed store bootstrap (${results.length} matches)`,
             }).catch(() => undefined);
         };
 
@@ -897,8 +822,6 @@ export const MatchesProvider = ({ children }: { children: ReactNode }) => {
                         rawCount: parsedMatches.length,
                         computedCount: normalizedComputedForMerge.length,
                     });
-<<<<<<< HEAD
-=======
                     setMatches([]);
                     if (lastLoggedCount.current !== 0) {
                         lastLoggedCount.current = 0;
@@ -906,7 +829,6 @@ export const MatchesProvider = ({ children }: { children: ReactNode }) => {
                             message: "Match data updated (0 matches)",
                         }).catch(() => undefined);
                     }
->>>>>>> 4445079 (consumption of the new addon version)
                     lastParseErrorMessage.current = null;
                     return;
                 }
@@ -934,7 +856,6 @@ export const MatchesProvider = ({ children }: { children: ReactNode }) => {
                                       durationSeconds: effectiveDuration,
                                   } as unknown)
                                 : parsedMatch;
-<<<<<<< HEAD
                         const builtMatch = await buildMatchWithId(
                             normalizedParsedMatch,
                             interruptSpellIds
@@ -942,41 +863,6 @@ export const MatchesProvider = ({ children }: { children: ReactNode }) => {
 
                         if (logStaleRun(runId, `after-identify-${matchKey ?? "unknown"}`)) return;
                         results.push(builtMatch);
-=======
-                        const id = await invoke<string>("identify_match", {
-                            obj: normalizedParsedMatch,
-                        });
-
-                        if (logStaleRun(runId, `after-identify-${matchKey ?? "unknown"}`)) return;
-
-                        const telemetryVersion =
-                            typeof (normalizedParsedMatch as { telemetryVersion?: unknown })
-                                .telemetryVersion === "number"
-                                ? ((normalizedParsedMatch as { telemetryVersion?: number })
-                                      .telemetryVersion as number)
-                                : Number.NaN;
-                        const isTelemetryV2Plus =
-                            typeof normalizedParsedMatch === "object" &&
-                            normalizedParsedMatch !== null &&
-                            Number.isFinite(telemetryVersion) &&
-                            telemetryVersion >= 2;
-
-                        if (isTelemetryV2Plus) {
-                            validateMatchV2Plus(normalizedParsedMatch);
-                        } else {
-                            validateMatchV1(normalizedParsedMatch);
-                        }
-
-                        results.push({
-                            id,
-                            ...(isTelemetryV2Plus
-                                ? ((telemetryVersion >= 4
-                                      ? (normalizedParsedMatch as MatchV4)
-                                      : (normalizedParsedMatch as MatchV2)) as MatchV2 | MatchV4)
-                                : (normalizedParsedMatch as Match)),
-                            interruptSpellIds,
-                        });
->>>>>>> 4445079 (consumption of the new addon version)
                     } catch (matchErr) {
                         failedCount += 1;
                         if (import.meta.env.DEV) {
@@ -993,27 +879,6 @@ export const MatchesProvider = ({ children }: { children: ReactNode }) => {
                 });
                 if (logStaleRun(runId, "before-set-matches")) return;
 
-<<<<<<< HEAD
-                if (!results.length) {
-                    lastParseErrorMessage.current = null;
-                    return;
-                }
-
-                const nextMatches = mergeLoadedMatchCorpus(matchesRef.current, results);
-                commitMatches(nextMatches);
-                debugMatches("setMatches committed", {
-                    runId,
-                    results: nextMatches.length,
-                    refreshed: results.length,
-                });
-                if (lastLoggedCount.current !== nextMatches.length || failedCount > 0) {
-                    lastLoggedCount.current = nextMatches.length;
-                    invoke("push_log", {
-                        message:
-                            failedCount > 0
-                                ? `Match data updated (${nextMatches.length} loaded, ${failedCount} failed)`
-                                : `Match data updated (${nextMatches.length} matches)`,
-=======
                 setMatches(results);
                 debugMatches("setMatches committed", {
                     runId,
@@ -1026,7 +891,6 @@ export const MatchesProvider = ({ children }: { children: ReactNode }) => {
                             failedCount > 0
                                 ? `Match data updated (${results.length} loaded, ${failedCount} failed)`
                                 : `Match data updated (${results.length} matches)`,
->>>>>>> 4445079 (consumption of the new addon version)
                     }).catch(() => undefined);
                 }
                 lastParseErrorMessage.current = null;
