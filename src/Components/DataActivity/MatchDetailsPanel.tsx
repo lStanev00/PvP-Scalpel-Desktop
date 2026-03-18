@@ -72,7 +72,7 @@ const PLAYER_COL_WIDTH = 180;
 const KD_COL_WIDTH = 72;
 const OUTPUT_COL_WIDTH = 220;
 const EXTRA_STAT_MIN_WIDTH = 112;
-const PRE_POST_COL_WIDTH = 64;
+const CURRENT_MMR_COL_WIDTH = 132;
 const RATING_COL_WIDTH = 84;
 const TABLE_FRAME_WIDTH = 68;
 
@@ -85,15 +85,15 @@ const getRequiredMergedTableWidth = ({
     showRating: boolean;
     players: MatchPlayer[];
 }) => {
-    const hasPreMMR = players.some((player) => {
-        const value = player.prematchMMR;
-        return typeof value === "number" && Number.isFinite(value) && value !== 0;
-    });
-    const hasPostMMR = players.some((player) => {
-        const value = player.postmatchMMR;
-        return typeof value === "number" && Number.isFinite(value) && value !== 0;
-    });
-    const hasMMRDelta =
+    const hasCurrentMMR =
+        players.some((player) => {
+            const pre = player.prematchMMR;
+            const post = player.postmatchMMR;
+            return (
+                (typeof pre === "number" && Number.isFinite(pre) && pre !== 0) ||
+                (typeof post === "number" && Number.isFinite(post) && post !== 0)
+            );
+        }) ||
         players.some((player) => {
             const value = player.ratingChange;
             return typeof value === "number" && Number.isFinite(value) && value !== 0;
@@ -115,9 +115,7 @@ const getRequiredMergedTableWidth = ({
         KD_COL_WIDTH +
         OUTPUT_COL_WIDTH +
         extraStatsWidth +
-        (hasPreMMR ? PRE_POST_COL_WIDTH : 0) +
-        (hasPostMMR ? PRE_POST_COL_WIDTH : 0) +
-        (hasMMRDelta ? PRE_POST_COL_WIDTH : 0) +
+        (hasCurrentMMR ? CURRENT_MMR_COL_WIDTH : 0) +
         (showRating ? RATING_COL_WIDTH : 0)
     );
 };
@@ -405,6 +403,8 @@ export default function MatchDetailsPanel({ match, isLoading, onBack }: MatchDet
                     players={content.players}
                     showRating={content.showRating}
                     showTeams={content.showFactions}
+                    ownerTeamMmrDelta={match.delta}
+                    ownerTeamCurrentMmr={match.owner.rating}
                     extraStats={
                         shouldMergeMSS
                             ? {

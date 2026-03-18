@@ -12,6 +12,8 @@ interface TeamTableProps {
     players: MatchPlayer[];
     showRating?: boolean;
     showTeams?: boolean;
+    ownerTeamMmrDelta?: number | null;
+    ownerTeamCurrentMmr?: number | null;
     extraStats?: {
         statNames: string[];
         valuesByPlayerKey: Record<string, Record<string, number>>;
@@ -23,6 +25,29 @@ interface TeamTableProps {
 const fmt = (v?: number | null) => (v != null ? v.toLocaleString() : "-");
 const fmtClass = (c?: string) => (c ? c[0].toUpperCase() + c.slice(1).toLowerCase() : "-");
 const EXTRA_STAT_MIN_WIDTH = 112;
+const CURRENT_MMR_MIN_WIDTH = 132;
+
+const toFiniteNumber = (value: unknown) => {
+    if (typeof value === "number" && Number.isFinite(value)) return value;
+    if (typeof value === "string" && value.trim() !== "") {
+        const numeric = Number(value);
+        if (Number.isFinite(numeric)) return numeric;
+    }
+    return null;
+};
+
+const formatSignedNumber = (value: number) => {
+    const normalized = Math.trunc(value);
+    if (normalized > 0) return `+${normalized.toLocaleString()}`;
+    return normalized.toLocaleString();
+};
+
+const formatMmrDelta = (value: number | null) => {
+    if (value === null) return "-";
+    const normalized = Math.trunc(value);
+    if (normalized === 0) return "-";
+    return formatSignedNumber(normalized);
+};
 
 function HeaderHint({
     label,
@@ -57,6 +82,8 @@ export default function TeamTable({
     players,
     showRating = true,
     showTeams = false,
+    ownerTeamMmrDelta = null,
+    ownerTeamCurrentMmr = null,
     extraStats = null,
     highlightedPlayerKey = null,
     onHoverPlayerKey,
@@ -79,9 +106,9 @@ export default function TeamTable({
             return typeof raw === "number" && !Number.isNaN(raw) && raw !== 0;
         });
 
-    const showPreMMR = hasNonZero("prematchMMR");
-    const showPostMMR = hasNonZero("postmatchMMR");
-    const showMMRDelta =
+    const showCurrentMMR =
+        hasNonZero("prematchMMR") ||
+        hasNonZero("postmatchMMR") ||
         hasNonZero("ratingChange") ||
         players.some((player) => {
             const pre = player.prematchMMR ?? 0;
@@ -96,9 +123,7 @@ export default function TeamTable({
         "72px",
         "minmax(220px, 1fr)",
         ...extraStatNames.map(() => `minmax(${EXTRA_STAT_MIN_WIDTH}px, auto)`),
-        ...(showPreMMR ? ["minmax(64px, auto)"] : []),
-        ...(showPostMMR ? ["minmax(64px, auto)"] : []),
-        ...(showMMRDelta ? ["minmax(64px, auto)"] : []),
+        ...(showCurrentMMR ? [`minmax(${CURRENT_MMR_MIN_WIDTH}px, auto)`] : []),
         ...(showRating ? ["minmax(84px, auto)"] : []),
     ].join(" ");
 
@@ -149,6 +174,10 @@ export default function TeamTable({
         const sortedPlayers = [...players].sort((a, b) => (a.faction ?? 99) - (b.faction ?? 99));
         return { sorted: sortedPlayers, teamMap: map };
     }, [players, showTeams]);
+    const ownerFaction = useMemo(() => {
+        const owner = players.find((player) => player.isOwner);
+        return typeof owner?.faction === "number" ? owner.faction : null;
+    }, [players]);
 
     const handleRowAction = (realm?: string, name?: string) => {
         if (!realm || !name) return;
@@ -209,7 +238,7 @@ export default function TeamTable({
                                       ? lastMergedColRef
                                       : undefined
                             }
-                        className={[
+                            className={[
                                 styles.ttColStat,
                                 styles.ttMergedCol,
                                 index === 0 ? styles.ttMergedColStart : "",
@@ -221,19 +250,13 @@ export default function TeamTable({
                             <HeaderHint label={stat} tooltip={stat} multiline />
                         </span>
                     ))}
-                    {showPreMMR ? (
+                    {showCurrentMMR ? (
                         <span className={styles.ttColStat}>
-                            <HeaderHint label="Pre" tooltip="Pre-match MMR" />
-                        </span>
-                    ) : null}
-                    {showPostMMR ? (
-                        <span className={styles.ttColStat}>
-                            <HeaderHint label="Post" tooltip="Post-match MMR" />
-                        </span>
-                    ) : null}
-                    {showMMRDelta ? (
-                        <span className={styles.ttColStat}>
-                            <HeaderHint label="Δ" tooltip="MMR change" />
+                            <HeaderHint
+                                label="Current MMR"
+                                tooltip="Current MMR and match delta"
+                                multiline
+                            />
                         </span>
                     ) : null}
                     {showRating ? (
@@ -254,9 +277,37 @@ export default function TeamTable({
 
                     const classColor = getClassColor(player.class) ?? "rgba(230,234,240,0.7)";
                     const media = resolveMedia(player);
-                    const delta = (player.postmatchMMR ?? 0) - (player.prematchMMR ?? 0);
+                    const preMatchMMR = toFiniteNumber(player.prematchMMR);
+                    const postMatchMMR = toFiniteNumber(player.postmatchMMR);
+                    const isOwnerTeamPlayer =
+                        ownerFaction !== null &&
+                        typeof player.faction === "number" &&
+                        player.faction === ownerFaction;
+                    const currentMMR =
+                        postMatchMMR ??
+                        preMatchMMR ??
+                        (isOwnerTeamPlayer ? ownerTeamCurrentMmr : null);
+                    const derivedDelta =
+                        preMatchMMR !== null && postMatchMMR !== null ? postMatchMMR - preMatchMMR : null;
+                    const rawPlayerDelta = toFiniteNumber(player.ratingChange);
+                    const fallbackTeamDelta =
+                        isOwnerTeamPlayer &&
+                        ownerTeamMmrDelta !== null &&
+                        ownerTeamMmrDelta !== 0
+                            ? ownerTeamMmrDelta
+                            : null;
+                    const mmrDelta =
+                        rawPlayerDelta !== null && rawPlayerDelta !== 0
+                            ? rawPlayerDelta
+                            : derivedDelta !== null && derivedDelta !== 0
+                              ? derivedDelta
+                              : fallbackTeamDelta;
                     const deltaStyle =
-                        delta > 0 ? styles.deltaPositive : delta < 0 ? styles.deltaNegative : styles.deltaNeutral;
+                        mmrDelta !== null && mmrDelta > 0
+                            ? styles.deltaPositive
+                            : mmrDelta !== null && mmrDelta < 0
+                              ? styles.deltaNegative
+                              : styles.deltaNeutral;
                     const rating = player.rating ?? null;
                     const ratingChange = player.ratingChange ?? null;
                     const damagePct = maxOutput > 0 ? ((player.damage ?? 0) / maxOutput) * 100 : 0;
@@ -359,10 +410,13 @@ export default function TeamTable({
                                     </span>
                                 ))}
 
-                                {showPreMMR ? <span className={styles.ttStat}>{player.prematchMMR ?? "-"}</span> : null}
-                                {showPostMMR ? <span className={styles.ttStat}>{player.postmatchMMR ?? "-"}</span> : null}
-                                {showMMRDelta ? (
-                                    <span className={`${styles.ttStat} ${deltaStyle}`}>{delta > 0 ? `+${delta}` : delta}</span>
+                                {showCurrentMMR ? (
+                                    <span className={`${styles.ttStat} ${styles.ttMmrCell}`}>
+                                        <span className={styles.ttMmrValue}>{fmt(currentMMR)}</span>
+                                        <span className={`${styles.ttMmrDelta} ${deltaStyle}`}>
+                                            {formatMmrDelta(mmrDelta)}
+                                        </span>
+                                    </span>
                                 ) : null}
                                 {showRating ? (
                                     <span className={styles.ttStat}>

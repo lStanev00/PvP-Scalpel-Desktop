@@ -330,7 +330,7 @@ export default function MatchSummaryHeader({
                 />
                 <StatCard
                     icon={<LuTrendingUp size={14} />}
-                    label={showRatingDelta ? "Rating" : "Mode"}
+                    label={showRatingDelta ? "MMR" : "Mode"}
                     value={showRatingDelta ? match.deltaLabel : match.modeLabel}
                     sub={showRatingDelta ? undefined : "Match format"}
                     accent={

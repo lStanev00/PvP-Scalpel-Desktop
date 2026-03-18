@@ -553,7 +553,7 @@ export default function DataActivity() {
                                     <LuTrendingUp />
                                 </span>
                                 <div className={styles.historyStatContent}>
-                                    <span className={styles.historyStatLabel}>Current Rating</span>
+                                    <span className={styles.historyStatLabel}>Current MMR</span>
                                     <span className={styles.historyStatValue}>
                                         {displayedHistoryStats.currentRatingLabel}
                                     </span>

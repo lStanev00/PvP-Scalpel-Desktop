@@ -3782,6 +3782,21 @@
     white-space: nowrap;
 }
 
+.ttMmrCell {
+    display: inline-flex;
+    align-items: baseline;
+    justify-content: center;
+    gap: 8px;
+}
+
+.ttMmrValue {
+    color: rgba(244, 247, 255, 0.9);
+}
+
+.ttMmrDelta {
+    font-size: 12px;
+}
+
 .ttMergedCellStart {
     padding-left: 4px;
     box-sizing: border-box;
