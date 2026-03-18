@@ -20,6 +20,12 @@ import { usePreferences } from "../../Context-Providers/preferences-context";
 import { getRoleBySpec } from "../../Domain/CombatDomainContext";
 import RouteLayout from "../../Components/RouteLayout/RouteLayout";
 import {
+    BRACKET_BATTLEGROUND_BLITZ,
+    BRACKET_RATED_ARENA,
+    BRACKET_RATED_ARENA_2V2,
+    BRACKET_RATED_ARENA_3V3,
+    BRACKET_RATED_BATTLEGROUND,
+    BRACKET_SOLO_SHUFFLE,
     buildCharacterOptions,
     buildMatchSummary,
     getModeLabel,
@@ -403,7 +409,20 @@ export default function Dashboard() {
             : null;
     const apiBracketSnapshot = resolveCharacterBracketSnapshot(profiles, latest);
     const currentRating =
-        dashboardSummaries.find((match) => typeof match.owner.rating === "number")?.owner.rating ??
+        dashboardSummaries.find((match) => {
+            const owner =
+                match.raw.players?.find((player) => player.isOwner === true) ??
+                match.raw.players?.[0] ??
+                null;
+            return typeof owner?.rating === "number" && Number.isFinite(owner.rating);
+        })?.raw.players?.find((player) => player.isOwner === true)?.rating ??
+        dashboardSummaries.find((match) => {
+            const owner =
+                match.raw.players?.find((player) => player.isOwner === true) ??
+                match.raw.players?.[0] ??
+                null;
+            return typeof owner?.rating === "number" && Number.isFinite(owner.rating);
+        })?.raw.players?.[0]?.rating ??
         apiBracketSnapshot?.rating ??
         null;
     const latestCombatStats = useMemo(() => resolveOwnerCombatStats(dashboardLatest), [dashboardLatest]);
@@ -468,7 +487,19 @@ export default function Dashboard() {
     }, [ratedMovementPoints]);
     const ownerName = heroMatch?.owner.name ?? "Your character";
     const latestScopeId = dashboardFilters?.mode ?? null;
-    const isRatedContext = dashboardLatest ? isRatedBracket(dashboardLatest.bracketId) : false;
+    const isRatedContext =
+        latestScopeId !== null
+            ? [
+                  BRACKET_SOLO_SHUFFLE,
+                  BRACKET_BATTLEGROUND_BLITZ,
+                  BRACKET_RATED_ARENA_2V2,
+                  BRACKET_RATED_ARENA_3V3,
+                  BRACKET_RATED_ARENA,
+                  BRACKET_RATED_BATTLEGROUND,
+              ].includes(latestScopeId)
+            : dashboardLatest
+              ? isRatedBracket(dashboardLatest.bracketId)
+              : false;
     const ownerSpec = profile?.activeSpec?.name ?? heroMatch?.owner.spec ?? "Spec pending";
     const ownerClass = profile?.class?.name ?? heroMatch?.owner.class ?? "Class pending";
     const currentBracketLabel =
@@ -521,7 +552,7 @@ export default function Dashboard() {
             : undefined;
     const showRatingMetric = isRatedContext && currentRating !== null && currentRating > 0;
     const metricFourLabel = showRatingMetric
-        ? "Current rating"
+        ? "Current Rating"
         : nonRatedAverageMetric?.label ?? "Active spec";
     const metricFourValue = showRatingMetric
         ? String(Math.round(currentRating))
@@ -821,7 +852,7 @@ export default function Dashboard() {
                             <div>
                                 <div className={styles.panelEyebrow}>Momentum</div>
                                 <h3 className={styles.panelTitle}>
-                                    {isRatedContext ? "Recent form" : "Recent battlegrounds"}
+                                    {isRatedContext ? "MMR Movement" : "Recent battlegrounds"}
                                 </h3>
                             </div>
                         </div>
