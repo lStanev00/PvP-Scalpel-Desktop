@@ -1,0 +1,231 @@
+.card {
+    position: relative;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 20px;
+    padding: 18px;
+    background:
+        radial-gradient(circle at top right, rgba(74, 222, 200, 0.08), transparent 34%),
+        linear-gradient(180deg, rgba(12, 20, 32, 0.82), rgba(9, 15, 24, 0.92));
+    box-shadow: 0 20px 36px rgba(5, 10, 16, 0.28);
+    display: grid;
+    gap: 14px;
+}
+
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.eyebrow {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: rgba(124, 242, 194, 0.88);
+}
+
+.title {
+    margin: 3px 0 0;
+    font-size: 20px;
+    line-height: 1.1;
+    color: rgba(244, 247, 251, 0.98);
+}
+
+.scopePill {
+    display: inline-flex;
+    align-items: center;
+    min-height: 36px;
+    padding: 0 14px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.55px;
+    text-transform: uppercase;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.045);
+    color: rgba(230, 234, 240, 0.88);
+    white-space: nowrap;
+}
+
+.graphWrap {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.metaRow {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-top: 2px;
+}
+
+.metaLabel {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: rgba(220, 232, 252, 0.58);
+}
+
+.netValue {
+    font-size: 13px;
+    font-weight: 760;
+    font-variant-numeric: tabular-nums;
+}
+
+.netValuePositive {
+    color: rgba(124, 242, 194, 0.98);
+}
+
+.netValueNegative {
+    color: rgba(255, 133, 133, 0.98);
+}
+
+.netValueNeutral {
+    color: rgba(230, 234, 240, 0.92);
+}
+
+.svg {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+
+.baseline {
+    stroke: rgba(174, 201, 240, 0.16);
+    stroke-width: 1;
+    stroke-dasharray: 5 5;
+}
+
+.goalLine {
+    stroke: rgba(120, 240, 210, 0.24);
+    stroke-width: 1;
+    stroke-dasharray: 4 4;
+}
+
+.axisLabel {
+    fill: rgba(210, 226, 248, 0.62);
+    font-size: 0.72rem;
+    font-weight: 700;
+}
+
+.area {
+    fill: rgba(120, 240, 210, 0.12);
+}
+
+.line {
+    fill: none;
+    stroke: #78f0d2;
+    stroke-width: 3;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.point {
+    fill: #071120;
+    stroke: #78f0d2;
+    stroke-width: 3;
+    transition:
+        opacity 160ms ease,
+        transform 160ms ease;
+}
+
+.pointDefault {
+    opacity: 1;
+}
+
+.pointHoverOnly {
+    opacity: 0.86;
+}
+
+.pointLabel {
+    fill: #dbe9fb;
+    font-size: 0.78rem;
+    font-weight: 800;
+    pointer-events: none;
+}
+
+.pointLabelAbove {
+    dominant-baseline: auto;
+}
+
+/* .pointLabelBelow {
+    dominant-baseline: hanging;
+} */
+
+.resultStrip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.resultBubble {
+    appearance: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 56px;
+    min-width: 56px;
+    height: 56px;
+    min-height: 56px;
+    padding: 0;
+    border-radius: 999px;
+    font-size: 16px;
+    font-weight: 800;
+    letter-spacing: 0;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    cursor: pointer;
+    transition:
+        transform 160ms ease,
+        box-shadow 160ms ease,
+        border-color 160ms ease;
+}
+
+.resultBubble:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 12px 20px rgba(5, 10, 16, 0.22);
+}
+
+.resultBubble:focus-visible {
+    outline: none;
+    border-color: rgba(124, 242, 194, 0.48);
+    box-shadow: 0 0 0 3px rgba(58, 167, 255, 0.18);
+}
+
+.resultWin {
+    background: rgba(58, 210, 159, 0.1);
+    color: rgba(124, 242, 194, 0.98);
+    border-color: rgba(124, 242, 194, 0.24);
+}
+
+.resultLoss {
+    background: rgba(255, 77, 79, 0.08);
+    color: rgba(255, 133, 133, 0.98);
+    border-color: rgba(255, 120, 120, 0.2);
+}
+
+.resultNeutral {
+    background: rgba(255, 255, 255, 0.04);
+    color: rgba(230, 234, 240, 0.9);
+}
+
+.empty {
+    min-height: 160px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: rgba(220, 232, 252, 0.65);
+    font-weight: 600;
+    text-align: center;
+}
+
+@media (max-width: 720px) {
+    .metaRow {
+        align-items: flex-start;
+    }
+}
