@@ -41,6 +41,10 @@ const normalizeNumber = (value: unknown) => {
 };
 
 const normalizeCount = (value: unknown) => Math.max(0, Math.trunc(normalizeNumber(value)));
+const normalizeOptionalCount = (value: unknown) => {
+    if (value === null || value === undefined) return null;
+    return normalizeCount(value);
+};
 
 const formatInteger = (value: number) => value.toLocaleString();
 
@@ -152,14 +156,21 @@ export default function MatchSummaryHeader({
     const outputTeamTotal = isHealer ? teamHealing : teamDamage;
     const contributionPct = outputTeamTotal > 0 ? (outputTotal / outputTeamTotal) * 100 : 0;
 
-    const kickSupported = kickTelemetrySnapshot.isSupported;
-    const confirmedInterrupts = Math.max(0, kickTelemetrySnapshot.confirmedInterrupts ?? 0);
     const kickTotal = Math.max(
         0,
         kickTelemetrySnapshot.totalKickAttempts ?? kickTelemetrySnapshot.intentAttempts
     );
-    const kickPct = kickSupported && kickTotal > 0 ? (confirmedInterrupts / kickTotal) * 100 : 0;
-    const missedKicks = Math.max(0, kickTelemetrySnapshot.missedKicks ?? 0);
+    const confirmedInterrupts =
+        normalizeOptionalCount(kickTelemetrySnapshot.confirmedInterrupts) ??
+        normalizeOptionalCount(kickTelemetrySnapshot.succeeded);
+    const hasKickDisplay = kickTotal > 0 && confirmedInterrupts !== null;
+    const kickPct = hasKickDisplay ? (confirmedInterrupts / kickTotal) * 100 : 0;
+    const missedKicks = Math.max(
+        0,
+        kickTelemetrySnapshot.missedKicks ??
+            kickTelemetrySnapshot.failed ??
+            (hasKickDisplay ? kickTotal - confirmedInterrupts : 0)
+    );
     const averageReactionMs = null;
 
     const ownerClassColor = getClassColor(owner?.class) ?? "#8a94a6";
@@ -270,7 +281,7 @@ export default function MatchSummaryHeader({
                         <MiniRing
                             percent={kickPct}
                             color={
-                                kickSupported && kickTotal > 0
+                                hasKickDisplay
                                     ? kickPct >= 60
                                         ? "#22c55e"
                                         : kickPct >= 30
@@ -281,7 +292,7 @@ export default function MatchSummaryHeader({
                             size={56}
                         />
                         <span className={styles.mdRingValue}>
-                            {kickSupported && kickTotal > 0 ? `${confirmedInterrupts}/${kickTotal}` : "?"}
+                            {hasKickDisplay ? `${confirmedInterrupts}/${kickTotal}` : "?"}
                         </span>
                     </div>
                     <span className={styles.mdRingLabel}>Kicks</span>
@@ -310,9 +321,9 @@ export default function MatchSummaryHeader({
                 <StatCard
                     icon={<LuZap size={14} />}
                     label="Kick Eff."
-                    value={kickSupported && kickTotal > 0 ? `${Math.round(kickPct)}%` : "--"}
+                    value={hasKickDisplay ? `${Math.round(kickPct)}%` : "--"}
                     sub={
-                        kickSupported && kickTotal > 0
+                        hasKickDisplay
                             ? averageReactionMs !== null
                                 ? `${averageReactionMs}ms avg`
                                 : `${confirmedInterrupts} confirmed · ${missedKicks} missed`
@@ -323,7 +334,7 @@ export default function MatchSummaryHeader({
                             ? "#22c55e"
                             : kickPct >= 30
                               ? "#f5a85b"
-                              : kickSupported && kickTotal > 0
+                              : hasKickDisplay
                                 ? "#ef4444"
                                 : undefined
                     }
@@ -349,7 +360,7 @@ export default function MatchSummaryHeader({
                 <div className={styles.mdExpandedGrid}>
                     <div className={styles.mdExpandedItem}>
                         <span className={styles.mdExpandedLabel}>Missed Kicks</span>
-                        <span className={styles.mdExpandedValue}>{kickSupported ? missedKicks : "--"}</span>
+                        <span className={styles.mdExpandedValue}>{hasKickDisplay ? missedKicks : "--"}</span>
                     </div>
                     <div className={styles.mdExpandedItem}>
                         <span className={styles.mdExpandedLabel}>Total Attempts</span>

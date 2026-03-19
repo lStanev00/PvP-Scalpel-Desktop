@@ -89,7 +89,7 @@ export default function KicksAnalysisTab({
                 />
                 <Scorecard
                     label="Failed"
-                    value={String(kickTelemetrySnapshot.failedAttempts ?? 0)}
+                    value={String(kickTelemetrySnapshot.failed ?? kickTelemetrySnapshot.missedKicks ?? 0)}
                     icon={<LuCircleOff aria-hidden="true" />}
                 />
             </div>

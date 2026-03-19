@@ -62,9 +62,9 @@ type MatchDetailsContent = {
     spellTotalsBySource: Record<string, unknown> | null;
     interruptSpellsBySource: Record<string, unknown> | null;
     interruptSpellIds: number[];
-    ownerInterruptsIssued: number | null;
-    ownerInterruptsSucceeded: number | null;
+    baseKickTelemetrySnapshot: KickTelemetrySnapshot;
     kickTelemetrySnapshot: KickTelemetrySnapshot;
+    computedOwnerKicks: ComputedOwnerKickSummary | null;
     computedSpellOutcomes: Record<string, { succeeded: number; interrupted: number; failed: number }> | null;
 };
 
@@ -118,6 +118,69 @@ const getRequiredMergedTableWidth = ({
         (hasCurrentMMR ? CURRENT_MMR_COL_WIDTH : 0) +
         (showRating ? RATING_COL_WIDTH : 0)
     );
+};
+
+const coerceComputedKickCount = (value: unknown) =>
+    typeof value === "number" && Number.isFinite(value) ? Math.max(0, Math.trunc(value)) : null;
+
+const resolveKickSnapshotForDisplay = (
+    base: KickTelemetrySnapshot,
+    computedOwnerKicks: ComputedOwnerKickSummary | null
+): KickTelemetrySnapshot => {
+    if (!computedOwnerKicks) return base;
+
+    const baseHasKickEvidence =
+        base.totalKickAttempts > 0 ||
+        base.eventIntentAttempts > 0 ||
+        base.castEvents > 0 ||
+        base.issued !== null ||
+        base.succeeded !== null;
+    if (baseHasKickEvidence) return base;
+
+    const computedTotal =
+        coerceComputedKickCount(computedOwnerKicks.total) ??
+        coerceComputedKickCount(computedOwnerKicks.intentAttempts);
+    const computedIntentAttempts = coerceComputedKickCount(computedOwnerKicks.intentAttempts);
+    const computedLanded = coerceComputedKickCount(computedOwnerKicks.landed);
+    const computedConfirmedInterrupts =
+        coerceComputedKickCount(computedOwnerKicks.confirmedInterrupts) ??
+        coerceComputedKickCount(computedOwnerKicks.succeeded);
+    const computedMissed =
+        coerceComputedKickCount(computedOwnerKicks.missed) ??
+        coerceComputedKickCount(computedOwnerKicks.failed);
+    const computedFailed =
+        coerceComputedKickCount(computedOwnerKicks.failed) ?? computedMissed;
+
+    const hasComputedFallback =
+        computedTotal !== null ||
+        computedIntentAttempts !== null ||
+        computedLanded !== null ||
+        computedConfirmedInterrupts !== null ||
+        computedMissed !== null ||
+        computedFailed !== null;
+
+    if (!hasComputedFallback) return base;
+
+    const totalKickAttempts = computedTotal ?? base.totalKickAttempts;
+    const intentAttempts = computedIntentAttempts ?? totalKickAttempts;
+    const landedAttempts = computedLanded ?? base.landedAttempts;
+    const confirmedInterrupts = computedConfirmedInterrupts ?? base.confirmedInterrupts;
+    const missedKicks =
+        computedMissed ??
+        (confirmedInterrupts !== null ? Math.max(0, totalKickAttempts - confirmedInterrupts) : null);
+    const failed = computedFailed ?? missedKicks;
+
+    return {
+        ...base,
+        totalKickAttempts,
+        intentAttempts,
+        landedAttempts,
+        succeededAttempts: landedAttempts,
+        confirmedInterrupts,
+        missedKicks,
+        failed,
+        succeeded: confirmedInterrupts ?? base.succeeded,
+    };
 };
 
 export default function MatchDetailsPanel({ match, isLoading, onBack }: MatchDetailsPanelProps) {
@@ -186,17 +249,6 @@ export default function MatchDetailsPanel({ match, isLoading, onBack }: MatchDet
         ).interruptSpellIds;
         const computed = (match.raw as unknown as { computed?: ComputedAnalyticsV2 }).computed;
         const ownerPlayer = players.find((player) => player.isOwner) ?? null;
-        const ownerInterruptTuple = Array.isArray((ownerPlayer as { interrupts?: unknown } | null)?.interrupts)
-            ? ((ownerPlayer as { interrupts?: unknown }).interrupts as unknown[])
-            : null;
-        const ownerInterruptsIssued =
-            ownerInterruptTuple && ownerInterruptTuple.length > 0
-                ? Number(ownerInterruptTuple[0])
-                : null;
-        const ownerInterruptsSucceeded =
-            ownerInterruptTuple && ownerInterruptTuple.length > 1
-                ? Number(ownerInterruptTuple[1])
-                : null;
         const normalizedInterruptSpellIds = Array.isArray(interruptSpellIds)
             ? interruptSpellIds
                   .map((value) => (typeof value === "number" ? value : Number(value)))
@@ -212,67 +264,54 @@ export default function MatchDetailsPanel({ match, isLoading, onBack }: MatchDet
             interruptSpellsBySource,
             includeDiagnostics: debugEnabled,
         });
-        const computedOwnerKicks = computed?.ownerKicks as ComputedOwnerKickSummary | undefined;
-        const computedTotal =
-            typeof computedOwnerKicks?.total === "number" && Number.isFinite(computedOwnerKicks.total)
-                ? Math.max(0, Math.trunc(computedOwnerKicks.total))
-                : typeof computedOwnerKicks?.intentAttempts === "number" &&
-                    Number.isFinite(computedOwnerKicks.intentAttempts)
-                  ? Math.max(0, Math.trunc(computedOwnerKicks.intentAttempts))
-                  : null;
-        const computedIntentAttempts =
-            typeof computedOwnerKicks?.intentAttempts === "number" &&
-            Number.isFinite(computedOwnerKicks.intentAttempts)
-                ? Math.max(0, Math.trunc(computedOwnerKicks.intentAttempts))
+        const computedOwnerKicks =
+            computed?.ownerKicks && typeof computed.ownerKicks === "object"
+                ? (computed.ownerKicks as ComputedOwnerKickSummary)
                 : null;
-        const computedLanded =
-            typeof computedOwnerKicks?.landed === "number" && Number.isFinite(computedOwnerKicks.landed)
-                ? Math.max(0, Math.trunc(computedOwnerKicks.landed))
-                : null;
-        const computedConfirmedInterrupts =
-            typeof computedOwnerKicks?.confirmedInterrupts === "number" &&
-            Number.isFinite(computedOwnerKicks.confirmedInterrupts)
-                ? Math.max(0, Math.trunc(computedOwnerKicks.confirmedInterrupts))
-                : typeof computedOwnerKicks?.succeeded === "number" &&
-                    Number.isFinite(computedOwnerKicks.succeeded)
-                  ? Math.max(0, Math.trunc(computedOwnerKicks.succeeded))
-                  : null;
-        const computedMissed =
-            typeof computedOwnerKicks?.missed === "number" && Number.isFinite(computedOwnerKicks.missed)
-                ? Math.max(0, Math.trunc(computedOwnerKicks.missed))
-                : typeof computedOwnerKicks?.failed === "number" && Number.isFinite(computedOwnerKicks.failed)
-                  ? Math.max(0, Math.trunc(computedOwnerKicks.failed))
-                  : null;
-        const resolvedTotalKickAttempts =
-            computedTotal !== null ? computedTotal : baseKickTelemetrySnapshot.totalKickAttempts;
-        const resolvedIntentAttempts =
-            computedIntentAttempts !== null && computedIntentAttempts > 0
-                ? computedIntentAttempts
-                : resolvedTotalKickAttempts;
-        const resolvedLanded =
-            computedLanded !== null ? computedLanded : baseKickTelemetrySnapshot.landedAttempts;
-        const resolvedConfirmedInterrupts =
-            computedConfirmedInterrupts !== null
-                ? computedConfirmedInterrupts
-                : baseKickTelemetrySnapshot.confirmedInterrupts;
-        const resolvedMissed =
-            computedMissed !== null ? computedMissed : baseKickTelemetrySnapshot.missedKicks;
-        const kickTelemetrySnapshot: KickTelemetrySnapshot =
-            computedOwnerKicks &&
-            typeof computedOwnerKicks === "object" &&
-            computedOwnerKicks !== null &&
-            baseKickTelemetrySnapshot.isSupported
-                ? {
-                      ...baseKickTelemetrySnapshot,
-                      totalKickAttempts: resolvedTotalKickAttempts,
-                      intentAttempts: resolvedIntentAttempts,
-                      landedAttempts: resolvedLanded,
-                      succeededAttempts: resolvedLanded,
-                      confirmedInterrupts: resolvedConfirmedInterrupts,
-                      missedKicks: resolvedMissed,
-                      succeeded: resolvedConfirmedInterrupts,
-                  }
-                : baseKickTelemetrySnapshot;
+        const kickTelemetrySnapshot = resolveKickSnapshotForDisplay(
+            baseKickTelemetrySnapshot,
+            computedOwnerKicks
+        );
+        if (import.meta.env.DEV) {
+            console.log("[match-details] local telemetry summary", {
+                matchId: match.id,
+                matchKey:
+                    typeof (match.raw as { matchKey?: unknown }).matchKey === "string"
+                        ? (match.raw as { matchKey: string }).matchKey
+                        : null,
+                telemetryVersion,
+                hasLocalSpellCapture:
+                    !!(match.raw as { localSpellCapture?: unknown }).localSpellCapture,
+                hasLocalLossOfControl:
+                    !!(match.raw as { localLossOfControl?: unknown }).localLossOfControl,
+                localSpellModel: localSpellModel
+                    ? {
+                          sourceFormat: localSpellModel.sourceFormat,
+                          detailAvailable: localSpellModel.detailAvailable,
+                          failureReason: localSpellModel.failureReason ?? null,
+                          attempts: localSpellModel.attempts.length,
+                          events: localSpellModel.events.length,
+                          locEntries: localSpellModel.locEntries.length,
+                      }
+                    : null,
+                kickSnapshotBase: {
+                    totalKickAttempts: baseKickTelemetrySnapshot.totalKickAttempts,
+                    eventIntentAttempts: baseKickTelemetrySnapshot.eventIntentAttempts,
+                    castEvents: baseKickTelemetrySnapshot.castEvents,
+                    confirmedInterrupts: baseKickTelemetrySnapshot.confirmedInterrupts,
+                    confirmationSource: baseKickTelemetrySnapshot.confirmationSource,
+                    issued: baseKickTelemetrySnapshot.issued,
+                    succeeded: baseKickTelemetrySnapshot.succeeded,
+                },
+                kickSnapshotDisplayed: {
+                    totalKickAttempts: kickTelemetrySnapshot.totalKickAttempts,
+                    confirmedInterrupts: kickTelemetrySnapshot.confirmedInterrupts,
+                    missedKicks: kickTelemetrySnapshot.missedKicks,
+                    failed: kickTelemetrySnapshot.failed,
+                },
+                computedOwnerKicks,
+            });
+        }
         const computedSpellOutcomesFromStore =
             computed?.spellOutcomesBySpellId && typeof computed.spellOutcomesBySpellId === "object"
                 ? Object.fromEntries(
@@ -347,15 +386,9 @@ export default function MatchDetailsPanel({ match, isLoading, onBack }: MatchDet
             ) as Record<string, unknown> | null,
             interruptSpellsBySource: (interruptSpellsBySource ?? null) as Record<string, unknown> | null,
             interruptSpellIds: normalizedInterruptSpellIds,
-            ownerInterruptsIssued:
-                ownerInterruptsIssued !== null && Number.isFinite(ownerInterruptsIssued)
-                    ? Math.max(0, Math.trunc(ownerInterruptsIssued))
-                    : null,
-            ownerInterruptsSucceeded:
-                ownerInterruptsSucceeded !== null && Number.isFinite(ownerInterruptsSucceeded)
-                    ? Math.max(0, Math.trunc(ownerInterruptsSucceeded))
-                    : null,
+            baseKickTelemetrySnapshot,
             kickTelemetrySnapshot,
+            computedOwnerKicks,
             computedSpellOutcomes,
         };
     }, [match, debugEnabled]);
@@ -457,9 +490,9 @@ export default function MatchDetailsPanel({ match, isLoading, onBack }: MatchDet
                         localSpellModel={content.localSpellModel}
                         gameVersion={content.gameVersion}
                         kickSpellIds={content.interruptSpellIds}
-                        ownerInterruptsIssued={content.ownerInterruptsIssued}
-                        ownerInterruptsSucceeded={content.ownerInterruptsSucceeded}
+                        baseKickTelemetrySnapshot={content.baseKickTelemetrySnapshot}
                         kickTelemetrySnapshot={content.kickTelemetrySnapshot}
+                        computedOwnerKicks={content.computedOwnerKicks}
                     />
                 ) : null}
             </div>

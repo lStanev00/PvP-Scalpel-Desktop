@@ -1,5 +1,9 @@
 import type { MatchPlayer } from "./types";
-import type { NormalizedLocalSpellAttempt, NormalizedLocalSpellModel } from "../../Interfaces/local-spell-model";
+import type {
+    NormalizedLocalSpellAttempt,
+    NormalizedLocalSpellEvent,
+    NormalizedLocalSpellModel,
+} from "../../Interfaces/local-spell-model";
 
 export const INTERRUPT_TRACKING_VERSION = 3;
 const KICK_COLLAPSE_WINDOW_SECONDS = 0.35;
@@ -26,6 +30,41 @@ const getCastGuidCollapseKey = (castGUID?: string) => {
 
 const hasIntentSignal = (attempt: NormalizedLocalSpellAttempt) =>
     attempt.events.some((event) => isIntentSignalEvent(event.event));
+
+const collapseKickIntentEvents = (input: NormalizedLocalSpellEvent[]) => {
+    const sorted = [...input].sort((a, b) =>
+        a.t === b.t ? a.index - b.index : a.t - b.t
+    );
+    const collapsed: NormalizedLocalSpellEvent[] = [];
+    let active: NormalizedLocalSpellEvent | null = null;
+
+    sorted.forEach((event) => {
+        if (!active) {
+            active = event;
+            return;
+        }
+
+        const sameSpell = active.spellId === event.spellId;
+        const delta = Math.abs(event.t - active.t);
+        const activeGuidKey = getCastGuidCollapseKey(active.castGUID);
+        const incomingGuidKey = getCastGuidCollapseKey(event.castGUID);
+        const similarGuid =
+            !!activeGuidKey && !!incomingGuidKey && activeGuidKey === incomingGuidKey;
+
+        if (sameSpell && (similarGuid || delta <= KICK_COLLAPSE_WINDOW_SECONDS)) {
+            if (event.t < active.t || (event.t === active.t && event.index < active.index)) {
+                active = event;
+            }
+            return;
+        }
+
+        collapsed.push(active);
+        active = event;
+    });
+
+    if (active) collapsed.push(active);
+    return collapsed;
+};
 
 const collapseKickAttempts = (input: NormalizedLocalSpellAttempt[]) => {
     const sorted = [...input].sort((a, b) =>
@@ -142,6 +181,7 @@ export type KickTelemetrySnapshot = {
     isSupported: boolean;
     totalKickAttempts: number;
     intentAttempts: number;
+    eventIntentAttempts: number;
     castEvents: number;
     outcomeOnlyAttempts: number;
     landedAttempts: number;
@@ -150,8 +190,11 @@ export type KickTelemetrySnapshot = {
     failedAttempts: number;
     unresolvedAttempts: number;
     issued: number | null;
+    perSourceConfirmedInterrupts: number | null;
+    confirmationSource: "per-source" | "scoreboard" | "unavailable";
     confirmedInterrupts: number | null;
     missedKicks: number | null;
+    failed: number | null;
     succeeded: number | null;
 };
 
@@ -188,8 +231,13 @@ export const computeKickTelemetrySnapshot = ({
     const attemptsWithIntent = collapsedKickAttempts.filter(hasIntentSignal);
     const scopedAttempts =
         sourceFormat === "legacy-timeline" ? attemptsWithIntent : collapsedKickAttempts;
+    const rawKickIntentEvents = allEvents.filter(
+        (event) => kickSet.has(event.spellId) && isIntentSignalEvent(event.event)
+    );
+    const eventIntentAttempts = collapseKickIntentEvents(rawKickIntentEvents).length;
 
-    const totalKickAttempts = scopedAttempts.length;
+    const totalKickAttempts =
+        scopedAttempts.length > 0 ? scopedAttempts.length : eventIntentAttempts;
     const intentAttempts = totalKickAttempts;
     const landedAttempts = scopedAttempts.filter(
         (attempt) => attempt.resolvedOutcome === "succeeded"
@@ -202,19 +250,26 @@ export const computeKickTelemetrySnapshot = ({
         (attempt) => attempt.resolvedOutcome === "failed"
     ).length;
     const unresolvedAttempts = scopedAttempts.filter((attempt) => !attempt.resolvedOutcome).length;
-    let castEvents = 0;
+    let castEvents = rawKickIntentEvents.length;
     let outcomeOnlyAttempts = 0;
 
     if (includeDiagnostics) {
-        const rawKickEvents = allEvents.filter((event) => kickSet.has(event.spellId));
-        castEvents = rawKickEvents.filter((event) => isIntentSignalEvent(event.event)).length;
         outcomeOnlyAttempts = Math.max(0, collapsedKickAttempts.length - attemptsWithIntent.length);
     }
 
     const { issued, succeeded } = parseInterruptTuple(owner);
-    const rawConfirmedInterrupts = isSupported
-        ? parseSucceededFromInterruptSpellsBySource(interruptSpellsBySource, owner) ?? succeeded ?? 0
+    const perSourceConfirmedInterrupts = isSupported
+        ? parseSucceededFromInterruptSpellsBySource(interruptSpellsBySource, owner)
         : null;
+    const rawConfirmedInterrupts = isSupported
+        ? perSourceConfirmedInterrupts ?? succeeded ?? 0
+        : succeeded;
+    const confirmationSource =
+        perSourceConfirmedInterrupts !== null
+            ? "per-source"
+            : succeeded !== null
+              ? "scoreboard"
+              : "unavailable";
     const clampedConfirmedInterrupts =
         rawConfirmedInterrupts === null
             ? null
@@ -223,6 +278,37 @@ export const computeKickTelemetrySnapshot = ({
         clampedConfirmedInterrupts === null
             ? null
             : Math.max(0, totalKickAttempts - clampedConfirmedInterrupts);
+    const failed = missedKicks;
+
+    if (
+        import.meta.env.DEV &&
+        kickSet.size > 0 &&
+        (totalKickAttempts > 0 ||
+            eventIntentAttempts > 0 ||
+            castEvents > 0 ||
+            perSourceConfirmedInterrupts !== null ||
+            issued !== null ||
+            succeeded !== null)
+    ) {
+        console.log("[kickTelemetry] computed snapshot", {
+            matchId,
+            telemetryVersion,
+            sourceFormat,
+            totalKickAttempts,
+            eventIntentAttempts,
+            castEvents,
+            landedAttempts,
+            interruptedAttempts,
+            failedAttempts,
+            unresolvedAttempts,
+            perSourceConfirmedInterrupts,
+            confirmationSource,
+            confirmedInterrupts: clampedConfirmedInterrupts,
+            issued,
+            succeeded,
+            missedKicks,
+        });
+    }
 
     return {
         matchId,
@@ -231,6 +317,7 @@ export const computeKickTelemetrySnapshot = ({
         isSupported,
         totalKickAttempts,
         intentAttempts,
+        eventIntentAttempts,
         castEvents,
         outcomeOnlyAttempts,
         landedAttempts,
@@ -239,8 +326,11 @@ export const computeKickTelemetrySnapshot = ({
         failedAttempts,
         unresolvedAttempts,
         issued,
+        perSourceConfirmedInterrupts,
+        confirmationSource,
         confirmedInterrupts: clampedConfirmedInterrupts,
         missedKicks,
+        failed,
         succeeded: isSupported ? clampedConfirmedInterrupts : succeeded,
     };
 };
