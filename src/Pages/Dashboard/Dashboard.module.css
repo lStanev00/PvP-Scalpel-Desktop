@@ -388,12 +388,14 @@
     display: grid;
     grid-template-columns: minmax(0, 1.05fr) minmax(320px, 0.95fr);
     gap: 14px;
+    align-items: start;
 }
 
 .panel {
     padding: 18px;
     display: grid;
     gap: 14px;
+    align-content: start;
 }
 
 .panelTitle {
@@ -414,26 +416,39 @@
     gap: 12px;
 }
 
-.spotlightHighlights {
+.spotlightMetaRow {
     display: flex;
     flex-wrap: wrap;
-    gap: 10px;
+    align-items: center;
+    gap: 8px;
 }
 
-.highlightChip,
 .resultBadge {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-height: 32px;
-    padding: 0 12px;
-    border-radius: 999px;
+    min-height: 28px;
+    padding: 0 10px;
+    border-radius: 10px;
     font-size: 11px;
+    font-weight: 700;
     letter-spacing: 0.8px;
     text-transform: uppercase;
     border: 1px solid rgba(255, 255, 255, 0.08);
     background: rgba(255, 255, 255, 0.04);
     color: rgba(230, 234, 240, 0.88);
+}
+
+.spotlightMetaText {
+    color: rgba(220, 226, 236, 0.76);
+    font-size: 12px;
+    line-height: 1.4;
+}
+
+.spotlightMetaDivider {
+    color: rgba(138, 148, 166, 0.58);
+    font-size: 14px;
+    line-height: 1;
 }
 
 .resultGood {
@@ -494,143 +509,6 @@
     color: rgba(138, 148, 166, 0.95);
     line-height: 1.6;
     font-size: 13px;
-}
-
-.formStrip {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-}
-
-.formPill {
-    display: inline-flex;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 12px;
-    border-radius: 999px;
-    font-size: 12px;
-    font-family: var(--mono);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.formBubble {
-    justify-content: center;
-    width: 56px;
-    min-width: 56px;
-    height: 56px;
-    min-height: 56px;
-    padding: 0;
-    border-radius: 999px;
-    font-size: 16px;
-    font-weight: 800;
-    letter-spacing: 0;
-}
-
-.formBubbleButton {
-    appearance: none;
-    cursor: pointer;
-    transition:
-        transform 160ms ease,
-        box-shadow 160ms ease,
-        border-color 160ms ease;
-}
-
-.formBubbleButton:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 12px 20px rgba(5, 10, 16, 0.22);
-}
-
-.formBubbleButton:focus-visible {
-    outline: none;
-    border-color: rgba(124, 242, 194, 0.48);
-    box-shadow: 0 0 0 3px rgba(58, 167, 255, 0.18);
-}
-
-.formWin {
-    background: rgba(58, 210, 159, 0.1);
-    color: rgba(124, 242, 194, 0.98);
-    border-color: rgba(124, 242, 194, 0.24);
-}
-
-.formLoss {
-    background: rgba(255, 77, 79, 0.08);
-    color: rgba(255, 133, 133, 0.98);
-    border-color: rgba(255, 120, 120, 0.2);
-}
-
-.formNeutral {
-    background: rgba(255, 255, 255, 0.04);
-    color: rgba(230, 234, 240, 0.9);
-}
-
-.formEmpty {
-    font-size: 13px;
-    color: rgba(138, 148, 166, 0.95);
-}
-
-.movementGraph {
-    display: grid;
-    gap: 12px;
-}
-
-.movementGraphMeta {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    flex-wrap: wrap;
-}
-
-.movementGraphLabel {
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.7px;
-    color: rgba(138, 148, 166, 0.92);
-}
-
-.movementGraphNet {
-    font-size: 13px;
-    font-weight: 760;
-    font-variant-numeric: tabular-nums;
-}
-
-.movementGraphSvg {
-    width: 100%;
-    height: 148px;
-    display: block;
-    overflow: visible;
-}
-
-.movementGraphBaseline {
-    stroke: rgba(255, 255, 255, 0.1);
-    stroke-width: 1;
-    stroke-dasharray: 4 4;
-}
-
-.movementGraphArea {
-    fill: rgba(58, 167, 255, 0.1);
-}
-
-.movementGraphLine {
-    fill: none;
-    stroke: rgba(124, 242, 194, 0.94);
-    stroke-width: 3;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-}
-
-.movementGraphPoint {
-    fill: rgba(12, 20, 32, 0.98);
-    stroke: rgba(124, 242, 194, 0.98);
-    stroke-width: 2;
-}
-
-.movementGraphPointLabel {
-    fill: rgba(230, 234, 240, 0.86);
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: 0.2px;
-    font-family: var(--mono);
 }
 
 .metricGood {
@@ -744,7 +622,4 @@
         grid-template-columns: 1fr;
     }
 
-    .movementGraphMeta {
-        align-items: flex-start;
-    }
 }

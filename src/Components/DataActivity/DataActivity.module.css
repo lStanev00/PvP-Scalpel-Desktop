@@ -3161,10 +3161,10 @@
     margin-top: 12px;
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: var(--r12);
-    padding: 12px;
+    padding: 10px 12px;
     display: grid;
-    gap: 12px;
-    background: rgba(12, 16, 24, 0.4);
+    gap: 10px;
+    background: rgba(12, 16, 24, 0.34);
     width: 100%;
     max-width: var(--spell-panel-content-max-width, 1180px);
     margin-right: auto;
@@ -3196,10 +3196,10 @@
 .debugNotice {
     font-size: 11px;
     color: rgba(230, 234, 240, 0.75);
-    max-width: 320px;
-    background: rgba(12, 16, 24, 0.4);
-    border-radius: var(--r12);
-    padding: 8px 10px;
+    max-width: 100%;
+    background: rgba(12, 16, 24, 0.52);
+    border-radius: var(--r10);
+    padding: 6px 10px;
     border-left: 2px solid rgba(124, 242, 194, 0.6);
 }
 
@@ -3225,37 +3225,94 @@
     color: rgba(230, 234, 240, 0.8);
 }
 
+.debugSummaryGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 10px;
+}
+
+.debugSummarySection {
+    display: grid;
+    gap: 8px;
+    padding: 9px 10px;
+    border-radius: var(--r10);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    background: rgba(12, 16, 24, 0.46);
+}
+
+.debugSummarySectionGood {
+    border-color: rgba(124, 242, 194, 0.24);
+}
+
+.debugSummarySectionWarning {
+    border-color: rgba(245, 168, 91, 0.28);
+}
+
+.debugSummaryTitle {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: rgba(230, 234, 240, 0.68);
+    font-weight: 700;
+}
+
+.debugSummaryRows {
+    display: grid;
+    gap: 6px;
+}
+
+.debugSummaryRow {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 11px;
+    color: rgba(230, 234, 240, 0.82);
+}
+
+.debugSummaryRow span:last-child {
+    text-align: right;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
 .debugGrid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 16px;
+    gap: 12px;
 }
 
 .debugPane {
     display: grid;
-    gap: 10px;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: var(--r10);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    background: rgba(12, 16, 24, 0.34);
 }
 
 .debugPaneTitle {
-    font-size: 12px;
+    font-size: 11px;
     text-transform: uppercase;
     letter-spacing: 0.6px;
     color: var(--muted);
+    font-weight: 700;
 }
 
 .debugList {
     display: grid;
-    gap: 8px;
+    gap: 6px;
+    max-height: 320px;
+    overflow: auto;
 }
 
 .debugRow {
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 10px;
-    padding: 8px 10px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    padding: 6px 8px;
     display: grid;
-    gap: 4px;
-    background: rgba(12, 16, 24, 0.6);
-    font-size: 12px;
+    gap: 3px;
+    background: rgba(12, 16, 24, 0.5);
+    font-size: 11px;
 }
 
 .debugRowActive {
@@ -3300,13 +3357,13 @@
 
 .debugGuid {
     font-family: var(--mono);
-    font-size: 11px;
+    font-size: 10px;
     color: rgba(230, 234, 240, 0.6);
     word-break: break-all;
 }
 
 .debugTag {
-    font-size: 11px;
+    font-size: 10px;
     color: rgba(230, 234, 240, 0.6);
 }
 
@@ -3325,11 +3382,11 @@
     justify-content: space-between;
     gap: 10px;
     color: rgba(230, 234, 240, 0.65);
-    font-size: 11px;
+    font-size: 10px;
 }
 
 .debugExplanation {
-    font-size: 11px;
+    font-size: 10px;
     color: rgba(230, 234, 240, 0.7);
 }
 

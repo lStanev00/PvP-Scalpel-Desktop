@@ -12,6 +12,7 @@ import {
 } from "../../Domain/spellMetaCache";
 import type { KickTelemetrySnapshot } from "./kickTelemetry";
 import type {
+    ComputedOwnerKickSummary,
     NormalizedLocalSpellAttempt,
     NormalizedLocalSpellEvent,
     NormalizedLocalSpellModel,
@@ -22,9 +23,9 @@ interface DebugSpellInspectorProps {
     localSpellModel?: NormalizedLocalSpellModel | null;
     gameVersion?: string | null;
     kickSpellIds?: number[];
-    ownerInterruptsIssued?: number | null;
-    ownerInterruptsSucceeded?: number | null;
+    baseKickTelemetrySnapshot?: KickTelemetrySnapshot | null;
     kickTelemetrySnapshot?: KickTelemetrySnapshot | null;
+    computedOwnerKicks?: ComputedOwnerKickSummary | null;
 }
 
 type EventStatus = "outcome" | "collapsed" | "ignored" | "unresolved";
@@ -133,6 +134,8 @@ const collapseAttempts = (input: NormalizedLocalSpellAttempt[], aggressive: bool
 };
 
 const formatTime = (value: number) => `${value.toFixed(2)}s`;
+const coerceCount = (value: unknown) =>
+    typeof value === "number" && Number.isFinite(value) ? Math.max(0, Math.trunc(value)) : null;
 
 const getAttemptExplanation = (attempt: NormalizedLocalSpellAttempt) => {
     const outcomes = attempt.outcomes;
@@ -176,13 +179,45 @@ const getEventStatus = (event: NormalizedLocalSpellEvent, attempt?: NormalizedLo
     return "ignored";
 };
 
+function DefinitionSection({
+    title,
+    rows,
+    tone = "default",
+}: {
+    title: string;
+    rows: Array<{ label: string; value: string }>;
+    tone?: "default" | "good" | "warning";
+}) {
+    return (
+        <section
+            className={`${styles.debugSummarySection} ${
+                tone === "good"
+                    ? styles.debugSummarySectionGood
+                    : tone === "warning"
+                      ? styles.debugSummarySectionWarning
+                      : ""
+            }`}
+        >
+            <div className={styles.debugSummaryTitle}>{title}</div>
+            <div className={styles.debugSummaryRows}>
+                {rows.map((row) => (
+                    <div key={row.label} className={styles.debugSummaryRow}>
+                        <span>{row.label}</span>
+                        <span>{row.value}</span>
+                    </div>
+                ))}
+            </div>
+        </section>
+    );
+}
+
 export default function DebugSpellInspector({
     localSpellModel = null,
     gameVersion,
     kickSpellIds,
-    ownerInterruptsIssued,
-    ownerInterruptsSucceeded,
+    baseKickTelemetrySnapshot = null,
     kickTelemetrySnapshot,
+    computedOwnerKicks = null,
 }: DebugSpellInspectorProps) {
     const { httpFetch } = useUserContext();
     const gameKey = useMemo(() => normalizeGameVersionKey(gameVersion), [gameVersion]);
@@ -203,9 +238,19 @@ export default function DebugSpellInspector({
     }, [attempts]);
 
     const spellOptions = useMemo(() => {
-        const ids = Array.from(new Set(rawEvents.map((event) => event.spellId)));
-        return ids.sort((a, b) => a - b);
-    }, [rawEvents]);
+        const ids = new Set<number>();
+        rawEvents.forEach((event) => ids.add(event.spellId));
+        attempts.forEach((attempt) => ids.add(attempt.spellId));
+        const values = Array.from(ids);
+        if (import.meta.env.DEV) {
+            console.log("[debug-spell-inspector] spell option sources", {
+                eventSpellIds: Array.from(new Set(rawEvents.map((event) => event.spellId))),
+                attemptSpellIds: Array.from(new Set(attempts.map((attempt) => attempt.spellId))),
+                resolvedSpellOptions: values,
+            });
+        }
+        return values.sort((a, b) => a - b);
+    }, [rawEvents, attempts]);
 
     const [selectedFilter, setSelectedFilter] = useState<string>("");
     const [hoveredAttempt, setHoveredAttempt] = useState<string | null>(null);
@@ -354,91 +399,84 @@ export default function DebugSpellInspector({
     const kickValidation = useMemo(() => {
         if (!isKickFilter) return null;
 
-        const fallbackIssued =
-            typeof ownerInterruptsIssued === "number" && Number.isFinite(ownerInterruptsIssued)
-                ? Math.max(0, Math.trunc(ownerInterruptsIssued))
-                : null;
-        const fallbackSucceeded =
-            typeof ownerInterruptsSucceeded === "number" && Number.isFinite(ownerInterruptsSucceeded)
-                ? Math.max(0, Math.trunc(ownerInterruptsSucceeded))
-                : null;
+        const rawSnapshot = baseKickTelemetrySnapshot;
+        const displayedSnapshot = kickTelemetrySnapshot;
+        const storedTotal =
+            coerceCount(computedOwnerKicks?.total) ?? coerceCount(computedOwnerKicks?.intentAttempts);
+        const storedConfirmed =
+            coerceCount(computedOwnerKicks?.confirmedInterrupts) ??
+            coerceCount(computedOwnerKicks?.succeeded);
+        const storedMissed =
+            coerceCount(computedOwnerKicks?.missed) ?? coerceCount(computedOwnerKicks?.failed);
 
-        if (!kickTelemetrySnapshot) {
-            return {
-                castEvents: 0,
-                rawEvents: filteredEvents.length,
-                attemptCount: 0,
-                landedAttempts: 0,
-                outcomeOnlyAttempts: 0,
-                confirmedInterrupts: null,
-                missedKicks: null,
-                interruptedAttempts: 0,
-                executedInterruptOutcomes: 0,
-                failedAttempts: 0,
-                unresolvedAttempts: 0,
-                issued: fallbackIssued,
-                succeeded: fallbackSucceeded,
-                attemptsVsIssued: null,
-                intentVsSucceeded: null,
-                castsVsIssued: null,
-                executedVsIssued: null,
-                successVsSucceeded: null,
-                suggestedMissedKicks: 0,
-                estimatedBadKicks: 0,
-            };
-        }
+        const rawTotal = rawSnapshot?.totalKickAttempts ?? 0;
+        const rawConfirmed = rawSnapshot?.confirmedInterrupts ?? rawSnapshot?.succeeded ?? null;
+        const rawMissed =
+            rawSnapshot?.missedKicks ?? rawSnapshot?.failed ?? (rawConfirmed !== null ? rawTotal - rawConfirmed : null);
+        const displayedTotal = displayedSnapshot?.totalKickAttempts ?? 0;
+        const displayedConfirmed =
+            displayedSnapshot?.confirmedInterrupts ?? displayedSnapshot?.succeeded ?? null;
+        const displayedMissed =
+            displayedSnapshot?.missedKicks ??
+            displayedSnapshot?.failed ??
+            (displayedConfirmed !== null ? displayedTotal - displayedConfirmed : null);
 
-        const castEvents = kickTelemetrySnapshot.castEvents;
-        const attemptCount = kickTelemetrySnapshot.totalKickAttempts;
-        const landedAttempts = kickTelemetrySnapshot.landedAttempts;
-        const outcomeOnlyAttempts = kickTelemetrySnapshot.outcomeOnlyAttempts;
-        const confirmedInterrupts = kickTelemetrySnapshot.confirmedInterrupts;
-        const missedKicks = kickTelemetrySnapshot.missedKicks;
-        const interruptedAttempts = kickTelemetrySnapshot.interruptedAttempts;
-        const failedAttempts = kickTelemetrySnapshot.failedAttempts;
-        const unresolvedAttempts = kickTelemetrySnapshot.unresolvedAttempts;
-        const executedInterruptOutcomes = landedAttempts + interruptedAttempts;
-        const issued = kickTelemetrySnapshot.issued ?? fallbackIssued;
-        const succeeded = kickTelemetrySnapshot.succeeded ?? fallbackSucceeded;
-
-        const attemptsVsIssued = issued === null ? null : attemptCount - issued;
-        const intentVsSucceeded = succeeded === null ? null : attemptCount - succeeded;
-        const castsVsIssued = issued === null ? null : castEvents - issued;
-        const executedVsIssued = issued === null ? null : executedInterruptOutcomes - issued;
-        const successVsSucceeded = succeeded === null ? null : landedAttempts - succeeded;
-        const suggestedMissedKicks =
-            typeof missedKicks === "number" && Number.isFinite(missedKicks) ? missedKicks : 0;
-        const estimatedBadKicks = suggestedMissedKicks;
+        const mismatchChecks = [
+            storedTotal !== null && storedTotal !== rawTotal ? "stored total differs from raw-derived total" : null,
+            storedConfirmed !== null && storedConfirmed !== rawConfirmed
+                ? "stored confirmed interrupts differ from raw-derived confirmation"
+                : null,
+            storedMissed !== null && storedMissed !== rawMissed
+                ? "stored missed kicks differ from raw-derived missed count"
+                : null,
+        ].filter((value): value is string => !!value);
 
         return {
-            castEvents,
             rawEvents: filteredEvents.length,
-            attemptCount,
-            landedAttempts,
-            outcomeOnlyAttempts,
-            confirmedInterrupts,
-            missedKicks,
-            interruptedAttempts,
-            executedInterruptOutcomes,
-            failedAttempts,
-            unresolvedAttempts,
-            issued,
-            succeeded,
-            attemptsVsIssued,
-            intentVsSucceeded,
-            castsVsIssued,
-            executedVsIssued,
-            successVsSucceeded,
-            suggestedMissedKicks,
-            estimatedBadKicks,
+            displayAttempts: displayAttempts.length,
+            rawTotal,
+            rawConfirmed,
+            rawMissed,
+            rawCastEvents: rawSnapshot?.castEvents ?? 0,
+            rawEventIntentAttempts: rawSnapshot?.eventIntentAttempts ?? 0,
+            outcomeOnlyAttempts: rawSnapshot?.outcomeOnlyAttempts ?? 0,
+            landedAttempts: rawSnapshot?.landedAttempts ?? 0,
+            interruptedAttempts: rawSnapshot?.interruptedAttempts ?? 0,
+            failedAttempts: rawSnapshot?.failedAttempts ?? 0,
+            unresolvedAttempts: rawSnapshot?.unresolvedAttempts ?? 0,
+            issued: rawSnapshot?.issued ?? null,
+            succeeded: rawSnapshot?.succeeded ?? null,
+            perSourceConfirmedInterrupts: rawSnapshot?.perSourceConfirmedInterrupts ?? null,
+            confirmationSource: rawSnapshot?.confirmationSource ?? "unavailable",
+            displayedTotal,
+            displayedConfirmed,
+            displayedMissed,
+            storedTotal,
+            storedConfirmed,
+            storedMissed,
+            hasMismatch: mismatchChecks.length > 0,
+            mismatchChecks,
         };
     }, [
         isKickFilter,
         filteredEvents.length,
+        displayAttempts.length,
+        baseKickTelemetrySnapshot,
         kickTelemetrySnapshot,
-        ownerInterruptsIssued,
-        ownerInterruptsSucceeded,
+        computedOwnerKicks,
     ]);
+
+    const selectedSummary = useMemo(() => {
+        const resolvedAttempts = displayAttempts.filter(
+            (attempt) => !!attempt.resolvedOutcome
+        ).length;
+        return {
+            rawEvents: filteredEvents.length,
+            displayAttempts: displayAttempts.length,
+            resolvedAttempts,
+            unresolvedAttempts: Math.max(0, displayAttempts.length - resolvedAttempts),
+        };
+    }, [filteredEvents.length, displayAttempts]);
 
     const debugJsonPayload = useMemo(() => {
         if (!import.meta.env.DEV || !isJsonExpanded) return null;
@@ -471,7 +509,9 @@ export default function DebugSpellInspector({
                     eventToDisplayAttemptId: Array.from(eventToDisplayAttemptId.entries()),
                 },
                 kickValidation,
+                baseKickTelemetrySnapshot,
                 kickTelemetrySnapshot,
+                computedOwnerKicks,
             },
             null,
             2
@@ -489,10 +529,27 @@ export default function DebugSpellInspector({
         eventToAttemptId,
         eventToDisplayAttemptId,
         kickValidation,
+        baseKickTelemetrySnapshot,
         kickTelemetrySnapshot,
+        computedOwnerKicks,
     ]);
 
     if (!spellOptions.length) {
+        if (import.meta.env.DEV) {
+            console.warn("[debug-spell-inspector] hidden because no spell options were normalized", {
+                localSpellModel: localSpellModel
+                    ? {
+                          sourceFormat: localSpellModel.sourceFormat,
+                          detailAvailable: localSpellModel.detailAvailable,
+                          failureReason: localSpellModel.failureReason ?? null,
+                          attempts: localSpellModel.attempts.length,
+                          events: localSpellModel.events.length,
+                          locEntries: localSpellModel.locEntries.length,
+                      }
+                    : null,
+                kickTelemetrySnapshot,
+            });
+        }
         return null;
     }
 
@@ -534,9 +591,148 @@ export default function DebugSpellInspector({
                 </div>
             </div>
 
+            <div className={styles.debugSummaryGrid}>
+                <DefinitionSection
+                    title={isKickFilter ? "Kick Summary" : "Selected Spell Summary"}
+                    rows={
+                        isKickFilter && kickValidation
+                            ? [
+                                  {
+                                      label: "Observed denominator",
+                                      value: `${kickValidation.displayedConfirmed ?? 0}/${kickValidation.displayedTotal}`,
+                                  },
+                                  {
+                                      label: "Raw-derived total",
+                                      value: String(kickValidation.rawTotal),
+                                  },
+                                  {
+                                      label: "Displayed missed",
+                                      value:
+                                          kickValidation.displayedMissed === null
+                                              ? "--"
+                                              : String(kickValidation.displayedMissed),
+                                  },
+                                  {
+                                      label: "Confirmation source",
+                                      value: kickValidation.confirmationSource,
+                                  },
+                              ]
+                            : [
+                                  { label: "Raw events", value: String(selectedSummary.rawEvents) },
+                                  {
+                                      label: "Display attempts",
+                                      value: String(selectedSummary.displayAttempts),
+                                  },
+                                  {
+                                      label: "Resolved",
+                                      value: String(selectedSummary.resolvedAttempts),
+                                  },
+                                  {
+                                      label: "Unresolved",
+                                      value: String(selectedSummary.unresolvedAttempts),
+                                  },
+                              ]
+                    }
+                    tone={isKickFilter && kickValidation?.displayedTotal ? "good" : "default"}
+                />
+
+                {isKickFilter && kickValidation ? (
+                    <>
+                        <DefinitionSection
+                            title="Raw Kick Evidence"
+                            rows={[
+                                {
+                                    label: "Grouped intent events",
+                                    value: String(kickValidation.rawEventIntentAttempts),
+                                },
+                                {
+                                    label: "Raw START/SENT events",
+                                    value: String(kickValidation.rawCastEvents),
+                                },
+                                {
+                                    label: "Outcome-only groups",
+                                    value: String(kickValidation.outcomeOnlyAttempts),
+                                },
+                                {
+                                    label: "Landed / interrupted",
+                                    value: `${kickValidation.landedAttempts} / ${kickValidation.interruptedAttempts}`,
+                                },
+                            ]}
+                        />
+                        <DefinitionSection
+                            title="Fallback Sources"
+                            rows={[
+                                {
+                                    label: "Scoreboard issued",
+                                    value:
+                                        kickValidation.issued === null
+                                            ? "--"
+                                            : String(kickValidation.issued),
+                                },
+                                {
+                                    label: "Scoreboard succeeded",
+                                    value:
+                                        kickValidation.succeeded === null
+                                            ? "--"
+                                            : String(kickValidation.succeeded),
+                                },
+                                {
+                                    label: "Per-source confirmed",
+                                    value:
+                                        kickValidation.perSourceConfirmedInterrupts === null
+                                            ? "--"
+                                            : String(kickValidation.perSourceConfirmedInterrupts),
+                                },
+                                {
+                                    label: "Unresolved attempts",
+                                    value: String(kickValidation.unresolvedAttempts),
+                                },
+                            ]}
+                        />
+                        <DefinitionSection
+                            title="Stored Computed Result"
+                            rows={[
+                                {
+                                    label: "Stored total",
+                                    value:
+                                        kickValidation.storedTotal === null
+                                            ? "--"
+                                            : String(kickValidation.storedTotal),
+                                },
+                                {
+                                    label: "Stored confirmed",
+                                    value:
+                                        kickValidation.storedConfirmed === null
+                                            ? "--"
+                                            : String(kickValidation.storedConfirmed),
+                                },
+                                {
+                                    label: "Stored missed",
+                                    value:
+                                        kickValidation.storedMissed === null
+                                            ? "--"
+                                            : String(kickValidation.storedMissed),
+                                },
+                                {
+                                    label: "Mismatch",
+                                    value: kickValidation.hasMismatch ? "Yes" : "No",
+                                },
+                            ]}
+                            tone={kickValidation.hasMismatch ? "warning" : "good"}
+                        />
+                    </>
+                ) : null}
+            </div>
+
+            {isKickFilter && kickValidation?.hasMismatch ? (
+                <div className={styles.debugNotice}>
+                    {kickValidation.mismatchChecks.join(" · ")}
+                </div>
+            ) : null}
+
             <div className={styles.debugGrid}>
                 <div className={styles.debugPane}>
-                    <div className={styles.debugPaneTitle}>Raw Events</div>
+                    <div className={styles.debugPaneTitle}>Event Trace</div>
                     <div className={styles.debugList}>
                         {filteredEvents.map((event) => {
                             const attemptId = eventToAttemptId.get(event.id) ?? null;
@@ -571,7 +767,7 @@ export default function DebugSpellInspector({
                 </div>
 
                 <div className={styles.debugPane}>
-                    <div className={styles.debugPaneTitle}>Intent Attempts</div>
+                    <div className={styles.debugPaneTitle}>Attempt Resolution</div>
                     <div className={styles.debugList}>
                         {displayAttempts.map((attempt) => {
                             const resolved = attempt.resolvedOutcome ?? "unresolved";
@@ -617,97 +813,6 @@ export default function DebugSpellInspector({
                     </div>
                 </div>
             </div>
-
-            {kickValidation ? (
-                <div className={styles.debugValidation}>
-                    <div className={styles.debugValidationTitle}>Kick Validation (Normalized Local Spell Data)</div>
-                    <div className={styles.debugValidationRow}>
-                        <span>Kick cast events (SENT + START where available)</span>
-                        <span>{kickValidation.castEvents}</span>
-                    </div>
-                    <div className={styles.debugValidationRow}>
-                        <span>Total kick attempts</span>
-                        <span>{kickValidation.attemptCount}</span>
-                    </div>
-                    <div className={styles.debugValidationRow}>
-                        <span>Outcome-only groups (no SENT/START)</span>
-                        <span>{kickValidation.outcomeOnlyAttempts}</span>
-                    </div>
-                    <div className={styles.debugValidationRow}>
-                        <span>Scoreboard interrupts[0] (issued)</span>
-                        <span>{kickValidation.issued ?? "--"}</span>
-                    </div>
-                    <div className={styles.debugValidationRow}>
-                        <span>Scoreboard interrupts[1] (succeeded)</span>
-                        <span>{kickValidation.succeeded ?? "--"}</span>
-                    </div>
-                    <div className={styles.debugValidationRow}>
-                        <span>Confirmed interrupts (owner per-source)</span>
-                        <span>{kickValidation.confirmedInterrupts ?? "--"}</span>
-                    </div>
-                    <div className={styles.debugValidationRow}>
-                        <span>Estimated bad kicks (total kicks - confirmed interrupts)</span>
-                        <span>{kickValidation.estimatedBadKicks}</span>
-                    </div>
-                    <div className={styles.debugValidationRow}>
-                        <span>Attempts - interrupts[0]</span>
-                        <span>
-                            {kickValidation.attemptsVsIssued === null
-                                ? "--"
-                                : `${kickValidation.attemptsVsIssued > 0 ? "+" : ""}${kickValidation.attemptsVsIssued}`}
-                        </span>
-                    </div>
-                    <div className={styles.debugValidationRow}>
-                        <span>Resolved kick outcomes (succeeded/interrupted) - interrupts[0]</span>
-                        <span>
-                            {kickValidation.executedVsIssued === null
-                                ? "--"
-                                : `${kickValidation.executedVsIssued > 0 ? "+" : ""}${kickValidation.executedVsIssued}`}
-                        </span>
-                    </div>
-                    <div className={styles.debugValidationRow}>
-                        <span>Cast events - interrupts[0]</span>
-                        <span>
-                            {kickValidation.castsVsIssued === null
-                                ? "--"
-                                : `${kickValidation.castsVsIssued > 0 ? "+" : ""}${kickValidation.castsVsIssued}`}
-                        </span>
-                    </div>
-                    <div className={styles.debugValidationRow}>
-                        <span>Outcome-succeeded kick attempts - interrupts[1]</span>
-                        <span>
-                            {kickValidation.successVsSucceeded === null
-                                ? "--"
-                                : `${kickValidation.successVsSucceeded > 0 ? "+" : ""}${kickValidation.successVsSucceeded}`}
-                        </span>
-                    </div>
-                    <div className={styles.debugValidationRow}>
-                        <span>Scoreboard alignment (intent attempts - interrupts[1])</span>
-                        <span>
-                            {kickValidation.intentVsSucceeded === null
-                                ? "--"
-                                : `${kickValidation.intentVsSucceeded > 0 ? "+" : ""}${kickValidation.intentVsSucceeded}`}
-                        </span>
-                    </div>
-                    <div className={styles.debugValidationRow}>
-                        <span>Suggested missed kicks (total kicks - confirmed interrupts)</span>
-                        <span>{kickValidation.suggestedMissedKicks}</span>
-                    </div>
-                    <div className={styles.debugValidationRow}>
-                        <span>Kick outcomes (total / confirmed / interrupted / failed / unresolved)</span>
-                        <span>
-                            {kickValidation.attemptCount} / {kickValidation.confirmedInterrupts ?? "--"} /{" "}
-                            {kickValidation.interruptedAttempts} / {kickValidation.failedAttempts} /{" "}
-                            {kickValidation.unresolvedAttempts}
-                        </span>
-                    </div>
-                    <div className={styles.debugValidationHint}>
-                        {kickTelemetrySnapshot?.isSupported
-                            ? "Calculation uses normalized local kick attempts and confirms interrupts from owner per-source interrupt data."
-                            : "Kick outcome confirmation is gated off for legacy telemetry versions; debug rows below only show local cast diagnostics."}
-                    </div>
-                </div>
-            ) : null}
 
             <details
                 className={styles.debugJsonSection}

@@ -52,6 +52,11 @@ const toBoolean = (value: unknown) => {
     return null;
 };
 
+const toSecondsFromCentiseconds = (value: unknown) => {
+    const parsed = toFiniteNumber(value);
+    return parsed !== null ? parsed / 100 : null;
+};
+
 const normalizeToken = (value: string) => value.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
 
 const toOrderedIndexedRows = (value: unknown) => {
@@ -94,11 +99,11 @@ const buildSchemaIndex = (schemaRow: unknown) => {
             if (Array.isArray(entry) && entry.length >= 2) {
                 const [first, second] = entry;
                 if (typeof first === "string") {
-                    setField(first, second);
+                    setField(first, toInteger(second) ?? index);
                     return;
                 }
                 if (typeof second === "string") {
-                    setField(second, first);
+                    setField(second, toInteger(first) ?? index);
                 }
                 return;
             }
@@ -135,6 +140,39 @@ const buildSchemaIndex = (schemaRow: unknown) => {
     }
 
     return Object.keys(out).length > 0 ? out : null;
+};
+
+const buildSchemaIndexFromRow = (row: unknown) => {
+    const direct = buildSchemaIndex(row);
+    if (direct) return direct;
+
+    if (Array.isArray(row)) {
+        for (const item of row) {
+            const nested = buildSchemaIndex(item);
+            if (nested) return nested;
+        }
+    }
+
+    return null;
+};
+
+const resolveSchemaRows = (rows: Array<{ rawIndex: number; item: unknown }>) => {
+    for (const row of rows) {
+        const schemaIndex = buildSchemaIndexFromRow(row.item);
+        if (schemaIndex) {
+            return {
+                schemaIndex,
+                schemaRowIndex: row.rawIndex,
+                dataRows: rows.filter((candidate) => candidate.rawIndex !== row.rawIndex),
+            };
+        }
+    }
+
+    return {
+        schemaIndex: null,
+        schemaRowIndex: null,
+        dataRows: rows,
+    };
 };
 
 const readField = (
@@ -219,12 +257,28 @@ const coerceLinkedLoc = (value: unknown) => {
 };
 
 const normalizeEventName = (value: unknown) => {
+    if (typeof value === "number" && Number.isFinite(value)) {
+        const normalized = Math.trunc(value);
+        if (normalized === 1) return "START";
+        if (normalized === 2) return "SUCCEEDED";
+        if (normalized === 3) return "FAILED";
+        if (normalized === 4) return "INTERRUPTED";
+        if (normalized === 5) return "STOP";
+        return null;
+    }
     const raw = toTrimmedString(value);
     if (!raw) return null;
     return raw.replace(/[\s-]+/g, "_").toUpperCase();
 };
 
 const normalizeOutcome = (value: unknown): SpellOutcomeResult | null => {
+    if (typeof value === "number" && Number.isFinite(value)) {
+        const normalized = Math.trunc(value);
+        if (normalized === 0) return "succeeded";
+        if (normalized === 1) return "failed";
+        if (normalized === 2) return "interrupted";
+        return null;
+    }
     const token = typeof value === "string" ? normalizeToken(value) : "";
     if (!token) return null;
     if (token.includes("succeed") || token === "success" || token === "ok") {
@@ -246,32 +300,42 @@ const normalizeOutcome = (value: unknown): SpellOutcomeResult | null => {
 
 const castFieldAliases = {
     spellId: ["spellID", "spellId", "spell", "abilityId"],
-    castGuid: ["castGUID", "castGuid", "castId"],
-    time: ["t", "time", "timestamp", "at"],
-    startTime: ["startTime", "firstObservedTime", "firstTime", "startedAt"],
-    endTime: ["endTime", "lastTime", "completedAt", "resolvedAt"],
-    duration: ["duration", "elapsed", "castDuration"],
+    castGuid: ["castGUID", "castGuid", "castId", "castKey"],
+    time: ["t", "time", "timestamp", "at", "attemptTimeCs"],
+    startTime: ["startTime", "firstObservedTime", "firstTime", "startedAt", "attemptTimeCs"],
+    endTime: ["endTime", "lastTime", "completedAt", "resolvedAt", "resolveTimeCs"],
+    duration: ["duration", "elapsed", "castDuration", "durationCs"],
     outcome: ["outcome", "result", "status", "resolvedOutcome"],
     firstEvent: ["firstEvent", "firstObservedEvent", "startEvent", "openEvent"],
     terminalEvent: ["terminalEvent", "outcomeEvent", "lastEvent", "endEvent"],
-    interruptible: ["interruptible", "isInterruptible", "canBeInterrupted"],
+    interruptible: ["interruptible", "isInterruptible", "canBeInterrupted", "interruptibleState"],
     interruptedBy: ["interruptedBy", "interruptSource", "interruptSpell"],
     linkedLoc: ["linkedLoc", "locLink", "locIndex", "linkedLocIndex"],
     roundIndex: ["roundIndex", "round"],
-    fakeCastStopReason: ["fakeCastStopReason", "stopReason", "fakeStopReason", "cancelReason"],
-    targetInfo: ["targetInfo", "targetSnapshot", "target"],
+    fakeCastStopReason: ["fakeCastStopReason", "stopReason", "fakeStopReason", "cancelReason", "manualStopReason"],
+    targetInfo: [
+        "targetInfo",
+        "targetSnapshot",
+        "target",
+        "targetName",
+        "targetDisposition",
+        "targetIsPlayer",
+        "targetCanAttack",
+        "targetIsFriend",
+        "targetReaction",
+    ],
     provenance: ["provenance", "provenanceFlags", "sourceFlags", "flags"],
 } as const;
 
 const locFieldAliases = {
-    time: ["t", "time", "timestamp", "at", "startTime"],
-    duration: ["duration", "elapsed"],
+    time: ["t", "time", "timestamp", "at", "startTime", "timeCs"],
+    duration: ["duration", "elapsed", "durationCs"],
     roundIndex: ["roundIndex", "round"],
     locType: ["locType", "type"],
     displayText: ["displayText", "text", "label"],
     issuedByGuid: ["issuedByGuid", "sourceGuid"],
     auraInstanceId: ["auraInstanceId", "auraId"],
-    school: ["school", "lockoutSchool", "schoolMask"],
+    school: ["school", "lockoutSchool", "schoolMask", "lockoutSchoolText"],
 } as const;
 
 const normalizeLegacyLocalSpellModel = (rawMatch: unknown): NormalizedLocalSpellModel | null => {
@@ -331,20 +395,31 @@ const normalizeLocEntries = (rawMatch: Record<string, unknown>) => {
     const rows = toOrderedIndexedRows(root.entries ?? localLossOfControl);
     if (rows.length === 0) return [] as NormalizedLocalLossOfControlEntry[];
 
-    const schemaIndex = buildSchemaIndex(rows[0]?.item);
+    const { schemaIndex, schemaRowIndex, dataRows } = resolveSchemaRows(rows);
     const hasArrayRows = rows.some(({ item }) => Array.isArray(item));
     if (!schemaIndex && hasArrayRows) {
+        if (import.meta.env.DEV) {
+            console.warn("[localSpellModel] unsupported v4 localLossOfControl schema", {
+                rowCount: rows.length,
+                firstRow: rows[0]?.item ?? null,
+            });
+        }
         return [] as NormalizedLocalLossOfControlEntry[];
     }
-    const dataRows =
-        schemaIndex && rows[0]?.rawIndex === 0 ? rows.slice(1) : rows;
+    if (import.meta.env.DEV && schemaIndex && schemaRowIndex !== 0) {
+        console.warn("[localSpellModel] localLossOfControl schema row is not at index 0", {
+            schemaRowIndex,
+        });
+    }
 
     const entries = dataRows
         .map<NormalizedLocalLossOfControlEntry | null>(({ rawIndex, item }) => {
             const t =
-                toFiniteNumber(readField(item, schemaIndex, locFieldAliases.time)) ??
+                toSecondsFromCentiseconds(readField(item, schemaIndex, locFieldAliases.time)) ??
                 0;
-            const duration = toFiniteNumber(readField(item, schemaIndex, locFieldAliases.duration));
+            const duration = toSecondsFromCentiseconds(
+                readField(item, schemaIndex, locFieldAliases.duration)
+            );
             const roundIndex = toInteger(readField(item, schemaIndex, locFieldAliases.roundIndex));
             const issuedByGuid = toTrimmedString(
                 readField(item, schemaIndex, locFieldAliases.issuedByGuid)
@@ -449,7 +524,11 @@ const normalizeV4LocalSpellModel = (rawMatch: unknown): NormalizedLocalSpellMode
         return null;
     }
 
-    const groups = Object.entries(localSpellCapture);
+    const captureRoot =
+        isRecord(localSpellCapture) && isRecord(localSpellCapture.bySpellID)
+            ? localSpellCapture.bySpellID
+            : localSpellCapture;
+    const groups = Object.entries(captureRoot);
 
     const attempts: NormalizedLocalSpellAttempt[] = [];
     const events: NormalizedLocalSpellEvent[] = [];
@@ -464,15 +543,28 @@ const normalizeV4LocalSpellModel = (rawMatch: unknown): NormalizedLocalSpellMode
         const castsRows = toOrderedIndexedRows(groupRecord.casts ?? groupValue);
         if (castsRows.length === 0) return;
 
-        const schemaIndex = buildSchemaIndex(castsRows[0]?.item);
+        const { schemaIndex, schemaRowIndex, dataRows } = resolveSchemaRows(castsRows);
         const hasArrayRows = castsRows.some(({ item }) => Array.isArray(item));
         if (!schemaIndex && hasArrayRows) {
             unsupportedArrayGroup = true;
+            if (import.meta.env.DEV) {
+                console.warn("[localSpellModel] unsupported v4 localSpellCapture schema", {
+                    groupKey,
+                    spellName: groupRecord.spellName ?? null,
+                    rowCount: castsRows.length,
+                    firstRow: castsRows[0]?.item ?? null,
+                });
+            }
             return;
         }
 
-        const dataRows =
-            schemaIndex && castsRows[0]?.rawIndex === 0 ? castsRows.slice(1) : castsRows;
+        if (import.meta.env.DEV && schemaIndex && schemaRowIndex !== 0) {
+            console.warn("[localSpellModel] localSpellCapture schema row is not at index 0", {
+                groupKey,
+                spellName: groupRecord.spellName ?? null,
+                schemaRowIndex,
+            });
+        }
         const groupSpellId =
             toInteger(groupRecord.spellID ?? groupRecord.spellId ?? groupKey) ?? null;
 
@@ -483,10 +575,18 @@ const normalizeV4LocalSpellModel = (rawMatch: unknown): NormalizedLocalSpellMode
             if (spellId === null || spellId <= 0) return;
 
             const castGUID = toTrimmedString(readField(item, schemaIndex, castFieldAliases.castGuid)) ?? undefined;
-            const explicitTime = toFiniteNumber(readField(item, schemaIndex, castFieldAliases.time));
-            const explicitStart = toFiniteNumber(readField(item, schemaIndex, castFieldAliases.startTime));
-            const explicitEnd = toFiniteNumber(readField(item, schemaIndex, castFieldAliases.endTime));
-            const explicitDuration = toFiniteNumber(readField(item, schemaIndex, castFieldAliases.duration));
+            const explicitTime = toSecondsFromCentiseconds(
+                readField(item, schemaIndex, castFieldAliases.time)
+            );
+            const explicitStart = toSecondsFromCentiseconds(
+                readField(item, schemaIndex, castFieldAliases.startTime)
+            );
+            const explicitEnd = toSecondsFromCentiseconds(
+                readField(item, schemaIndex, castFieldAliases.endTime)
+            );
+            const explicitDuration = toSecondsFromCentiseconds(
+                readField(item, schemaIndex, castFieldAliases.duration)
+            );
             const startTime = explicitStart ?? explicitTime ?? explicitEnd ?? 0;
             const endTime =
                 explicitEnd ??
@@ -499,16 +599,44 @@ const normalizeV4LocalSpellModel = (rawMatch: unknown): NormalizedLocalSpellMode
             const outcome =
                 normalizeOutcome(readField(item, schemaIndex, castFieldAliases.outcome)) ??
                 normalizeOutcome(terminalEvent);
-            const interruptible = toBoolean(
-                readField(item, schemaIndex, castFieldAliases.interruptible)
-            );
+            const interruptibleRaw = readField(item, schemaIndex, castFieldAliases.interruptible);
+            const interruptible =
+                interruptibleRaw === 1
+                    ? true
+                    : interruptibleRaw === 0
+                      ? false
+                      : toBoolean(interruptibleRaw);
             const roundIndex = toInteger(readField(item, schemaIndex, castFieldAliases.roundIndex));
             const interruptedBy = readField(item, schemaIndex, castFieldAliases.interruptedBy);
             const linkedLoc = coerceLinkedLoc(readField(item, schemaIndex, castFieldAliases.linkedLoc));
-            const fakeCastStopReason = toTrimmedString(
-                readField(item, schemaIndex, castFieldAliases.fakeCastStopReason)
-            );
-            const targetInfo = readField(item, schemaIndex, castFieldAliases.targetInfo);
+            const fakeCastStopReasonRaw = readField(item, schemaIndex, castFieldAliases.fakeCastStopReason);
+            const fakeCastStopReason =
+                toTrimmedString(fakeCastStopReasonRaw) ??
+                (typeof fakeCastStopReasonRaw === "number" && fakeCastStopReasonRaw > 0
+                    ? `manualStopReason:${Math.trunc(fakeCastStopReasonRaw)}`
+                    : null);
+            const targetName = toTrimmedString(readField(item, schemaIndex, ["targetName"]));
+            const targetDisposition = readField(item, schemaIndex, ["targetDisposition"]);
+            const targetIsPlayer = toBoolean(readField(item, schemaIndex, ["targetIsPlayer"]));
+            const targetCanAttack = toBoolean(readField(item, schemaIndex, ["targetCanAttack"]));
+            const targetIsFriend = toBoolean(readField(item, schemaIndex, ["targetIsFriend"]));
+            const targetReaction = toInteger(readField(item, schemaIndex, ["targetReaction"]));
+            const targetInfo =
+                targetName !== null ||
+                targetDisposition !== undefined ||
+                targetIsPlayer !== null ||
+                targetCanAttack !== null ||
+                targetIsFriend !== null ||
+                targetReaction !== null
+                    ? {
+                          targetName,
+                          targetDisposition,
+                          targetIsPlayer,
+                          targetCanAttack,
+                          targetIsFriend,
+                          targetReaction,
+                      }
+                    : readField(item, schemaIndex, castFieldAliases.targetInfo);
             const provenance = coerceStringArray(
                 readField(item, schemaIndex, castFieldAliases.provenance)
             );
