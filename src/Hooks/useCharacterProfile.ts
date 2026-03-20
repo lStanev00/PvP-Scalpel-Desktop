@@ -56,6 +56,11 @@ export interface CharacterProfile {
 }
 
 export type CharacterProfiles = CharacterProfile[];
+export type CharacterProfileState = {
+    profiles: CharacterProfiles;
+    isLoading: boolean;
+    hasCachedData: boolean;
+};
 
 type StoredProfile = {
     expiresAt: number;
@@ -298,29 +303,38 @@ export const resolveCharacterBracketSnapshot = (
     return null;
 };
 
-export default function useCharacterProfile({ server, realm, name }: ProfileArgs) {
-    const [profile, setProfile] = useState<CharacterProfiles>([]);
+export const useCharacterProfileState = ({ server, realm, name }: ProfileArgs): CharacterProfileState => {
+    const [profiles, setProfiles] = useState<CharacterProfiles>([]);
+    const [isLoading, setIsLoading] = useState(false);
+    const [hasCachedData, setHasCachedData] = useState(false);
     const { httpFetch } = useUserContext();
 
     useEffect(() => {
         const resolved = resolveProfileArgs({ server, realm, name });
         if (!resolved) {
-            setProfile([]);
+            setProfiles([]);
+            setIsLoading(false);
+            setHasCachedData(false);
             return;
         }
 
         const key = makeCacheKey(resolved);
         const cached = readStoredProfile(key);
+        setHasCachedData(!!cached);
         if (cached) {
-            setProfile(cached.data);
+            setProfiles(cached.data);
+        } else {
+            setProfiles([]);
         }
 
         let active = true;
+        setIsLoading(true);
         fetchCharacterProfile(resolved, httpFetch).then((result) => {
             if (!active) return;
             startTransition(() => {
-                setProfile(result);
+                setProfiles(result);
             });
+            setIsLoading(false);
         });
 
         return () => {
@@ -328,5 +342,9 @@ export default function useCharacterProfile({ server, realm, name }: ProfileArgs
         };
     }, [httpFetch, server, realm, name]);
 
-    return profile;
+    return { profiles, isLoading, hasCachedData };
+};
+
+export default function useCharacterProfile({ server, realm, name }: ProfileArgs) {
+    return useCharacterProfileState({ server, realm, name }).profiles;
 }

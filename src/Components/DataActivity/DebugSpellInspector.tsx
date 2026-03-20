@@ -409,17 +409,23 @@ export default function DebugSpellInspector({
         const storedMissed =
             coerceCount(computedOwnerKicks?.missed) ?? coerceCount(computedOwnerKicks?.failed);
 
-        const rawTotal = rawSnapshot?.totalKickAttempts ?? 0;
+        const rawTotal = rawSnapshot?.totalKickCasts ?? 0;
+        const rawSuccessful = rawSnapshot?.successfulKickCasts ?? 0;
         const rawConfirmed = rawSnapshot?.confirmedInterrupts ?? rawSnapshot?.succeeded ?? null;
         const rawMissed =
-            rawSnapshot?.missedKicks ?? rawSnapshot?.failed ?? (rawConfirmed !== null ? rawTotal - rawConfirmed : null);
-        const displayedTotal = displayedSnapshot?.totalKickAttempts ?? 0;
+            rawSnapshot?.missedKickCasts ??
+            rawSnapshot?.missedKicks ??
+            rawSnapshot?.failed ??
+            Math.max(0, rawTotal - rawSuccessful);
+        const displayedTotal = displayedSnapshot?.totalKickCasts ?? 0;
+        const displayedSuccessful = displayedSnapshot?.successfulKickCasts ?? 0;
         const displayedConfirmed =
             displayedSnapshot?.confirmedInterrupts ?? displayedSnapshot?.succeeded ?? null;
         const displayedMissed =
+            displayedSnapshot?.missedKickCasts ??
             displayedSnapshot?.missedKicks ??
             displayedSnapshot?.failed ??
-            (displayedConfirmed !== null ? displayedTotal - displayedConfirmed : null);
+            Math.max(0, displayedTotal - displayedSuccessful);
 
         const mismatchChecks = [
             storedTotal !== null && storedTotal !== rawTotal ? "stored total differs from raw-derived total" : null,
@@ -435,10 +441,12 @@ export default function DebugSpellInspector({
             rawEvents: filteredEvents.length,
             displayAttempts: displayAttempts.length,
             rawTotal,
+            rawSuccessful,
             rawConfirmed,
             rawMissed,
             rawCastEvents: rawSnapshot?.castEvents ?? 0,
             rawEventIntentAttempts: rawSnapshot?.eventIntentAttempts ?? 0,
+            rawCollapsedAttempts: rawSnapshot?.totalKickAttempts ?? 0,
             outcomeOnlyAttempts: rawSnapshot?.outcomeOnlyAttempts ?? 0,
             landedAttempts: rawSnapshot?.landedAttempts ?? 0,
             interruptedAttempts: rawSnapshot?.interruptedAttempts ?? 0,
@@ -447,10 +455,14 @@ export default function DebugSpellInspector({
             issued: rawSnapshot?.issued ?? null,
             succeeded: rawSnapshot?.succeeded ?? null,
             perSourceConfirmedInterrupts: rawSnapshot?.perSourceConfirmedInterrupts ?? null,
+            totalKickCastsSource: rawSnapshot?.totalKickCastsSource ?? "collapsed-attempts",
             confirmationSource: rawSnapshot?.confirmationSource ?? "unavailable",
             displayedTotal,
+            displayedSuccessful,
             displayedConfirmed,
             displayedMissed,
+            summarySupported: displayedSnapshot?.summarySupported ?? false,
+            summarySource: displayedSnapshot?.summarySource ?? "unsupported-version",
             storedTotal,
             storedConfirmed,
             storedMissed,
@@ -598,22 +610,32 @@ export default function DebugSpellInspector({
                         isKickFilter && kickValidation
                             ? [
                                   {
-                                      label: "Observed denominator",
-                                      value: `${kickValidation.displayedConfirmed ?? 0}/${kickValidation.displayedTotal}`,
+                                      label: "Kick summary support",
+                                      value: kickValidation.summarySupported ? "supported" : "unsupported",
                                   },
                                   {
-                                      label: "Raw-derived total",
-                                      value: String(kickValidation.rawTotal),
+                                      label: "Total kicks",
+                                      value: kickValidation.summarySupported
+                                          ? String(kickValidation.displayedTotal)
+                                          : "N/A",
                                   },
                                   {
-                                      label: "Displayed missed",
+                                      label: "Successful kicks",
+                                      value: String(kickValidation.displayedSuccessful),
+                                  },
+                                  {
+                                      label: "Failed kicks",
                                       value:
                                           kickValidation.displayedMissed === null
                                               ? "--"
                                               : String(kickValidation.displayedMissed),
                                   },
                                   {
-                                      label: "Confirmation source",
+                                      label: "Summary source",
+                                      value: kickValidation.summarySource,
+                                  },
+                                  {
+                                      label: "Legacy fallback source",
                                       value: kickValidation.confirmationSource,
                                   },
                               ]
@@ -642,6 +664,10 @@ export default function DebugSpellInspector({
                             title="Raw Kick Evidence"
                             rows={[
                                 {
+                                    label: "Raw kick casts",
+                                    value: String(kickValidation.rawTotal),
+                                },
+                                {
                                     label: "Grouped intent events",
                                     value: String(kickValidation.rawEventIntentAttempts),
                                 },
@@ -650,18 +676,22 @@ export default function DebugSpellInspector({
                                     value: String(kickValidation.rawCastEvents),
                                 },
                                 {
-                                    label: "Outcome-only groups",
-                                    value: String(kickValidation.outcomeOnlyAttempts),
+                                    label: "Collapsed attempts",
+                                    value: String(kickValidation.rawCollapsedAttempts),
                                 },
                                 {
-                                    label: "Landed / interrupted",
-                                    value: `${kickValidation.landedAttempts} / ${kickValidation.interruptedAttempts}`,
+                                    label: "Successful cast proxy",
+                                    value: String(kickValidation.rawSuccessful),
                                 },
                             ]}
                         />
                         <DefinitionSection
                             title="Fallback Sources"
                             rows={[
+                                {
+                                    label: "Total source",
+                                    value: kickValidation.totalKickCastsSource,
+                                },
                                 {
                                     label: "Scoreboard issued",
                                     value:
@@ -684,8 +714,8 @@ export default function DebugSpellInspector({
                                             : String(kickValidation.perSourceConfirmedInterrupts),
                                 },
                                 {
-                                    label: "Unresolved attempts",
-                                    value: String(kickValidation.unresolvedAttempts),
+                                    label: "Collapsed landed / interrupted",
+                                    value: `${kickValidation.landedAttempts} / ${kickValidation.interruptedAttempts}`,
                                 },
                             ]}
                         />
@@ -693,7 +723,7 @@ export default function DebugSpellInspector({
                             title="Stored Computed Result"
                             rows={[
                                 {
-                                    label: "Stored total",
+                                    label: "Stored total casts",
                                     value:
                                         kickValidation.storedTotal === null
                                             ? "--"
@@ -707,7 +737,7 @@ export default function DebugSpellInspector({
                                             : String(kickValidation.storedConfirmed),
                                 },
                                 {
-                                    label: "Stored missed",
+                                    label: "Stored missed casts",
                                     value:
                                         kickValidation.storedMissed === null
                                             ? "--"

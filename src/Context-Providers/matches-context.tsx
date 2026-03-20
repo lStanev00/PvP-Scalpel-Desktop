@@ -7,6 +7,13 @@ import { buildMatchComputed, extractMatchKey, toStoredComputedMatch } from "../D
 import { extractLuaRootTable } from "../Domain/luaSavedVariables";
 import { resolveMatchDurationSeconds } from "../Domain/localSpellModel";
 
+export type MatchesStatus = {
+    hasBootstrapped: boolean;
+    isHydrating: boolean;
+    isRefreshing: boolean;
+    lastUpdatedAt: number | null;
+};
+
 const logSchemaMismatch = (message: string, details?: unknown) => {
     if (import.meta.env.DEV) {
         console.warn(`[matches] ${message}`, details ?? "");
@@ -465,15 +472,55 @@ const readSavedVariablesSnapshot = async (path: string): Promise<MatchReadSucces
 };
 
 export const MatchesContext = createContext<MatchWithId[] | null>(null);
+export const MatchesStatusContext = createContext<MatchesStatus | null>(null);
 
 export const MatchesProvider = ({ children }: { children: ReactNode }) => {
     const [matches, setMatches] = useState<MatchWithId[]>([]);
+    const [status, setStatus] = useState<MatchesStatus>({
+        hasBootstrapped: false,
+        isHydrating: true,
+        isRefreshing: false,
+        lastUpdatedAt: null,
+    });
     const lastLoggedCount = useRef<number | null>(null);
     const lastParseErrorMessage = useRef<string | null>(null);
+    const hasHydratedFromStore = useRef(false);
+    const hasCompletedLiveUpdate = useRef(false);
+    const currentRunPhase = useRef<"none" | "initial" | "refresh">("none");
 
     useEffect(() => {
         let timeout: ReturnType<typeof setTimeout> | null = null;
         let activeRunId = 0;
+        const markHydrationSettled = () => {
+            hasHydratedFromStore.current = true;
+            setStatus((prev) => ({
+                ...prev,
+                hasBootstrapped: true,
+                isHydrating: currentRunPhase.current === "initial",
+            }));
+        };
+        const markRunStarted = () => {
+            const nextPhase = hasCompletedLiveUpdate.current ? "refresh" : "initial";
+            currentRunPhase.current = nextPhase;
+            setStatus((prev) => ({
+                ...prev,
+                hasBootstrapped: prev.hasBootstrapped || hasHydratedFromStore.current,
+                isHydrating: nextPhase === "initial",
+                isRefreshing: nextPhase === "refresh",
+            }));
+        };
+        const markRunSettled = (runId: number) => {
+            if (runId !== activeRunId) return;
+            hasCompletedLiveUpdate.current = true;
+            currentRunPhase.current = "none";
+            setStatus((prev) => ({
+                ...prev,
+                hasBootstrapped: true,
+                isHydrating: false,
+                isRefreshing: false,
+                lastUpdatedAt: Date.now(),
+            }));
+        };
         const hydrateFromComputedStore = async () => {
             const persistedComputedMatches = await invoke<unknown[]>("load_all_computed_matches").catch(
                 () => []
@@ -899,6 +946,8 @@ export const MatchesProvider = ({ children }: { children: ReactNode }) => {
                     console.error("SavedVariables read error:", err);
                 }
                 pushTerminalParseMessage("Match data update failed", err);
+            } finally {
+                markRunSettled(runId);
             }
         };
 
@@ -917,12 +966,17 @@ export const MatchesProvider = ({ children }: { children: ReactNode }) => {
                 });
 
                 timeout = setTimeout(() => {
+                    markRunStarted();
                     void runSavedVariablesUpdate(payload, runId);
                 }, MATCH_UPDATE_DEBOUNCE_MS);
             }
         );
 
-        hydrateFromComputedStore().catch(() => undefined);
+        hydrateFromComputedStore()
+            .catch(() => undefined)
+            .finally(() => {
+                markHydrationSettled();
+            });
 
         unlistenPromise
             .then(() => invoke("scan_saved_vars"))
@@ -937,5 +991,9 @@ export const MatchesProvider = ({ children }: { children: ReactNode }) => {
         };
     }, []);
 
-    return <MatchesContext.Provider value={matches}>{children}</MatchesContext.Provider>;
+    return (
+        <MatchesStatusContext.Provider value={status}>
+            <MatchesContext.Provider value={matches}>{children}</MatchesContext.Provider>
+        </MatchesStatusContext.Provider>
+    );
 };

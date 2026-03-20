@@ -1,4 +1,4 @@
-import { LuCircleOff, LuLocateFixed, LuShield, LuSword, LuZap } from "react-icons/lu";
+import { LuCircleOff, LuShield, LuSword, LuZap } from "react-icons/lu";
 import TelemetryUnavailableState from "./TelemetryUnavailableState";
 import {
     buildKickJourneyRows,
@@ -43,6 +43,22 @@ export default function KicksAnalysisTab({
     kickSpellIds,
     gameMap,
 }: KicksAnalysisTabProps) {
+    const kickSummarySupported = kickTelemetrySnapshot.summarySupported;
+    const kickTotal = Math.max(0, kickTelemetrySnapshot.totalKickCasts ?? 0);
+    const kickSuccessful = Math.max(0, kickTelemetrySnapshot.successfulKickCasts ?? 0);
+    const kickFailed = Math.max(
+        0,
+        kickTelemetrySnapshot.failed ??
+            kickTelemetrySnapshot.missedKickCasts ??
+            kickTelemetrySnapshot.missedKicks ??
+            (kickTotal - kickSuccessful)
+    );
+    const kickEff =
+        kickSummarySupported && kickTotal > 0
+            ? `${Math.round((kickSuccessful / kickTotal) * 100)}%`
+            : kickSummarySupported
+              ? "0%"
+              : "N/A";
     const hasLocalDetail = !!localSpellModel && localSpellModel.detailAvailable === true;
     const kickRows =
         hasLocalDetail && localSpellModel
@@ -58,41 +74,33 @@ export default function KicksAnalysisTab({
         <div className={styles.analysisTabStack}>
             <div className={styles.analysisMetricStrip}>
                 <Scorecard
-                    label="Total"
-                    value={String(kickTelemetrySnapshot.totalKickAttempts ?? 0)}
+                    label="Total kicks"
+                    value={kickSummarySupported ? String(kickTotal) : "N/A"}
                     icon={<LuSword aria-hidden="true" />}
                 />
                 <Scorecard
-                    label="Intent attempts"
-                    value={String(kickTelemetrySnapshot.intentAttempts ?? 0)}
-                    icon={<LuLocateFixed aria-hidden="true" />}
+                    label="Successful kicks"
+                    value={kickSummarySupported ? String(kickSuccessful) : "N/A"}
+                    icon={<LuShield aria-hidden="true" />}
                 />
                 <Scorecard
-                    label="Landed"
-                    value={String(kickTelemetrySnapshot.landedAttempts ?? 0)}
+                    label="Failed kicks"
+                    value={kickSummarySupported ? String(kickFailed) : "N/A"}
+                    icon={<LuCircleOff aria-hidden="true" />}
+                />
+                <Scorecard
+                    label="Kick Eff."
+                    value={kickEff}
                     icon={<LuZap aria-hidden="true" />}
                 />
-                <Scorecard
-                    label="Confirmed interrupts"
-                    value={String(kickTelemetrySnapshot.confirmedInterrupts ?? 0)}
-                    icon={<LuShield aria-hidden="true" />}
-                />
-                <Scorecard
-                    label="Missed"
-                    value={String(kickTelemetrySnapshot.missedKicks ?? 0)}
-                    icon={<LuCircleOff aria-hidden="true" />}
-                />
-                <Scorecard
-                    label="Succeeded"
-                    value={String(kickTelemetrySnapshot.succeeded ?? kickTelemetrySnapshot.confirmedInterrupts ?? 0)}
-                    icon={<LuShield aria-hidden="true" />}
-                />
-                <Scorecard
-                    label="Failed"
-                    value={String(kickTelemetrySnapshot.failed ?? kickTelemetrySnapshot.missedKicks ?? 0)}
-                    icon={<LuCircleOff aria-hidden="true" />}
-                />
             </div>
+
+            {!kickSummarySupported ? (
+                <div className={styles.analysisInlineHint}>
+                    Kick summary is only supported for telemetry version 5 or newer. Legacy
+                    matches can still show local interrupt journey data below when it exists.
+                </div>
+            ) : null}
 
             {!hasLocalDetail ? (
                 <TelemetryUnavailableState

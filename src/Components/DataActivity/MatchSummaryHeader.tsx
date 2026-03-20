@@ -41,11 +41,6 @@ const normalizeNumber = (value: unknown) => {
 };
 
 const normalizeCount = (value: unknown) => Math.max(0, Math.trunc(normalizeNumber(value)));
-const normalizeOptionalCount = (value: unknown) => {
-    if (value === null || value === undefined) return null;
-    return normalizeCount(value);
-};
-
 const formatInteger = (value: number) => value.toLocaleString();
 
 const formatRealm = (realm?: string) => {
@@ -156,21 +151,23 @@ export default function MatchSummaryHeader({
     const outputTeamTotal = isHealer ? teamHealing : teamDamage;
     const contributionPct = outputTeamTotal > 0 ? (outputTotal / outputTeamTotal) * 100 : 0;
 
-    const kickTotal = Math.max(
+    const kickSummarySupported = kickTelemetrySnapshot.summarySupported;
+    const kickTotal = Math.max(0, kickTelemetrySnapshot.totalKickCasts ?? 0);
+    const successfulKickCasts = Math.max(0, kickTelemetrySnapshot.successfulKickCasts ?? 0);
+    const kickPct =
+        kickSummarySupported && kickTotal > 0 ? clampPercent((successfulKickCasts / kickTotal) * 100) : 0;
+    const failedKicks = Math.max(
         0,
-        kickTelemetrySnapshot.totalKickAttempts ?? kickTelemetrySnapshot.intentAttempts
+        kickTelemetrySnapshot.failed ??
+            kickTelemetrySnapshot.missedKickCasts ??
+            kickTelemetrySnapshot.missedKicks ??
+            (kickSummarySupported ? kickTotal - successfulKickCasts : 0)
     );
-    const confirmedInterrupts =
-        normalizeOptionalCount(kickTelemetrySnapshot.confirmedInterrupts) ??
-        normalizeOptionalCount(kickTelemetrySnapshot.succeeded);
-    const hasKickDisplay = kickTotal > 0 && confirmedInterrupts !== null;
-    const kickPct = hasKickDisplay ? (confirmedInterrupts / kickTotal) * 100 : 0;
-    const missedKicks = Math.max(
-        0,
-        kickTelemetrySnapshot.missedKicks ??
-            kickTelemetrySnapshot.failed ??
-            (hasKickDisplay ? kickTotal - confirmedInterrupts : 0)
-    );
+    const kickRingValue = kickSummarySupported ? `${successfulKickCasts}/${kickTotal}` : "N/A";
+    const unsupportedKickCopy =
+        kickTelemetrySnapshot.telemetryVersion === null
+            ? "Kick summary unsupported for unknown telemetry version"
+            : `Kick summary unsupported for telemetry v${kickTelemetrySnapshot.telemetryVersion}`;
     const averageReactionMs = null;
 
     const ownerClassColor = getClassColor(owner?.class) ?? "#8a94a6";
@@ -281,7 +278,7 @@ export default function MatchSummaryHeader({
                         <MiniRing
                             percent={kickPct}
                             color={
-                                hasKickDisplay
+                                kickSummarySupported
                                     ? kickPct >= 60
                                         ? "#22c55e"
                                         : kickPct >= 30
@@ -291,9 +288,7 @@ export default function MatchSummaryHeader({
                             }
                             size={56}
                         />
-                        <span className={styles.mdRingValue}>
-                            {hasKickDisplay ? `${confirmedInterrupts}/${kickTotal}` : "?"}
-                        </span>
+                        <span className={styles.mdRingValue}>{kickRingValue}</span>
                     </div>
                     <span className={styles.mdRingLabel}>Kicks</span>
                 </div>
@@ -321,20 +316,22 @@ export default function MatchSummaryHeader({
                 <StatCard
                     icon={<LuZap size={14} />}
                     label="Kick Eff."
-                    value={hasKickDisplay ? `${Math.round(kickPct)}%` : "--"}
+                    value={kickSummarySupported ? `${Math.round(kickPct)}%` : "N/A"}
                     sub={
-                        hasKickDisplay
+                        kickSummarySupported
                             ? averageReactionMs !== null
                                 ? `${averageReactionMs}ms avg`
-                                : `${confirmedInterrupts} confirmed · ${missedKicks} missed`
-                            : undefined
+                                : `${kickTotal} total / ${failedKicks} failed`
+                            : unsupportedKickCopy
                     }
                     accent={
-                        kickPct >= 60
+                        !kickSummarySupported
+                            ? undefined
+                            : kickPct >= 60
                             ? "#22c55e"
                             : kickPct >= 30
                               ? "#f5a85b"
-                              : hasKickDisplay
+                              : kickTotal > 0 || successfulKickCasts > 0
                                 ? "#ef4444"
                                 : undefined
                     }
@@ -359,12 +356,12 @@ export default function MatchSummaryHeader({
                 <div className={`${styles.mdExpandedLayer} ${isExpanded ? styles.mdExpandedOpen : ""}`}>
                 <div className={styles.mdExpandedGrid}>
                     <div className={styles.mdExpandedItem}>
-                        <span className={styles.mdExpandedLabel}>Missed Kicks</span>
-                        <span className={styles.mdExpandedValue}>{hasKickDisplay ? missedKicks : "--"}</span>
+                        <span className={styles.mdExpandedLabel}>Failed Kicks</span>
+                        <span className={styles.mdExpandedValue}>{kickSummarySupported ? failedKicks : "N/A"}</span>
                     </div>
                     <div className={styles.mdExpandedItem}>
-                        <span className={styles.mdExpandedLabel}>Total Attempts</span>
-                        <span className={styles.mdExpandedValue}>{kickTotal}</span>
+                        <span className={styles.mdExpandedLabel}>Total Kicks</span>
+                        <span className={styles.mdExpandedValue}>{kickSummarySupported ? kickTotal : "N/A"}</span>
                     </div>
                     <div className={styles.mdExpandedItem}>
                         <span className={styles.mdExpandedLabel}>Team {isHealer ? "Healing" : "Damage"}</span>

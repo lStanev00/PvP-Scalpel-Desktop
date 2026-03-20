@@ -523,6 +523,230 @@
     color: rgba(230, 234, 240, 0.92);
 }
 
+.dashboardLoadingCard {
+    position: relative;
+    overflow: hidden;
+}
+
+.dashboardLoadingCard::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+        linear-gradient(
+            110deg,
+            transparent 0%,
+            rgba(255, 255, 255, 0.03) 26%,
+            rgba(124, 242, 194, 0.12) 42%,
+            rgba(58, 167, 255, 0.16) 50%,
+            rgba(255, 255, 255, 0.03) 62%,
+            transparent 100%
+        );
+    transform: translateX(-120%);
+    animation: dashboardShimmer 2.2s ease-in-out infinite;
+    pointer-events: none;
+}
+
+.dashboardLoadingCard::after {
+    content: "";
+    position: absolute;
+    inset: auto auto -40% -10%;
+    width: 180px;
+    height: 180px;
+    border-radius: 999px;
+    background: radial-gradient(circle, rgba(58, 167, 255, 0.16), transparent 70%);
+    opacity: 0.65;
+    animation: dashboardPulse 2.8s ease-in-out infinite;
+    pointer-events: none;
+}
+
+.dashboardSkeletonBlock,
+.dashboardSkeletonAvatar,
+.dashboardSkeletonMetricIconGlow,
+.dashboardSkeletonChart,
+.dashboardSkeletonChartLine {
+    position: relative;
+    overflow: hidden;
+    border-radius: 999px;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(124, 242, 194, 0.08));
+}
+
+.dashboardSkeletonBlock::after,
+.dashboardSkeletonAvatar::after,
+.dashboardSkeletonMetricIconGlow::after,
+.dashboardSkeletonChart::after,
+.dashboardSkeletonChartLine::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+        90deg,
+        transparent,
+        rgba(255, 255, 255, 0.16),
+        transparent
+    );
+    transform: translateX(-100%);
+    animation: dashboardInnerShimmer 2s ease-in-out infinite;
+}
+
+.dashboardSkeletonAvatar {
+    width: 88px;
+    height: 88px;
+    border-radius: 24px;
+    box-shadow: 0 18px 36px rgba(4, 10, 18, 0.26);
+}
+
+.dashboardSkeletonMetaWrap {
+    display: grid;
+    gap: 10px;
+}
+
+.dashboardSkeletonTitle {
+    width: min(320px, 68%);
+    height: 28px;
+}
+
+.dashboardSkeletonMeta {
+    width: min(420px, 92%);
+    height: 14px;
+}
+
+.dashboardSkeletonMetaShort {
+    width: min(220px, 46%);
+    height: 14px;
+}
+
+.dashboardSkeletonGuild {
+    width: min(180px, 38%);
+    height: 14px;
+}
+
+.dashboardSkeletonLabel,
+.dashboardSkeletonEyebrow {
+    width: 96px;
+    height: 11px;
+}
+
+.dashboardSkeletonBadge {
+    width: 92px;
+    height: 36px;
+}
+
+.dashboardSkeletonSignalValue {
+    width: min(260px, 80%);
+    height: 24px;
+}
+
+.dashboardSkeletonSignalMeta {
+    width: min(240px, 78%);
+    height: 12px;
+}
+
+.dashboardSkeletonSignalMetaShort {
+    width: min(160px, 44%);
+    height: 12px;
+}
+
+.dashboardSkeletonMetricValue {
+    width: min(140px, 56%);
+    height: 26px;
+    margin-top: 8px;
+}
+
+.dashboardSkeletonMetricDetail {
+    width: min(210px, 82%);
+    height: 12px;
+    margin-top: 10px;
+}
+
+.dashboardSkeletonMetricIconGlow {
+    width: 18px;
+    height: 18px;
+    border-radius: 999px;
+    box-shadow: 0 0 18px rgba(124, 242, 194, 0.24);
+}
+
+.dashboardSkeletonPanelTitle {
+    width: min(220px, 72%);
+    height: 22px;
+    margin-top: 8px;
+}
+
+.dashboardSkeletonResultPill {
+    width: 96px;
+    height: 28px;
+}
+
+.dashboardSkeletonSpotlightValue {
+    width: min(200px, 86%);
+    height: 18px;
+}
+
+.dashboardSkeletonMomentumHeadline {
+    width: min(180px, 58%);
+    height: 28px;
+}
+
+.dashboardSkeletonChart {
+    min-height: 260px;
+    border-radius: 18px;
+    background:
+        linear-gradient(180deg, rgba(18, 24, 33, 0.72), rgba(12, 18, 28, 0.92)),
+        radial-gradient(circle at 20% 0%, rgba(124, 242, 194, 0.1), transparent 44%);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.dashboardSkeletonChartGlow {
+    position: absolute;
+    inset: auto auto 18% 8%;
+    width: 170px;
+    height: 170px;
+    border-radius: 999px;
+    background: radial-gradient(circle, rgba(124, 242, 194, 0.14), transparent 72%);
+    animation: dashboardPulse 3.2s ease-in-out infinite;
+}
+
+.dashboardSkeletonChartLine {
+    position: absolute;
+    inset: auto 8% 18% 8%;
+    height: 3px;
+    border-radius: 999px;
+    background:
+        linear-gradient(90deg, rgba(124, 242, 194, 0.2), rgba(124, 242, 194, 0.86));
+    transform: skewY(-14deg);
+    box-shadow: 0 0 18px rgba(124, 242, 194, 0.18);
+}
+
+@keyframes dashboardShimmer {
+    from {
+        transform: translateX(-120%);
+    }
+    to {
+        transform: translateX(120%);
+    }
+}
+
+@keyframes dashboardInnerShimmer {
+    from {
+        transform: translateX(-100%);
+    }
+    to {
+        transform: translateX(100%);
+    }
+}
+
+@keyframes dashboardPulse {
+    0%,
+    100% {
+        opacity: 0.45;
+        transform: scale(0.96);
+    }
+    50% {
+        opacity: 0.9;
+        transform: scale(1.04);
+    }
+}
+
 @media (max-width: 1180px) {
     .dashboardCrossBand {
         opacity: 0.8;
@@ -547,6 +771,13 @@
 
     .metricsGrid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .dashboardSkeletonTitle,
+    .dashboardSkeletonMeta,
+    .dashboardSkeletonSignalValue,
+    .dashboardSkeletonPanelTitle {
+        width: 100%;
     }
 }
 
@@ -593,7 +824,8 @@
     }
 
     .identityAvatar,
-    .identityFallback {
+    .identityFallback,
+    .dashboardSkeletonAvatar {
         width: 72px;
         height: 72px;
         border-radius: 20px;
@@ -620,6 +852,20 @@
 
     .metricCard {
         grid-template-columns: 1fr;
+    }
+
+    .dashboardSkeletonBadge,
+    .dashboardSkeletonSignalMeta,
+    .dashboardSkeletonSignalMetaShort,
+    .dashboardSkeletonMetricValue,
+    .dashboardSkeletonMetricDetail,
+    .dashboardSkeletonMomentumHeadline,
+    .dashboardSkeletonSpotlightValue {
+        width: 100%;
+    }
+
+    .dashboardSkeletonChart {
+        min-height: 220px;
     }
 
 }

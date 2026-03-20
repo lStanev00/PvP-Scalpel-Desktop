@@ -90,9 +90,20 @@ export interface MatchSummary {
         class?: string;
         isOwner: boolean;
         rating: number | null;
+        ratingChange: number | null;
+        mmr: number | null;
     };
     raw: MatchWithId;
 }
+
+const toFiniteNumber = (value: unknown): number | null => {
+    if (typeof value === "number" && Number.isFinite(value)) return value;
+    if (typeof value === "string" && value.trim() !== "") {
+        const numeric = Number(value);
+        if (Number.isFinite(numeric)) return numeric;
+    }
+    return null;
+};
 
 const formatTimestamp = (value: string) => {
     const normalized = value.replace(" ", "T");
@@ -142,6 +153,23 @@ const resolveMatchBracket = (match: MatchWithId) => {
 const getOwner = (players: MatchPlayer[]) => {
     const owner = players.find((p) => p.isOwner);
     return owner ?? players[0] ?? null;
+};
+
+export const resolveEffectivePostMatchRating = (player: MatchPlayer | null): number | null => {
+    if (!player) return null;
+
+    const rating = toFiniteNumber(player.rating);
+    return rating;
+};
+
+export const resolveEffectivePostMatchMmr = (player: MatchPlayer | null): number | null => {
+    if (!player) return null;
+
+    const postmatchMmr = toFiniteNumber(player.postmatchMMR);
+    if (postmatchMmr !== null) return postmatchMmr;
+
+    const prematchMmr = toFiniteNumber(player.prematchMMR);
+    return prematchMmr;
 };
 
 const getDurationSeconds = (match: MatchWithId) => {
@@ -234,7 +262,9 @@ export const buildMatchSummary = (match: MatchWithId): MatchSummary => {
             spec: owner?.spec ?? undefined,
             class: owner?.class ?? undefined,
             isOwner: !!owner?.isOwner,
-            rating: owner?.postmatchMMR ?? owner?.prematchMMR ?? null,
+            rating: resolveEffectivePostMatchRating(owner),
+            ratingChange: toFiniteNumber(owner?.ratingChange),
+            mmr: resolveEffectivePostMatchMmr(owner),
         },
         raw: match,
     };

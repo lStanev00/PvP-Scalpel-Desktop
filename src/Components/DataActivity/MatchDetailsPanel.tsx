@@ -127,9 +127,11 @@ const resolveKickSnapshotForDisplay = (
     base: KickTelemetrySnapshot,
     computedOwnerKicks: ComputedOwnerKickSummary | null
 ): KickTelemetrySnapshot => {
+    if (!base.summarySupported) return base;
     if (!computedOwnerKicks) return base;
 
     const baseHasKickEvidence =
+        base.totalKickCasts > 0 ||
         base.totalKickAttempts > 0 ||
         base.eventIntentAttempts > 0 ||
         base.castEvents > 0 ||
@@ -161,17 +163,24 @@ const resolveKickSnapshotForDisplay = (
 
     if (!hasComputedFallback) return base;
 
+    const totalKickCasts = computedTotal ?? base.totalKickCasts;
     const totalKickAttempts = computedTotal ?? base.totalKickAttempts;
-    const intentAttempts = computedIntentAttempts ?? totalKickAttempts;
+    const intentAttempts = computedIntentAttempts ?? totalKickCasts;
     const landedAttempts = computedLanded ?? base.landedAttempts;
     const confirmedInterrupts = computedConfirmedInterrupts ?? base.confirmedInterrupts;
-    const missedKicks =
+    const successfulKickCasts =
+        computedLanded ?? confirmedInterrupts ?? base.successfulKickCasts;
+    const missedKickCasts =
         computedMissed ??
-        (confirmedInterrupts !== null ? Math.max(0, totalKickAttempts - confirmedInterrupts) : null);
-    const failed = computedFailed ?? missedKicks;
+        Math.max(0, totalKickCasts - successfulKickCasts);
+    const missedKicks = missedKickCasts;
+    const failed = computedFailed ?? missedKickCasts;
 
     return {
         ...base,
+        totalKickCasts,
+        successfulKickCasts,
+        missedKickCasts,
         totalKickAttempts,
         intentAttempts,
         landedAttempts,
@@ -262,6 +271,7 @@ export default function MatchDetailsPanel({ match, isLoading, onBack }: MatchDet
             owner: ownerPlayer,
             telemetryVersion,
             interruptSpellsBySource,
+            rawLocalSpellCapture: (match.raw as { localSpellCapture?: unknown }).localSpellCapture,
             includeDiagnostics: debugEnabled,
         });
         const computedOwnerKicks =
@@ -295,15 +305,22 @@ export default function MatchDetailsPanel({ match, isLoading, onBack }: MatchDet
                       }
                     : null,
                 kickSnapshotBase: {
+                    totalKickCasts: baseKickTelemetrySnapshot.totalKickCasts,
+                    successfulKickCasts: baseKickTelemetrySnapshot.successfulKickCasts,
+                    missedKickCasts: baseKickTelemetrySnapshot.missedKickCasts,
                     totalKickAttempts: baseKickTelemetrySnapshot.totalKickAttempts,
                     eventIntentAttempts: baseKickTelemetrySnapshot.eventIntentAttempts,
                     castEvents: baseKickTelemetrySnapshot.castEvents,
                     confirmedInterrupts: baseKickTelemetrySnapshot.confirmedInterrupts,
+                    totalKickCastsSource: baseKickTelemetrySnapshot.totalKickCastsSource,
                     confirmationSource: baseKickTelemetrySnapshot.confirmationSource,
                     issued: baseKickTelemetrySnapshot.issued,
                     succeeded: baseKickTelemetrySnapshot.succeeded,
                 },
                 kickSnapshotDisplayed: {
+                    totalKickCasts: kickTelemetrySnapshot.totalKickCasts,
+                    successfulKickCasts: kickTelemetrySnapshot.successfulKickCasts,
+                    missedKickCasts: kickTelemetrySnapshot.missedKickCasts,
                     totalKickAttempts: kickTelemetrySnapshot.totalKickAttempts,
                     confirmedInterrupts: kickTelemetrySnapshot.confirmedInterrupts,
                     missedKicks: kickTelemetrySnapshot.missedKicks,
@@ -437,7 +454,7 @@ export default function MatchDetailsPanel({ match, isLoading, onBack }: MatchDet
                     showRating={content.showRating}
                     showTeams={content.showFactions}
                     ownerTeamMmrDelta={match.delta}
-                    ownerTeamCurrentMmr={match.owner.rating}
+                    ownerTeamCurrentMmr={match.owner.mmr ?? match.owner.rating}
                     extraStats={
                         shouldMergeMSS
                             ? {
