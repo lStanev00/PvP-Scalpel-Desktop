@@ -159,6 +159,13 @@ export const resolveEffectivePostMatchRating = (player: MatchPlayer | null): num
     if (!player) return null;
 
     const rating = toFiniteNumber(player.rating);
+    if (rating === null) return null;
+
+    const ratingChange = toFiniteNumber(player.ratingChange);
+    if (ratingChange !== null) {
+        return rating + ratingChange;
+    }
+
     return rating;
 };
 

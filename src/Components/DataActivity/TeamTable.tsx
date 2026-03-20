@@ -43,11 +43,11 @@ const formatSignedNumber = (value: number) => {
     return normalized.toLocaleString();
 };
 
-const formatMmrDelta = (value: number | null) => {
-    if (value === null) return "-";
+const formatBracketedDelta = (value: number | null) => {
+    if (value === null) return null;
     const normalized = Math.trunc(value);
-    if (normalized === 0) return "-";
-    return formatSignedNumber(normalized);
+    if (normalized === 0) return null;
+    return `(${formatSignedNumber(normalized)})`;
 };
 
 function HeaderHint({
@@ -305,6 +305,14 @@ export default function TeamTable({
                               : styles.deltaNeutral;
                     const rating = resolveEffectivePostMatchRating(player);
                     const ratingChange = toFiniteNumber(player.ratingChange);
+                    const mmrDeltaLabel = formatBracketedDelta(mmrDelta);
+                    const ratingDeltaLabel = formatBracketedDelta(ratingChange);
+                    const ratingDeltaStyle =
+                        ratingChange !== null && ratingChange > 0
+                            ? styles.deltaPositive
+                            : ratingChange !== null && ratingChange < 0
+                              ? styles.deltaNegative
+                              : "";
                     const damagePct = maxOutput > 0 ? ((player.damage ?? 0) / maxOutput) * 100 : 0;
                     const healingPct = maxOutput > 0 ? ((player.healing ?? 0) / maxOutput) * 100 : 0;
                     const extraRowStats = playerKey ? extraStatValuesByPlayerKey[playerKey] ?? null : null;
@@ -408,26 +416,21 @@ export default function TeamTable({
                                 {showCurrentMMR ? (
                                     <span className={`${styles.ttStat} ${styles.ttMmrCell}`}>
                                         <span className={styles.ttMmrValue}>{fmt(currentMMR)}</span>
-                                        <span className={`${styles.ttMmrDelta} ${deltaStyle}`}>
-                                            {formatMmrDelta(mmrDelta)}
-                                        </span>
+                                        {mmrDeltaLabel ? (
+                                            <span className={`${styles.ttMmrDelta} ${deltaStyle}`}>
+                                                {" "}
+                                                {mmrDeltaLabel}
+                                            </span>
+                                        ) : null}
                                     </span>
                                 ) : null}
                                 {showRating ? (
                                     <span className={styles.ttStat}>
                                         {rating ?? "-"}
-                                        {ratingChange != null ? (
-                                            <span
-                                                className={
-                                                    ratingChange > 0
-                                                        ? styles.deltaPositive
-                                                        : ratingChange < 0
-                                                          ? styles.deltaNegative
-                                                          : ""
-                                                }
-                                            >
+                                        {ratingDeltaLabel ? (
+                                            <span className={ratingDeltaStyle}>
                                                 {" "}
-                                                {ratingChange > 0 ? `+${ratingChange}` : ratingChange}
+                                                {ratingDeltaLabel}
                                             </span>
                                         ) : null}
                                     </span>

@@ -260,13 +260,18 @@ const resolveCurrentRating = (
     summaries: MatchSummary[],
     apiBracketSnapshot?: { rating?: number | null } | null,
 ) => {
+    if (typeof apiBracketSnapshot?.rating === "number" && Number.isFinite(apiBracketSnapshot.rating)) {
+        console.info(summaries)
+        return summaries?.[0]?.owner?.rating;
+    }
+
     for (const match of summaries) {
         if (typeof match.owner.rating === "number" && Number.isFinite(match.owner.rating)) {
             return match.owner.rating;
         }
     }
 
-    return apiBracketSnapshot?.rating ?? null;
+    return null;
 };
 
 const resolveLatestDeltaTone = (latestDelta: number | null) => {
@@ -982,9 +987,7 @@ export default function Dashboard() {
 
     const showRatingMetric = isRatedContext && currentRating !== null && currentRating > 0;
 
-    const metricFourLabel = showRatingMetric
-        ? "Post-match Rating"
-        : nonRatedAverageMetric?.label ?? "Active spec";
+    const metricFourLabel = showRatingMetric ? "Rating" : nonRatedAverageMetric?.label ?? "Active spec";
 
     const metricFourValue = showRatingMetric
         ? String(Math.round(currentRating))
@@ -998,6 +1001,13 @@ export default function Dashboard() {
                 : `${ownerName} in ${currentBracketLabel} · latest captured rating`
             : "Rating attaches once match data is available"
         : nonRatedAverageMetric?.detail ?? `${ownerClass} in ${currentBracketLabel}`;
+
+    const metricFourDisplayDetail =
+        showRatingMetric && dashboardLatest
+            ? latestRatingChange !== null
+                ? `${latestRatingChange > 0 ? "+" : ""}${Math.trunc(latestRatingChange)} last game`
+                : `latest captured rating`
+            : metricFourDetail;
 
     const metricFourIcon = showRatingMetric ? (
         <LuSwords aria-hidden="true" />
@@ -1183,7 +1193,7 @@ export default function Dashboard() {
                             icon={metricFourIcon}
                             label={metricFourLabel}
                             value={metricFourValue}
-                            detail={metricFourDetail}
+                            detail={metricFourDisplayDetail}
                         />
                     </section>
                 ) : null}
