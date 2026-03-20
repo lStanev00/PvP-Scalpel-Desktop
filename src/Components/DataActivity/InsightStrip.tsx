@@ -141,17 +141,26 @@ export default function InsightStrip({
             <InsightCard
                 title="Kick Impact"
                 headline={
-                    kickTelemetrySnapshot.confirmedInterrupts !== null ||
-                    kickTelemetrySnapshot.totalKickCasts > 0
-                        ? `${kickTelemetrySnapshot.confirmedInterrupts ?? 0} confirmed`
-                        : "No confirmed interrupts"
+                    kickTelemetrySnapshot.summarySupported
+                        ? kickTelemetrySnapshot.totalKickCasts > 0 || kickTelemetrySnapshot.successfulKickCasts > 0
+                            ? `${kickTelemetrySnapshot.successfulKickCasts ?? 0} / ${kickTelemetrySnapshot.totalKickCasts ?? 0} succeeded`
+                            : "No kicks used"
+                        : "Unsupported"
                 }
                 detail={
-                    kickTelemetrySnapshot.totalKickCasts > 0
-                        ? `${kickTelemetrySnapshot.totalKickCasts} kick casts used in this match`
-                        : "No local kick journey was recorded in this match."
+                    kickTelemetrySnapshot.summarySupported
+                        ? `${kickTelemetrySnapshot.failed ?? 0} failed kicks in this match`
+                        : "Kick summary requires telemetry version 5 or newer."
                 }
-                supporting={`${kickTelemetrySnapshot.missedKickCasts ?? 0} missed / ${kickTelemetrySnapshot.successfulKickCasts ?? 0} successful casts`}
+                supporting={
+                    kickTelemetrySnapshot.summarySupported
+                        ? `${Math.round(
+                              ((kickTelemetrySnapshot.successfulKickCasts ?? 0) /
+                                  Math.max(1, kickTelemetrySnapshot.totalKickCasts ?? 0)) *
+                                  100
+                          )}% efficiency`
+                        : "Legacy telemetry remains viewable, but this summary is disabled."
+                }
                 icon={<LuTimerReset aria-hidden="true" />}
             />
         </section>

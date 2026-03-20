@@ -166,24 +166,37 @@ export default function MatchAnalysisOverviewTab({
                     title="Kick Summary"
                     icon={<LuTimerReset aria-hidden="true" />}
                     headline={
-                        kickTelemetrySnapshot.confirmedInterrupts !== null ||
-                        kickTelemetrySnapshot.totalKickCasts > 0
-                            ? `${kickTelemetrySnapshot.confirmedInterrupts ?? 0} confirmed`
-                            : "No confirmed interrupts"
+                        kickTelemetrySnapshot.summarySupported
+                            ? kickTelemetrySnapshot.totalKickCasts > 0 || kickTelemetrySnapshot.successfulKickCasts > 0
+                                ? `${kickTelemetrySnapshot.successfulKickCasts ?? 0} / ${kickTelemetrySnapshot.totalKickCasts ?? 0} succeeded`
+                                : "No kicks used"
+                            : "Unsupported"
                     }
                     detail={
-                        kickTelemetrySnapshot.totalKickCasts > 0
-                            ? `${kickTelemetrySnapshot.totalKickCasts} kick casts used in this match`
-                            : "No kick casts were captured in this match."
+                        kickTelemetrySnapshot.summarySupported
+                            ? `${kickTelemetrySnapshot.failed ?? 0} failed kicks in this match`
+                            : "Kick summary requires telemetry version 5 or newer."
                     }
                     subRows={[
                         {
-                            label: "Successful casts",
-                            value: String(kickTelemetrySnapshot.successfulKickCasts ?? 0),
+                            label: "Successful kicks",
+                            value: kickTelemetrySnapshot.summarySupported
+                                ? String(kickTelemetrySnapshot.successfulKickCasts ?? 0)
+                                : "N/A",
                         },
                         {
-                            label: "Missed casts",
-                            value: String(kickTelemetrySnapshot.missedKickCasts ?? 0),
+                            label: "Efficiency",
+                            value:
+                                kickTelemetrySnapshot.summarySupported &&
+                                (kickTelemetrySnapshot.totalKickCasts ?? 0) > 0
+                                    ? `${Math.round(
+                                          (Math.max(0, kickTelemetrySnapshot.successfulKickCasts ?? 0) /
+                                              Math.max(1, kickTelemetrySnapshot.totalKickCasts ?? 0)) *
+                                              100
+                                      )}%`
+                                    : kickTelemetrySnapshot.summarySupported
+                                      ? "0%"
+                                      : "N/A",
                         },
                     ]}
                 />

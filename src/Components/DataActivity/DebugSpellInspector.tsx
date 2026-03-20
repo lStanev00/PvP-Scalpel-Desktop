@@ -461,6 +461,8 @@ export default function DebugSpellInspector({
             displayedSuccessful,
             displayedConfirmed,
             displayedMissed,
+            summarySupported: displayedSnapshot?.summarySupported ?? false,
+            summarySource: displayedSnapshot?.summarySource ?? "unsupported-version",
             storedTotal,
             storedConfirmed,
             storedMissed,
@@ -608,30 +610,32 @@ export default function DebugSpellInspector({
                         isKickFilter && kickValidation
                             ? [
                                   {
-                                      label: "Confirmed interrupts",
-                                      value: String(kickValidation.displayedConfirmed ?? 0),
+                                      label: "Kick summary support",
+                                      value: kickValidation.summarySupported ? "supported" : "unsupported",
                                   },
                                   {
-                                      label: "Kick casts used",
-                                      value: String(kickValidation.rawTotal),
+                                      label: "Total kicks",
+                                      value: kickValidation.summarySupported
+                                          ? String(kickValidation.displayedTotal)
+                                          : "N/A",
                                   },
                                   {
-                                      label: "Successful kick casts",
+                                      label: "Successful kicks",
                                       value: String(kickValidation.displayedSuccessful),
                                   },
                                   {
-                                      label: "Missed kick casts",
+                                      label: "Failed kicks",
                                       value:
                                           kickValidation.displayedMissed === null
                                               ? "--"
                                               : String(kickValidation.displayedMissed),
                                   },
                                   {
-                                      label: "Total source",
-                                      value: kickValidation.totalKickCastsSource,
+                                      label: "Summary source",
+                                      value: kickValidation.summarySource,
                                   },
                                   {
-                                      label: "Confirmation source",
+                                      label: "Legacy fallback source",
                                       value: kickValidation.confirmationSource,
                                   },
                               ]

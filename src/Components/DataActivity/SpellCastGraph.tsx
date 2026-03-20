@@ -265,6 +265,7 @@ export default function SpellCastGraph({
                 impactValue: row.value.toLocaleString(),
                 impactLabel: toImpactLabel(metric),
                 castsValue: String(row.totalAttempts),
+                showCastsMetric: metric !== "interrupts",
                 avgValue: row.avgPerCast === null ? "--" : Math.round(row.avgPerCast).toLocaleString(),
                 shareValue: `${row.sharePct.toFixed(1)}%`,
                 successful: row.succeeded,

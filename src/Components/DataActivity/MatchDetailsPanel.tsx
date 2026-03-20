@@ -127,6 +127,7 @@ const resolveKickSnapshotForDisplay = (
     base: KickTelemetrySnapshot,
     computedOwnerKicks: ComputedOwnerKickSummary | null
 ): KickTelemetrySnapshot => {
+    if (!base.summarySupported) return base;
     if (!computedOwnerKicks) return base;
 
     const baseHasKickEvidence =
@@ -168,10 +169,7 @@ const resolveKickSnapshotForDisplay = (
     const landedAttempts = computedLanded ?? base.landedAttempts;
     const confirmedInterrupts = computedConfirmedInterrupts ?? base.confirmedInterrupts;
     const successfulKickCasts =
-        computedLanded ??
-        (confirmedInterrupts !== null
-            ? Math.min(totalKickCasts, confirmedInterrupts)
-            : base.successfulKickCasts);
+        computedLanded ?? confirmedInterrupts ?? base.successfulKickCasts;
     const missedKickCasts =
         computedMissed ??
         Math.max(0, totalKickCasts - successfulKickCasts);

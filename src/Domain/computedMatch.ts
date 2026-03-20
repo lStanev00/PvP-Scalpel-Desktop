@@ -57,7 +57,7 @@ export const buildMatchComputed = (rawMatch: unknown, kickSpellIds: number[]): M
     const missed = toSafeCount(kickSnapshot.missedKickCasts);
     const failed = toSafeCount(kickSnapshot.missedKickCasts);
 
-    const ownerKicks: ComputedOwnerKickSummary = kickSnapshot.isSupported
+    const ownerKicks: ComputedOwnerKickSummary | undefined = kickSnapshot.isSupported
         ? {
               total: totalKickAttempts,
               intentAttempts,
@@ -67,10 +67,7 @@ export const buildMatchComputed = (rawMatch: unknown, kickSpellIds: number[]): M
               succeeded: confirmedInterrupts,
               failed,
           }
-        : {
-              total: totalKickAttempts,
-              intentAttempts,
-          };
+        : undefined;
 
     return {
         schemaVersion: 2,

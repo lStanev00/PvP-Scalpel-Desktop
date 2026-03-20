@@ -5,7 +5,7 @@ import type {
     NormalizedLocalSpellModel,
 } from "../../Interfaces/local-spell-model";
 
-export const INTERRUPT_TRACKING_VERSION = 3;
+export const KICK_SUMMARY_SUPPORT_VERSION = 5;
 const KICK_COLLAPSE_WINDOW_SECONDS = 0.35;
 
 const isIntentSignalEvent = (event: string) => event === "SENT" || event === "START";
@@ -31,11 +31,13 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
     typeof value === "object" && value !== null && !Array.isArray(value);
 
 type KickCastCountSource =
+    | "owner-interrupts"
     | "raw-cast-counts"
     | "raw-cast-rows"
     | "raw-events"
     | "scoreboard-issued"
-    | "collapsed-attempts";
+    | "collapsed-attempts"
+    | "unsupported-version";
 
 const getCastGuidCollapseKey = (castGUID?: string) => {
     if (!castGUID) return null;
@@ -165,6 +167,7 @@ const countRawCastRows = (value: unknown) => {
     return count > 0 ? count : 0;
 };
 
+// Retained for legacy/debug evidence inspection. V5 summary UI does not use these counts.
 const summarizeRawKickCastCounts = (
     rawLocalSpellCapture: unknown,
     kickSet: Set<number>
@@ -300,6 +303,8 @@ export type KickTelemetrySnapshot = {
     telemetryVersion: number | null;
     isLegacyMatch: boolean;
     isSupported: boolean;
+    summarySupported: boolean;
+    summarySource: "owner-interrupts" | "unsupported-version";
     totalKickCasts: number;
     successfulKickCasts: number;
     missedKickCasts: number;
@@ -316,7 +321,12 @@ export type KickTelemetrySnapshot = {
     unresolvedAttempts: number;
     issued: number | null;
     perSourceConfirmedInterrupts: number | null;
-    confirmationSource: "per-source" | "scoreboard" | "unavailable";
+    confirmationSource:
+        | "owner-interrupts"
+        | "per-source"
+        | "scoreboard"
+        | "unavailable"
+        | "unsupported-version";
     confirmedInterrupts: number | null;
     missedKicks: number | null;
     failed: number | null;
@@ -343,12 +353,13 @@ export const computeKickTelemetrySnapshot = ({
     includeDiagnostics?: boolean;
 }): KickTelemetrySnapshot => {
     const kickSet = new Set(kickSpellIds.filter((value) => Number.isFinite(value) && value > 0));
-    const isLegacyMatch =
-        telemetryVersion !== null && telemetryVersion < INTERRUPT_TRACKING_VERSION;
-    const isSupported =
+    const summarySupported =
         telemetryVersion !== null &&
         Number.isFinite(telemetryVersion) &&
-        telemetryVersion >= INTERRUPT_TRACKING_VERSION;
+        telemetryVersion >= KICK_SUMMARY_SUPPORT_VERSION;
+    const isLegacyMatch =
+        telemetryVersion !== null && telemetryVersion < KICK_SUMMARY_SUPPORT_VERSION;
+    const isSupported = summarySupported;
     const sourceFormat = localSpellModel?.sourceFormat ?? "legacy-timeline";
     const allAttempts = localSpellModel?.attempts ?? [];
     const allEvents = localSpellModel?.events ?? [];
@@ -362,7 +373,8 @@ export const computeKickTelemetrySnapshot = ({
         (event) => kickSet.has(event.spellId) && isIntentSignalEvent(event.event)
     );
     const eventIntentAttempts = collapseKickIntentEvents(rawKickIntentEvents).length;
-    const rawKickCastCounts = summarizeRawKickCastCounts(rawLocalSpellCapture, kickSet);
+    const legacyCastCountDiagnostics =
+        includeDiagnostics ? summarizeRawKickCastCounts(rawLocalSpellCapture, kickSet) : null;
 
     const totalKickAttempts =
         scopedAttempts.length > 0 ? scopedAttempts.length : eventIntentAttempts;
@@ -390,38 +402,19 @@ export const computeKickTelemetrySnapshot = ({
         interruptSpellsBySource,
         owner
     );
-    const rawConfirmedInterrupts =
-        perSourceConfirmedInterrupts ?? succeeded ?? landedAttempts;
-    const confirmationSource =
-        perSourceConfirmedInterrupts !== null
-            ? "per-source"
-            : succeeded !== null
-              ? "scoreboard"
-              : landedAttempts > 0
-                ? "unavailable"
-                : "unavailable";
-
-    const confirmedInterrupts =
-        rawConfirmedInterrupts === null ? null : Math.max(0, Math.trunc(rawConfirmedInterrupts));
-    const totalKickCasts =
-        rawKickCastCounts.totalKickCasts ??
-        (eventIntentAttempts > 0
-            ? eventIntentAttempts
-            : issued !== null
-              ? issued
-              : totalKickAttempts);
-    const totalKickCastsSource =
-        rawKickCastCounts.totalKickCastsSource ??
-        (eventIntentAttempts > 0
-            ? "raw-events"
-            : issued !== null
-              ? "scoreboard-issued"
-              : "collapsed-attempts");
-    const successfulKickCasts =
-        confirmedInterrupts !== null
-            ? Math.min(totalKickCasts, confirmedInterrupts)
-            : rawKickCastCounts.successfulKickCasts ?? landedAttempts;
-    const missedKickCasts = Math.max(0, totalKickCasts - successfulKickCasts);
+    const rawConfirmedInterrupts = perSourceConfirmedInterrupts ?? succeeded ?? landedAttempts;
+    const confirmedInterrupts = summarySupported ? Math.max(0, Math.trunc(succeeded ?? 0)) : null;
+    const confirmationSource: KickTelemetrySnapshot["confirmationSource"] = summarySupported
+        ? "owner-interrupts"
+        : "unsupported-version";
+    const totalKickCasts = summarySupported ? Math.max(0, Math.trunc(issued ?? 0)) : 0;
+    const totalKickCastsSource: KickTelemetrySnapshot["totalKickCastsSource"] = summarySupported
+        ? "owner-interrupts"
+        : "unsupported-version";
+    const successfulKickCasts = summarySupported ? Math.max(0, Math.trunc(succeeded ?? 0)) : 0;
+    const missedKickCasts = summarySupported
+        ? Math.max(0, totalKickCasts - successfulKickCasts)
+        : 0;
     const missedKicks = missedKickCasts;
     const failed = missedKickCasts;
 
@@ -439,6 +432,7 @@ export const computeKickTelemetrySnapshot = ({
         console.log("[kickTelemetry] computed snapshot", {
             matchId,
             telemetryVersion,
+            summarySupported,
             sourceFormat,
             totalKickCasts,
             totalKickCastsSource,
@@ -454,9 +448,11 @@ export const computeKickTelemetrySnapshot = ({
             perSourceConfirmedInterrupts,
             confirmationSource,
             confirmedInterrupts,
+            rawConfirmedInterrupts,
             issued,
             succeeded,
             missedKicks,
+            legacyCastCountDiagnostics,
         });
     }
 
@@ -465,6 +461,8 @@ export const computeKickTelemetrySnapshot = ({
         telemetryVersion,
         isLegacyMatch,
         isSupported,
+        summarySupported,
+        summarySource: summarySupported ? "owner-interrupts" : "unsupported-version",
         totalKickCasts,
         successfulKickCasts,
         missedKickCasts,

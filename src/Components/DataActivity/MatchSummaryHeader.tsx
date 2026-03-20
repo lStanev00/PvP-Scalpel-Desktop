@@ -41,11 +41,6 @@ const normalizeNumber = (value: unknown) => {
 };
 
 const normalizeCount = (value: unknown) => Math.max(0, Math.trunc(normalizeNumber(value)));
-const normalizeOptionalCount = (value: unknown) => {
-    if (value === null || value === undefined) return null;
-    return normalizeCount(value);
-};
-
 const formatInteger = (value: number) => value.toLocaleString();
 
 const formatRealm = (realm?: string) => {
@@ -156,21 +151,23 @@ export default function MatchSummaryHeader({
     const outputTeamTotal = isHealer ? teamHealing : teamDamage;
     const contributionPct = outputTeamTotal > 0 ? (outputTotal / outputTeamTotal) * 100 : 0;
 
+    const kickSummarySupported = kickTelemetrySnapshot.summarySupported;
     const kickTotal = Math.max(0, kickTelemetrySnapshot.totalKickCasts ?? 0);
     const successfulKickCasts = Math.max(0, kickTelemetrySnapshot.successfulKickCasts ?? 0);
-    const confirmedInterrupts =
-        normalizeOptionalCount(kickTelemetrySnapshot.confirmedInterrupts) ??
-        normalizeOptionalCount(kickTelemetrySnapshot.succeeded);
-    const hasKickDisplay = kickTotal > 0 || confirmedInterrupts !== null;
-    const hasKickRatio = kickTotal > 0;
-    const kickPct = hasKickRatio ? (successfulKickCasts / kickTotal) * 100 : 0;
-    const missedKickCasts = Math.max(
+    const kickPct =
+        kickSummarySupported && kickTotal > 0 ? clampPercent((successfulKickCasts / kickTotal) * 100) : 0;
+    const failedKicks = Math.max(
         0,
-        kickTelemetrySnapshot.missedKickCasts ??
+        kickTelemetrySnapshot.failed ??
+            kickTelemetrySnapshot.missedKickCasts ??
             kickTelemetrySnapshot.missedKicks ??
-            kickTelemetrySnapshot.failed ??
-            (hasKickRatio ? kickTotal - successfulKickCasts : 0)
+            (kickSummarySupported ? kickTotal - successfulKickCasts : 0)
     );
+    const kickRingValue = kickSummarySupported ? `${successfulKickCasts}/${kickTotal}` : "N/A";
+    const unsupportedKickCopy =
+        kickTelemetrySnapshot.telemetryVersion === null
+            ? "Kick summary unsupported for unknown telemetry version"
+            : `Kick summary unsupported for telemetry v${kickTelemetrySnapshot.telemetryVersion}`;
     const averageReactionMs = null;
 
     const ownerClassColor = getClassColor(owner?.class) ?? "#8a94a6";
@@ -281,7 +278,7 @@ export default function MatchSummaryHeader({
                         <MiniRing
                             percent={kickPct}
                             color={
-                                hasKickDisplay
+                                kickSummarySupported
                                     ? kickPct >= 60
                                         ? "#22c55e"
                                         : kickPct >= 30
@@ -291,7 +288,7 @@ export default function MatchSummaryHeader({
                             }
                             size={56}
                         />
-                        <span className={styles.mdRingValue}>{hasKickDisplay ? String(confirmedInterrupts ?? 0) : "?"}</span>
+                        <span className={styles.mdRingValue}>{kickRingValue}</span>
                     </div>
                     <span className={styles.mdRingLabel}>Kicks</span>
                 </div>
@@ -319,20 +316,22 @@ export default function MatchSummaryHeader({
                 <StatCard
                     icon={<LuZap size={14} />}
                     label="Kick Eff."
-                    value={hasKickRatio ? `${Math.round(kickPct)}%` : "--"}
+                    value={kickSummarySupported ? `${Math.round(kickPct)}%` : "N/A"}
                     sub={
-                        hasKickDisplay
+                        kickSummarySupported
                             ? averageReactionMs !== null
                                 ? `${averageReactionMs}ms avg`
-                                : `${kickTotal} used / ${missedKickCasts} missed`
-                            : undefined
+                                : `${kickTotal} total / ${failedKicks} failed`
+                            : unsupportedKickCopy
                     }
                     accent={
-                        kickPct >= 60
+                        !kickSummarySupported
+                            ? undefined
+                            : kickPct >= 60
                             ? "#22c55e"
                             : kickPct >= 30
                               ? "#f5a85b"
-                              : hasKickDisplay
+                              : kickTotal > 0 || successfulKickCasts > 0
                                 ? "#ef4444"
                                 : undefined
                     }
@@ -357,12 +356,12 @@ export default function MatchSummaryHeader({
                 <div className={`${styles.mdExpandedLayer} ${isExpanded ? styles.mdExpandedOpen : ""}`}>
                 <div className={styles.mdExpandedGrid}>
                     <div className={styles.mdExpandedItem}>
-                        <span className={styles.mdExpandedLabel}>Missed Kick Casts</span>
-                        <span className={styles.mdExpandedValue}>{hasKickDisplay ? missedKickCasts : "--"}</span>
+                        <span className={styles.mdExpandedLabel}>Failed Kicks</span>
+                        <span className={styles.mdExpandedValue}>{kickSummarySupported ? failedKicks : "N/A"}</span>
                     </div>
                     <div className={styles.mdExpandedItem}>
-                        <span className={styles.mdExpandedLabel}>Kick Casts Used</span>
-                        <span className={styles.mdExpandedValue}>{kickTotal}</span>
+                        <span className={styles.mdExpandedLabel}>Total Kicks</span>
+                        <span className={styles.mdExpandedValue}>{kickSummarySupported ? kickTotal : "N/A"}</span>
                     </div>
                     <div className={styles.mdExpandedItem}>
                         <span className={styles.mdExpandedLabel}>Team {isHealer ? "Healing" : "Damage"}</span>

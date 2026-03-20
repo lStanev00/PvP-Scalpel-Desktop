@@ -16,6 +16,7 @@ type SpellTooltipPayload = {
     impactValue: string;
     impactLabel: string;
     castsValue: string;
+    showCastsMetric?: boolean;
     avgValue: string;
     shareValue: string;
     successful: number;
@@ -98,10 +99,12 @@ export default function SpellMetricsTooltip({ payload, position, tooltipRef }: S
                 </section>
 
                 <section className={styles["spell-tooltip__context"]}>
-                    <div className={styles.metric}>
-                        <span className={styles["metric__value"]}>{payload.castsValue}</span>
-                        <span className={styles["metric__label"]}>Casts</span>
-                    </div>
+                    {payload.showCastsMetric !== false ? (
+                        <div className={styles.metric}>
+                            <span className={styles["metric__value"]}>{payload.castsValue}</span>
+                            <span className={styles["metric__label"]}>Casts</span>
+                        </div>
+                    ) : null}
                     <div className={styles.metric}>
                         <span className={styles["metric__value"]}>{payload.avgValue}</span>
                         <span className={styles["metric__label"]}>Avg</span>
@@ -110,15 +113,6 @@ export default function SpellMetricsTooltip({ payload, position, tooltipRef }: S
                         <span className={styles["metric__value"]}>{payload.shareValue}</span>
                         <span className={styles["metric__label"]}>Share</span>
                     </div>
-                </section>
-
-                <section className={styles["spell-tooltip__execution"]}>
-                    <h4 className={styles["section-title"]}>Usage</h4>
-                    <ul className={styles["spell-tooltip__list"]}>
-                        <li>Successful: {payload.successful}</li>
-                        <li>Interrupted: {payload.interrupted}</li>
-                        <li>Failed: {payload.failed}</li>
-                    </ul>
                 </section>
 
                 {payload.description ? (
