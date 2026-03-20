@@ -5,6 +5,7 @@ import { openUrl } from "../../Helpers/open";
 import { getClassColor, getClassMedia, getSpecMedia } from "../../Domain/CombatDomainContext";
 import type { MatchPlayer } from "./types";
 import { getPlayerIdentityKey } from "./playerIdentity";
+import { resolveEffectivePostMatchMmr, resolveEffectivePostMatchRating } from "./utils";
 import styles from "./DataActivity.module.css";
 
 interface TeamTableProps {
@@ -284,12 +285,10 @@ export default function TeamTable({
                         typeof player.faction === "number" &&
                         player.faction === ownerFaction;
                     const currentMMR =
-                        postMatchMMR ??
-                        preMatchMMR ??
+                        resolveEffectivePostMatchMmr(player) ??
                         (isOwnerTeamPlayer ? ownerTeamCurrentMmr : null);
                     const derivedDelta =
                         preMatchMMR !== null && postMatchMMR !== null ? postMatchMMR - preMatchMMR : null;
-                    const rawPlayerDelta = toFiniteNumber(player.ratingChange);
                     const fallbackTeamDelta =
                         isOwnerTeamPlayer &&
                         ownerTeamMmrDelta !== null &&
@@ -297,19 +296,15 @@ export default function TeamTable({
                             ? ownerTeamMmrDelta
                             : null;
                     const mmrDelta =
-                        rawPlayerDelta !== null && rawPlayerDelta !== 0
-                            ? rawPlayerDelta
-                            : derivedDelta !== null && derivedDelta !== 0
-                              ? derivedDelta
-                              : fallbackTeamDelta;
+                        derivedDelta !== null && derivedDelta !== 0 ? derivedDelta : fallbackTeamDelta;
                     const deltaStyle =
                         mmrDelta !== null && mmrDelta > 0
                             ? styles.deltaPositive
                             : mmrDelta !== null && mmrDelta < 0
                               ? styles.deltaNegative
                               : styles.deltaNeutral;
-                    const rating = player.rating ?? null;
-                    const ratingChange = player.ratingChange ?? null;
+                    const rating = resolveEffectivePostMatchRating(player);
+                    const ratingChange = toFiniteNumber(player.ratingChange);
                     const damagePct = maxOutput > 0 ? ((player.damage ?? 0) / maxOutput) * 100 : 0;
                     const healingPct = maxOutput > 0 ? ((player.healing ?? 0) / maxOutput) * 100 : 0;
                     const extraRowStats = playerKey ? extraStatValuesByPlayerKey[playerKey] ?? null : null;

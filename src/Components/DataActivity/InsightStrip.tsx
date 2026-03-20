@@ -141,16 +141,17 @@ export default function InsightStrip({
             <InsightCard
                 title="Kick Impact"
                 headline={
-                    kickTelemetrySnapshot.totalKickAttempts > 0
-                        ? `${kickTelemetrySnapshot.confirmedInterrupts ?? 0}/${kickTelemetrySnapshot.totalKickAttempts}`
-                        : "No kick attempts"
+                    kickTelemetrySnapshot.confirmedInterrupts !== null ||
+                    kickTelemetrySnapshot.totalKickCasts > 0
+                        ? `${kickTelemetrySnapshot.confirmedInterrupts ?? 0} confirmed`
+                        : "No confirmed interrupts"
                 }
                 detail={
-                    kickTelemetrySnapshot.totalKickAttempts > 0
-                        ? "Confirmed interrupts over total attempts"
+                    kickTelemetrySnapshot.totalKickCasts > 0
+                        ? `${kickTelemetrySnapshot.totalKickCasts} kick casts used in this match`
                         : "No local kick journey was recorded in this match."
                 }
-                supporting={`${kickTelemetrySnapshot.missedKicks ?? 0} missed / ${kickTelemetrySnapshot.landedAttempts ?? 0} landed`}
+                supporting={`${kickTelemetrySnapshot.missedKickCasts ?? 0} missed / ${kickTelemetrySnapshot.successfulKickCasts ?? 0} successful casts`}
                 icon={<LuTimerReset aria-hidden="true" />}
             />
         </section>

@@ -12,9 +12,11 @@ import {
 } from "react-icons/lu";
 import AutoScopeBadge from "../../Components/AutoScopeBadge/AutoScopeBadge";
 import useMatches from "../../Hooks/useMatches";
-import useCharacterProfile, {
+import useMatchesStatus from "../../Hooks/useMatchesStatus";
+import {
     resolveCharacterProfile,
     resolveCharacterBracketSnapshot,
+    useCharacterProfileState,
 } from "../../Hooks/useCharacterProfile";
 import { usePreferences } from "../../Context-Providers/preferences-context";
 import { getRoleBySpec } from "../../Domain/CombatDomainContext";
@@ -259,9 +261,8 @@ const resolveCurrentRating = (
     apiBracketSnapshot?: { rating?: number | null } | null,
 ) => {
     for (const match of summaries) {
-        const owner = resolveOwnerPlayer(match);
-        if (typeof owner?.rating === "number" && Number.isFinite(owner.rating)) {
-            return owner.rating;
+        if (typeof match.owner.rating === "number" && Number.isFinite(match.owner.rating)) {
+            return match.owner.rating;
         }
     }
 
@@ -482,6 +483,118 @@ function DashboardMetricCard({ icon, label, value, detail }: DashboardMetricCard
     );
 }
 
+function DashboardSkeletonBlock({
+    className,
+}: {
+    className?: string;
+}) {
+    return <div className={[styles.dashboardSkeletonBlock, className].filter(Boolean).join(" ")} aria-hidden="true" />;
+}
+
+function DashboardHeroIdentitySkeleton() {
+    return (
+        <div className={styles.heroIdentity} aria-hidden="true">
+            <div className={styles.identityVisual}>
+                <div className={styles.dashboardSkeletonAvatar} />
+
+                <div className={styles.identityText}>
+                    <DashboardSkeletonBlock className={styles.dashboardSkeletonTitle} />
+
+                    <div className={styles.dashboardSkeletonMetaWrap}>
+                        <DashboardSkeletonBlock className={styles.dashboardSkeletonMeta} />
+                        <DashboardSkeletonBlock className={styles.dashboardSkeletonMetaShort} />
+                    </div>
+
+                    <DashboardSkeletonBlock className={styles.dashboardSkeletonGuild} />
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function DashboardScopedCardSkeleton() {
+    return (
+        <article className={`${styles.signalCard} ${styles.dashboardLoadingCard}`} aria-hidden="true">
+            <div className={styles.signalTop}>
+                <DashboardSkeletonBlock className={styles.dashboardSkeletonLabel} />
+                <DashboardSkeletonBlock className={styles.dashboardSkeletonBadge} />
+            </div>
+
+            <DashboardSkeletonBlock className={styles.dashboardSkeletonSignalValue} />
+
+            <div className={styles.signalMeta}>
+                <DashboardSkeletonBlock className={styles.dashboardSkeletonSignalMeta} />
+                <DashboardSkeletonBlock className={styles.dashboardSkeletonSignalMetaShort} />
+            </div>
+        </article>
+    );
+}
+
+function DashboardMetricCardSkeleton() {
+    return (
+        <article className={`${styles.metricCard} ${styles.dashboardLoadingCard}`} aria-hidden="true">
+            <div className={styles.metricIcon}>
+                <div className={styles.dashboardSkeletonMetricIconGlow} />
+            </div>
+
+            <div>
+                <DashboardSkeletonBlock className={styles.dashboardSkeletonLabel} />
+                <DashboardSkeletonBlock className={styles.dashboardSkeletonMetricValue} />
+                <DashboardSkeletonBlock className={styles.dashboardSkeletonMetricDetail} />
+            </div>
+        </article>
+    );
+}
+
+function DashboardSpotlightPanelSkeleton() {
+    return (
+        <article className={`${styles.panel} ${styles.dashboardLoadingCard}`} aria-hidden="true">
+            <div className={styles.panelHeader}>
+                <div>
+                    <DashboardSkeletonBlock className={styles.dashboardSkeletonEyebrow} />
+                    <DashboardSkeletonBlock className={styles.dashboardSkeletonPanelTitle} />
+                </div>
+                <DashboardSkeletonBlock className={styles.dashboardSkeletonBadge} />
+            </div>
+
+            <div className={styles.spotlightMetaRow}>
+                <DashboardSkeletonBlock className={styles.dashboardSkeletonResultPill} />
+                <DashboardSkeletonBlock className={styles.dashboardSkeletonMetaShort} />
+                <DashboardSkeletonBlock className={styles.dashboardSkeletonMetaShort} />
+            </div>
+
+            <div className={styles.spotlightGrid}>
+                {Array.from({ length: 4 }).map((_, index) => (
+                    <div key={index} className={styles.spotlightCard}>
+                        <DashboardSkeletonBlock className={styles.dashboardSkeletonLabel} />
+                        <DashboardSkeletonBlock className={styles.dashboardSkeletonSpotlightValue} />
+                    </div>
+                ))}
+            </div>
+        </article>
+    );
+}
+
+function DashboardMomentumPanelSkeleton() {
+    return (
+        <article className={`${styles.panel} ${styles.dashboardLoadingCard}`} aria-hidden="true">
+            <div className={styles.panelHeader}>
+                <div>
+                    <DashboardSkeletonBlock className={styles.dashboardSkeletonEyebrow} />
+                    <DashboardSkeletonBlock className={styles.dashboardSkeletonPanelTitle} />
+                </div>
+                <DashboardSkeletonBlock className={styles.dashboardSkeletonBadge} />
+            </div>
+
+            <DashboardSkeletonBlock className={styles.dashboardSkeletonMomentumHeadline} />
+            <div className={styles.dashboardSkeletonChart}>
+                <div className={styles.dashboardSkeletonChartGlow} />
+                <div className={styles.dashboardSkeletonChartLine} />
+            </div>
+        </article>
+    );
+}
+
 function DashboardDevWarning() {
     return (
         <section className={styles.devWarning} aria-label="Dashboard warning">
@@ -686,6 +799,7 @@ function DashboardSpotlightPanel({
 
 export default function Dashboard() {
     const matches = useMatches();
+    const matchesStatus = useMatchesStatus();
     const navigate = useNavigate();
 
     const {
@@ -756,11 +870,12 @@ export default function Dashboard() {
     const latestOwner = useMemo(() => resolveOwnerPlayer(heroMatch), [heroMatch]);
     const latestOwnerRealm = latestOwner?.realm ?? null;
 
-    const profiles = useCharacterProfile({
+    const profileState = useCharacterProfileState({
         server: heroMatch ? CHARACTER_API_SERVER : null,
         realm: latestOwnerRealm,
         name: heroMatch?.owner.name ?? null,
     });
+    const profiles = profileState.profiles;
 
     const profile = useMemo(
         () =>
@@ -868,16 +983,19 @@ export default function Dashboard() {
     const showRatingMetric = isRatedContext && currentRating !== null && currentRating > 0;
 
     const metricFourLabel = showRatingMetric
-        ? "Current Rating"
+        ? "Post-match Rating"
         : nonRatedAverageMetric?.label ?? "Active spec";
 
     const metricFourValue = showRatingMetric
         ? String(Math.round(currentRating))
         : nonRatedAverageMetric?.value ?? ownerSpec;
 
+    const latestRatingChange = dashboardLatest?.owner.ratingChange ?? null;
     const metricFourDetail = showRatingMetric
         ? dashboardLatest
-            ? `${ownerName} in ${currentBracketLabel}`
+            ? latestRatingChange !== null
+                ? `${ownerName} in ${currentBracketLabel} · ${latestRatingChange > 0 ? "+" : ""}${latestRatingChange} latest rating change`
+                : `${ownerName} in ${currentBracketLabel} · latest captured rating`
             : "Rating attaches once match data is available"
         : nonRatedAverageMetric?.detail ?? `${ownerClass} in ${currentBracketLabel}`;
 
@@ -919,6 +1037,14 @@ export default function Dashboard() {
         : dashboardLatest?.timestampLabel ?? "No capture time";
 
     const showDashboardData = dashboardSummaries.length > 0;
+    const showMatchesSkeleton =
+        !matchesStatus.hasBootstrapped || matchesStatus.isHydrating || matchesStatus.isRefreshing;
+    const showHeroProfileSkeleton =
+        !showMatchesSkeleton &&
+        !!heroMatch &&
+        profileState.isLoading &&
+        !profileState.hasCachedData &&
+        profiles.length === 0;
     const openScopedMatch = (matchId: string) => {
         navigate("/data", {
             state: {
@@ -942,62 +1068,83 @@ export default function Dashboard() {
             showHeader={false}
         >
             <div className={styles.dashboardSurface}>
-                <section className={styles.hero} style={heroStyle}>
+                <section className={styles.hero} style={!showMatchesSkeleton ? heroStyle : undefined}>
                     <div className={styles.heroCopy}>
-                        <div className={styles.heroIdentity}>
-                            <div className={styles.identityVisual}>
-                                {profile?.media?.avatar ? (
-                                    <img
-                                        className={styles.identityAvatar}
-                                        src={profile.media.avatar}
-                                        alt={`${ownerName} avatar`}
-                                    />
-                                ) : (
-                                    <div className={styles.identityFallback}>
-                                        {ownerName.charAt(0)}
-                                    </div>
-                                )}
-
-                                <div className={styles.identityText}>
-                                    <div className={styles.identityPrimary}>{ownerName}</div>
-
-                                    <div className={styles.identityMeta}>
-                                        <span>{ownerSpec}</span>
-                                        <span>{ownerClass}</span>
-                                        <span>{ownerRealmLabel}</span>
-                                        <span>
-                                            {heroMatch?.timestampLabel ?? "Awaiting first session"}
-                                        </span>
-                                    </div>
-
-                                    {ownerGuild ? (
-                                        <div className={styles.identityGuild}>
-                                            <LuBadgeCheck aria-hidden="true" />
-                                            <span>{ownerGuild}</span>
+                        {showMatchesSkeleton || showHeroProfileSkeleton ? (
+                            <DashboardHeroIdentitySkeleton />
+                        ) : (
+                            <div className={styles.heroIdentity}>
+                                <div className={styles.identityVisual}>
+                                    {profile?.media?.avatar ? (
+                                        <img
+                                            className={styles.identityAvatar}
+                                            src={profile.media.avatar}
+                                            alt={`${ownerName} avatar`}
+                                        />
+                                    ) : (
+                                        <div className={styles.identityFallback}>
+                                            {ownerName.charAt(0)}
                                         </div>
-                                    ) : null}
+                                    )}
+
+                                    <div className={styles.identityText}>
+                                        <div className={styles.identityPrimary}>{ownerName}</div>
+
+                                        <div className={styles.identityMeta}>
+                                            <span>{ownerSpec}</span>
+                                            <span>{ownerClass}</span>
+                                            <span>{ownerRealmLabel}</span>
+                                            <span>
+                                                {heroMatch?.timestampLabel ?? "Awaiting first session"}
+                                            </span>
+                                        </div>
+
+                                        {ownerGuild ? (
+                                            <div className={styles.identityGuild}>
+                                                <LuBadgeCheck aria-hidden="true" />
+                                                <span>{ownerGuild}</span>
+                                            </div>
+                                        ) : null}
+                                    </div>
                                 </div>
                             </div>
-                        </div>
+                        )}
                     </div>
 
                     <div className={styles.heroRail}>
-                        <DashboardScopedCard
-                            showDashboardData={showDashboardData}
-                            isLimited={autoScopeResolution.isLimited}
-                            dashboardAutoScopeMessage={dashboardAutoScopeMessage}
-                            dashboardFilters={dashboardFilters}
-                            scopeCardTitle={scopeCardTitle}
-                            scopeCardMetaPrimary={scopeCardMetaPrimary}
-                            scopeCardMetaSecondary={scopeCardMetaSecondary}
-                            navigate={navigate}
-                        />
+                        {showMatchesSkeleton ? (
+                            <DashboardScopedCardSkeleton />
+                        ) : (
+                            <DashboardScopedCard
+                                showDashboardData={showDashboardData}
+                                isLimited={autoScopeResolution.isLimited}
+                                dashboardAutoScopeMessage={dashboardAutoScopeMessage}
+                                dashboardFilters={dashboardFilters}
+                                scopeCardTitle={scopeCardTitle}
+                                scopeCardMetaPrimary={scopeCardMetaPrimary}
+                                scopeCardMetaSecondary={scopeCardMetaSecondary}
+                                navigate={navigate}
+                            />
+                        )}
                     </div>
                 </section>
 
                 <DashboardDevWarning />
 
-                {showDashboardData ? (
+                {showMatchesSkeleton ? (
+                    <>
+                        <section className={styles.metricsGrid}>
+                            {Array.from({ length: 4 }).map((_, index) => (
+                                <DashboardMetricCardSkeleton key={index} />
+                            ))}
+                        </section>
+
+                        <section className={styles.contentGrid}>
+                            <DashboardSpotlightPanelSkeleton />
+                            <DashboardMomentumPanelSkeleton />
+                        </section>
+                    </>
+                ) : showDashboardData ? (
                     <section className={styles.metricsGrid}>
                         <DashboardMetricCard
                             icon={<LuRadar aria-hidden="true" />}
@@ -1041,7 +1188,7 @@ export default function Dashboard() {
                     </section>
                 ) : null}
 
-                {showDashboardData ? (
+                {!showMatchesSkeleton && showDashboardData ? (
                     <section className={styles.contentGrid}>
                         <DashboardSpotlightPanel
                             dashboardLatest={dashboardLatest}

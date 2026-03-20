@@ -166,23 +166,24 @@ export default function MatchAnalysisOverviewTab({
                     title="Kick Summary"
                     icon={<LuTimerReset aria-hidden="true" />}
                     headline={
-                        kickTelemetrySnapshot.totalKickAttempts > 0
-                            ? `${kickTelemetrySnapshot.confirmedInterrupts ?? 0}/${kickTelemetrySnapshot.totalKickAttempts}`
-                            : "0/0"
+                        kickTelemetrySnapshot.confirmedInterrupts !== null ||
+                        kickTelemetrySnapshot.totalKickCasts > 0
+                            ? `${kickTelemetrySnapshot.confirmedInterrupts ?? 0} confirmed`
+                            : "No confirmed interrupts"
                     }
                     detail={
-                        kickTelemetrySnapshot.totalKickAttempts > 0
-                            ? "Confirmed interrupts over total kick attempts"
-                            : "No kick attempts captured in this match."
+                        kickTelemetrySnapshot.totalKickCasts > 0
+                            ? `${kickTelemetrySnapshot.totalKickCasts} kick casts used in this match`
+                            : "No kick casts were captured in this match."
                     }
                     subRows={[
                         {
-                            label: "Landed",
-                            value: String(kickTelemetrySnapshot.landedAttempts ?? 0),
+                            label: "Successful casts",
+                            value: String(kickTelemetrySnapshot.successfulKickCasts ?? 0),
                         },
                         {
-                            label: "Missed",
-                            value: String(kickTelemetrySnapshot.missedKicks ?? 0),
+                            label: "Missed casts",
+                            value: String(kickTelemetrySnapshot.missedKickCasts ?? 0),
                         },
                     ]}
                 />

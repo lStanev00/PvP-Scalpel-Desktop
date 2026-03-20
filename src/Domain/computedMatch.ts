@@ -46,17 +46,16 @@ export const buildMatchComputed = (rawMatch: unknown, kickSpellIds: number[]): M
         owner,
         telemetryVersion,
         interruptSpellsBySource: rawMatch.interruptSpellsBySource,
+        rawLocalSpellCapture: rawMatch.localSpellCapture,
         includeDiagnostics: false,
     });
 
-    const totalKickAttempts = toSafeCount(kickSnapshot.totalKickAttempts);
-    const intentAttempts = toSafeCount(kickSnapshot.intentAttempts);
-    const landed = toSafeCount(kickSnapshot.landedAttempts);
+    const totalKickAttempts = toSafeCount(kickSnapshot.totalKickCasts);
+    const intentAttempts = toSafeCount(kickSnapshot.totalKickCasts);
+    const landed = toSafeCount(kickSnapshot.successfulKickCasts);
     const confirmedInterrupts = toSafeCount(kickSnapshot.confirmedInterrupts);
-    const missed = toSafeCount(
-        kickSnapshot.missedKicks ?? Math.max(0, totalKickAttempts - confirmedInterrupts)
-    );
-    const failed = toSafeCount(kickSnapshot.failed ?? missed);
+    const missed = toSafeCount(kickSnapshot.missedKickCasts);
+    const failed = toSafeCount(kickSnapshot.missedKickCasts);
 
     const ownerKicks: ComputedOwnerKickSummary = kickSnapshot.isSupported
         ? {

@@ -71,10 +71,10 @@ export default function MatchAnalysisWorkspace({
             {
                 id: "kicks" as const,
                 label: "Kicks",
-                badge: kickTelemetrySnapshot.totalKickAttempts || null,
+                badge: kickTelemetrySnapshot.totalKickCasts || null,
             },
         ],
-        [kickTelemetrySnapshot.totalKickAttempts, localSpellModel?.locEntries.length]
+        [kickTelemetrySnapshot.totalKickCasts, localSpellModel?.locEntries.length]
     );
 
     return (

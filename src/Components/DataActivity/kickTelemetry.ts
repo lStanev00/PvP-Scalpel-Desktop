@@ -19,6 +19,23 @@ const normalizeNumber = (value: unknown) => {
 };
 
 const normalizeCount = (value: unknown) => Math.max(0, Math.trunc(normalizeNumber(value)));
+const normalizeOptionalCount = (value: unknown) => {
+    if (value === null || value === undefined) return null;
+    if (typeof value === "number" && Number.isFinite(value)) return Math.max(0, Math.trunc(value));
+    if (typeof value === "string" && value.trim() !== "" && Number.isFinite(Number(value))) {
+        return Math.max(0, Math.trunc(Number(value)));
+    }
+    return null;
+};
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+    typeof value === "object" && value !== null && !Array.isArray(value);
+
+type KickCastCountSource =
+    | "raw-cast-counts"
+    | "raw-cast-rows"
+    | "raw-events"
+    | "scoreboard-issued"
+    | "collapsed-attempts";
 
 const getCastGuidCollapseKey = (castGUID?: string) => {
     if (!castGUID) return null;
@@ -114,6 +131,110 @@ const collapseKickAttempts = (input: NormalizedLocalSpellAttempt[]) => {
     return collapsed;
 };
 
+const toNumericRows = (value: unknown) => {
+    if (Array.isArray(value)) {
+        return value.map((item, rawIndex) => ({ rawIndex, item }));
+    }
+
+    if (!isRecord(value)) return [];
+
+    return Object.entries(value)
+        .filter(([key]) => /^\d+$/.test(key))
+        .map(([key, item]) => ({ rawIndex: Number(key), item }))
+        .filter(({ rawIndex }) => Number.isFinite(rawIndex))
+        .sort((a, b) => a.rawIndex - b.rawIndex);
+};
+
+const isSchemaLikeCastRow = (value: unknown) =>
+    Array.isArray(value) &&
+    value.some(
+        (entry) =>
+            Array.isArray(entry) &&
+            entry.length >= 2 &&
+            typeof entry[0] === "string" &&
+            typeof entry[1] === "string"
+    );
+
+const countRawCastRows = (value: unknown) => {
+    const rows = toNumericRows(value);
+    if (!rows.length) return null;
+
+    const count = rows.filter(
+        ({ item, rawIndex }) => !(rawIndex === 0 && isSchemaLikeCastRow(item))
+    ).length;
+    return count > 0 ? count : 0;
+};
+
+const summarizeRawKickCastCounts = (
+    rawLocalSpellCapture: unknown,
+    kickSet: Set<number>
+): {
+    totalKickCasts: number | null;
+    successfulKickCasts: number | null;
+    totalKickCastsSource: KickCastCountSource | null;
+} => {
+    if (!isRecord(rawLocalSpellCapture)) {
+        return {
+            totalKickCasts: null,
+            successfulKickCasts: null,
+            totalKickCastsSource: null,
+        };
+    }
+
+    const captureRoot =
+        isRecord(rawLocalSpellCapture.bySpellID) ? rawLocalSpellCapture.bySpellID : rawLocalSpellCapture;
+    if (!isRecord(captureRoot)) {
+        return {
+            totalKickCasts: null,
+            successfulKickCasts: null,
+            totalKickCastsSource: null,
+        };
+    }
+
+    let totalKickCasts = 0;
+    let successfulKickCasts = 0;
+    let hasEvidence = false;
+    let usedRowFallback = false;
+    let hasCompleteSuccessCounts = true;
+
+    Object.entries(captureRoot).forEach(([rawSpellId, rawGroup]) => {
+        const spellId = normalizeOptionalCount(rawSpellId);
+        if (spellId === null || !kickSet.has(spellId) || !isRecord(rawGroup)) return;
+
+        const counts = isRecord(rawGroup.counts) ? rawGroup.counts : null;
+        const attemptsFromCounts = normalizeOptionalCount(counts?.attempts);
+        const successFromCounts = normalizeOptionalCount(counts?.success);
+
+        if (attemptsFromCounts !== null) {
+            totalKickCasts += attemptsFromCounts;
+            hasEvidence = true;
+        } else {
+            const rows = countRawCastRows(rawGroup.casts ?? rawGroup);
+            if (rows !== null) {
+                totalKickCasts += rows;
+                hasEvidence = true;
+                usedRowFallback = true;
+            }
+        }
+
+        if (successFromCounts !== null) {
+            successfulKickCasts += successFromCounts;
+        } else {
+            hasCompleteSuccessCounts = false;
+        }
+    });
+
+    return {
+        totalKickCasts: hasEvidence ? totalKickCasts : null,
+        successfulKickCasts: hasEvidence && hasCompleteSuccessCounts ? successfulKickCasts : null,
+        totalKickCastsSource: !hasEvidence
+            ? null
+            : usedRowFallback
+              ? "raw-cast-rows"
+              : "raw-cast-counts",
+    };
+};
+
 const parseInterruptTuple = (player: MatchPlayer | null) => {
     if (!player) return { issued: null, succeeded: null };
     const raw = (
@@ -179,6 +300,10 @@ export type KickTelemetrySnapshot = {
     telemetryVersion: number | null;
     isLegacyMatch: boolean;
     isSupported: boolean;
+    totalKickCasts: number;
+    successfulKickCasts: number;
+    missedKickCasts: number;
+    totalKickCastsSource: KickCastCountSource;
     totalKickAttempts: number;
     intentAttempts: number;
     eventIntentAttempts: number;
@@ -205,6 +330,7 @@ export const computeKickTelemetrySnapshot = ({
     owner,
     telemetryVersion,
     interruptSpellsBySource,
+    rawLocalSpellCapture,
     includeDiagnostics = false,
 }: {
     matchId: string;
@@ -213,6 +339,7 @@ export const computeKickTelemetrySnapshot = ({
     owner: MatchPlayer | null;
     telemetryVersion: number | null;
     interruptSpellsBySource?: unknown;
+    rawLocalSpellCapture?: unknown;
     includeDiagnostics?: boolean;
 }): KickTelemetrySnapshot => {
     const kickSet = new Set(kickSpellIds.filter((value) => Number.isFinite(value) && value > 0));
@@ -235,6 +362,7 @@ export const computeKickTelemetrySnapshot = ({
         (event) => kickSet.has(event.spellId) && isIntentSignalEvent(event.event)
     );
     const eventIntentAttempts = collapseKickIntentEvents(rawKickIntentEvents).length;
+    const rawKickCastCounts = summarizeRawKickCastCounts(rawLocalSpellCapture, kickSet);
 
     const totalKickAttempts =
         scopedAttempts.length > 0 ? scopedAttempts.length : eventIntentAttempts;
@@ -258,32 +386,50 @@ export const computeKickTelemetrySnapshot = ({
     }
 
     const { issued, succeeded } = parseInterruptTuple(owner);
-    const perSourceConfirmedInterrupts = isSupported
-        ? parseSucceededFromInterruptSpellsBySource(interruptSpellsBySource, owner)
-        : null;
-    const rawConfirmedInterrupts = isSupported
-        ? perSourceConfirmedInterrupts ?? succeeded ?? 0
-        : succeeded;
+    const perSourceConfirmedInterrupts = parseSucceededFromInterruptSpellsBySource(
+        interruptSpellsBySource,
+        owner
+    );
+    const rawConfirmedInterrupts =
+        perSourceConfirmedInterrupts ?? succeeded ?? landedAttempts;
     const confirmationSource =
         perSourceConfirmedInterrupts !== null
             ? "per-source"
             : succeeded !== null
               ? "scoreboard"
-              : "unavailable";
-    const clampedConfirmedInterrupts =
-        rawConfirmedInterrupts === null
-            ? null
-            : Math.max(0, Math.min(totalKickAttempts, Math.trunc(rawConfirmedInterrupts)));
-    const missedKicks =
-        clampedConfirmedInterrupts === null
-            ? null
-            : Math.max(0, totalKickAttempts - clampedConfirmedInterrupts);
-    const failed = missedKicks;
+              : landedAttempts > 0
+                ? "unavailable"
+                : "unavailable";
+
+    const confirmedInterrupts =
+        rawConfirmedInterrupts === null ? null : Math.max(0, Math.trunc(rawConfirmedInterrupts));
+    const totalKickCasts =
+        rawKickCastCounts.totalKickCasts ??
+        (eventIntentAttempts > 0
+            ? eventIntentAttempts
+            : issued !== null
+              ? issued
+              : totalKickAttempts);
+    const totalKickCastsSource =
+        rawKickCastCounts.totalKickCastsSource ??
+        (eventIntentAttempts > 0
+            ? "raw-events"
+            : issued !== null
+              ? "scoreboard-issued"
+              : "collapsed-attempts");
+    const successfulKickCasts =
+        confirmedInterrupts !== null
+            ? Math.min(totalKickCasts, confirmedInterrupts)
+            : rawKickCastCounts.successfulKickCasts ?? landedAttempts;
+    const missedKickCasts = Math.max(0, totalKickCasts - successfulKickCasts);
+    const missedKicks = missedKickCasts;
+    const failed = missedKickCasts;
 
     if (
         import.meta.env.DEV &&
         kickSet.size > 0 &&
-        (totalKickAttempts > 0 ||
+        (totalKickCasts > 0 ||
+            totalKickAttempts > 0 ||
             eventIntentAttempts > 0 ||
             castEvents > 0 ||
             perSourceConfirmedInterrupts !== null ||
@@ -294,6 +440,10 @@ export const computeKickTelemetrySnapshot = ({
             matchId,
             telemetryVersion,
             sourceFormat,
+            totalKickCasts,
+            totalKickCastsSource,
+            successfulKickCasts,
+            missedKickCasts,
             totalKickAttempts,
             eventIntentAttempts,
             castEvents,
@@ -303,7 +453,7 @@ export const computeKickTelemetrySnapshot = ({
             unresolvedAttempts,
             perSourceConfirmedInterrupts,
             confirmationSource,
-            confirmedInterrupts: clampedConfirmedInterrupts,
+            confirmedInterrupts,
             issued,
             succeeded,
             missedKicks,
@@ -315,6 +465,10 @@ export const computeKickTelemetrySnapshot = ({
         telemetryVersion,
         isLegacyMatch,
         isSupported,
+        totalKickCasts,
+        successfulKickCasts,
+        missedKickCasts,
+        totalKickCastsSource,
         totalKickAttempts,
         intentAttempts,
         eventIntentAttempts,
@@ -328,9 +482,9 @@ export const computeKickTelemetrySnapshot = ({
         issued,
         perSourceConfirmedInterrupts,
         confirmationSource,
-        confirmedInterrupts: clampedConfirmedInterrupts,
+        confirmedInterrupts,
         missedKicks,
         failed,
-        succeeded: isSupported ? clampedConfirmedInterrupts : succeeded,
+        succeeded: confirmedInterrupts,
     };
 };

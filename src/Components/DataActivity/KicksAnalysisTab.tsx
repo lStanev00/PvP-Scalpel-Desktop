@@ -58,18 +58,18 @@ export default function KicksAnalysisTab({
         <div className={styles.analysisTabStack}>
             <div className={styles.analysisMetricStrip}>
                 <Scorecard
-                    label="Total"
-                    value={String(kickTelemetrySnapshot.totalKickAttempts ?? 0)}
+                    label="Kick casts used"
+                    value={String(kickTelemetrySnapshot.totalKickCasts ?? 0)}
                     icon={<LuSword aria-hidden="true" />}
                 />
                 <Scorecard
-                    label="Intent attempts"
-                    value={String(kickTelemetrySnapshot.intentAttempts ?? 0)}
+                    label="Grouped intent events"
+                    value={String(kickTelemetrySnapshot.eventIntentAttempts ?? 0)}
                     icon={<LuLocateFixed aria-hidden="true" />}
                 />
                 <Scorecard
-                    label="Landed"
-                    value={String(kickTelemetrySnapshot.landedAttempts ?? 0)}
+                    label="Collapsed attempts"
+                    value={String(kickTelemetrySnapshot.totalKickAttempts ?? 0)}
                     icon={<LuZap aria-hidden="true" />}
                 />
                 <Scorecard
@@ -78,18 +78,13 @@ export default function KicksAnalysisTab({
                     icon={<LuShield aria-hidden="true" />}
                 />
                 <Scorecard
-                    label="Missed"
-                    value={String(kickTelemetrySnapshot.missedKicks ?? 0)}
-                    icon={<LuCircleOff aria-hidden="true" />}
-                />
-                <Scorecard
-                    label="Succeeded"
-                    value={String(kickTelemetrySnapshot.succeeded ?? kickTelemetrySnapshot.confirmedInterrupts ?? 0)}
+                    label="Successful kick casts"
+                    value={String(kickTelemetrySnapshot.successfulKickCasts ?? 0)}
                     icon={<LuShield aria-hidden="true" />}
                 />
                 <Scorecard
-                    label="Failed"
-                    value={String(kickTelemetrySnapshot.failed ?? kickTelemetrySnapshot.missedKicks ?? 0)}
+                    label="Missed kick casts"
+                    value={String(kickTelemetrySnapshot.missedKickCasts ?? 0)}
                     icon={<LuCircleOff aria-hidden="true" />}
                 />
             </div>
