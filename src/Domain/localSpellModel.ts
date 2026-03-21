@@ -886,6 +886,9 @@ export const resolveMatchDurationSeconds = (rawMatch: unknown) => {
     const directDuration = toPositiveNumber(rawMatch.durationSeconds);
     if (directDuration !== null) return Math.round(directDuration);
 
+    const topLevelDuration = toPositiveNumber(rawMatch.duration);
+    if (topLevelDuration !== null) return Math.round(topLevelDuration);
+
     const soloShuffle = isRecord(rawMatch.soloShuffle) ? rawMatch.soloShuffle : null;
     const soloDuration = soloShuffle ? toPositiveNumber(soloShuffle.duration) : null;
     if (soloDuration !== null) return Math.round(soloDuration);
